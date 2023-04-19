@@ -112,7 +112,7 @@ class Node:
         # infix a default print
         return str(self)
 
-    def val(self, t, x, deterministic=True):
+    def val(self, x, t, deterministic=True):
         if len(self.children) == 0:
             if str(self.value).startswith("x_"):
                 _, dim = self.value.split("_")
@@ -130,11 +130,11 @@ class Node:
                 return float(self.value) * np.ones((x.shape[0],))
 
         if self.value == "add":
-            return self.children[0].val(x) + self.children[1].val(x)
+            return self.children[0].val(x,t) + self.children[1].val(x,t)
         if self.value == "sub":
-            return self.children[0].val(x) - self.children[1].val(x)
+            return self.children[0].val(x,t) - self.children[1].val(x,t)
         if self.value == "mul":
-            m1, m2 = self.children[0].val(x), self.children[1].val(x)
+            m1, m2 = self.children[0].val(x,t), self.children[1].val(x,t)
             try:
                 return m1 * m2
             except Exception as e:
@@ -143,7 +143,7 @@ class Node:
                 nans[:] = np.nan
                 return nans
         if self.value == "pow":
-            m1, m2 = self.children[0].val(x), self.children[1].val(x)
+            m1, m2 = self.children[0].val(x,t), self.children[1].val(x,t)
             try:
                 return np.power(m1, m2)
             except Exception as e:
@@ -152,22 +152,22 @@ class Node:
                 nans[:] = np.nan
                 return nans
         if self.value == "max":
-            return np.maximum(self.children[0].val(x), self.children[1].val(x))
+            return np.maximum(self.children[0].val(x,t), self.children[1].val(x,t))
         if self.value == "min":
-            return np.minimum(self.children[0].val(x), self.children[1].val(x))
+            return np.minimum(self.children[0].val(x,t), self.children[1].val(x,t))
 
         if self.value == "div":
-            denominator = self.children[1].val(x)
+            denominator = self.children[1].val(x,t)
             denominator[denominator == 0.0] = np.nan
             try:
-                return self.children[0].val(x) / denominator
+                return self.children[0].val(x,t) / denominator
             except Exception as e:
                 # print(e)
                 nans = np.empty((denominator.shape[0],))
                 nans[:] = np.nan
                 return nans
         if self.value == "inv":
-            denominator = self.children[0].val(x)
+            denominator = self.children[0].val(x,t)
             denominator[denominator == 0.0] = np.nan
             try:
                 return 1 / denominator
@@ -177,7 +177,7 @@ class Node:
                 nans[:] = np.nan
                 return nans
         if self.value == "log":
-            numerator = self.children[0].val(x)
+            numerator = self.children[0].val(x,t)
             if self.params.use_abs:
                 numerator[numerator <= 0.0] *= -1
             else:
@@ -191,7 +191,7 @@ class Node:
                 return nans
 
         if self.value == "sqrt":
-            numerator = self.children[0].val(x)
+            numerator = self.children[0].val(x,t)
             if self.params.use_abs:
                 numerator[numerator <= 0.0] *= -1
             else:
@@ -204,7 +204,7 @@ class Node:
                 nans[:] = np.nan
                 return nans
         if self.value == "pow2":
-            numerator = self.children[0].val(x)
+            numerator = self.children[0].val(x,t)
             try:
                 return numerator ** 2
             except Exception as e:
@@ -213,7 +213,7 @@ class Node:
                 nans[:] = np.nan
                 return nans
         if self.value == "pow3":
-            numerator = self.children[0].val(x)
+            numerator = self.children[0].val(x,t)
             try:
                 return numerator ** 3
             except Exception as e:
@@ -222,33 +222,33 @@ class Node:
                 nans[:] = np.nan
                 return nans
         if self.value == "abs":
-            return np.abs(self.children[0].val(x))
+            return np.abs(self.children[0].val(x,t))
         if self.value == "sign":
-            return (self.children[0].val(x) >= 0) * 2.0 - 1.0
+            return (self.children[0].val(x,t) >= 0) * 2.0 - 1.0
         if self.value == "step":
-            x = self.children[0].val(x)
+            x = self.children[0].val(x,t)
             return x if x > 0 else 0
         if self.value == "id":
-            return self.children[0].val(x)
+            return self.children[0].val(x,t)
         if self.value == "fresnel":
-            return scipy.special.fresnel(self.children[0].val(x))[0]
+            return scipy.special.fresnel(self.children[0].val(x,t))[0]
         if self.value.startswith("eval"):
             n = self.value[-1]
-            return getattr(scipy.special, self.value[:-1])(n, self.children[0].val(x))[
+            return getattr(scipy.special, self.value[:-1])(n, self.children[0].val(x,t))[
                 0
             ]
         else:
             fn = getattr(np, self.value, None)
             if fn is not None:
                 try:
-                    return fn(self.children[0].val(x))
+                    return fn(self.children[0].val(x,t))
                 except Exception as e:
                     nans = np.empty((x.shape[0],))
                     nans[:] = np.nan
                     return nans
             fn = getattr(scipy.special, self.value, None)
             if fn is not None:
-                return fn(self.children[0].val(x))
+                return fn(self.children[0].val(x,t))
             assert False, "Could not find function"
 
     def get_recurrence_degree(self):
@@ -291,9 +291,9 @@ class NodeList:
     def __repr__(self):
         return str(self)
 
-    def val(self, xs, deterministic=True):
+    def val(self, xs, t, deterministic=True):
         batch_vals = [
-            np.expand_dims(node.val(np.copy(xs), deterministic=deterministic), -1)
+            np.expand_dims(node.val(np.copy(xs), t, deterministic=deterministic), -1)
             for node in self.nodes
         ]
         return np.concatenate(batch_vals, -1)
@@ -318,6 +318,7 @@ class RandomFunctions(Generator):
         self.params = params
         self.prob_const = params.prob_const
         self.prob_rand = params.prob_rand
+        self.prob_t = params.prob_t
         self.max_int = params.max_int
         self.min_binary_ops_per_dim = params.min_binary_ops_per_dim
         self.max_binary_ops_per_dim = params.max_binary_ops_per_dim
@@ -456,6 +457,8 @@ class RandomFunctions(Generator):
     def generate_leaf(self, rng, input_dimension):
         if rng.rand() < self.prob_rand:
             return "rand"
+        elif rng.rand() < self.prob_t:
+            return "t"
         else:
             if self.n_used_dims < input_dimension:
                 dimension = self.n_used_dims
@@ -761,16 +764,10 @@ class RandomFunctions(Generator):
         self,
         tree,
         n_points,
-        scale,
-        rng,
         input_dimension,
-        input_distribution_type,
-        n_centroids,
-        max_trials,
-        rotate=True,
-        offset=None,
     ):
         
+        return np.random.randn((n_points,input_dimension))
         points = []
         initial_conditions = np.random.randn(input_dimension)
         t = 0; delta_t = 1

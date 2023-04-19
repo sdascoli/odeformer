@@ -537,7 +537,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--operators_to_downsample",
             type=str,
-            default="div_0,arcsin_0,arccos_0,tan_0.2,arctan_0.2,sqrt_5,pow2_3,inv_3",
+            default="div_0,arcsin_0,arccos_0,tan_0,arctan_0,sqrt_0,pow2_0,pow3_0,inv_1,abs_0,exp_0,log_0",
             help="Which operator to remove",
         )
         parser.add_argument(
@@ -668,7 +668,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--max_unary_ops",
             type=int,
-            default=4,
+            default=1,
             help="Max number of unary operators",
         )
         parser.add_argument(
@@ -715,6 +715,12 @@ class FunctionEnvironment(object):
             "--prob_rand",
             type=float,
             default=0.0,
+            help="Probability to generate n in leafs",
+        )
+        parser.add_argument(
+            "--prob_t",
+            type=float,
+            default=0.2,
             help="Probability to generate n in leafs",
         )
         parser.add_argument(
