@@ -20,6 +20,8 @@ from sympy import Min
 from symbolicregression.envs import encoders
 from collections import defaultdict
 from scipy.stats import special_ortho_group
+import warnings
+warnings.filterwarnings("ignore")
 
 logger = getLogger()
 import random
@@ -113,6 +115,8 @@ class Node:
         return str(self)
 
     def val(self, x, t, deterministic=True):
+        if len(x.shape) == 1:
+            x = x.reshape((1, -1))
         if len(self.children) == 0:
             if str(self.value).startswith("x_"):
                 _, dim = self.value.split("_")
@@ -539,10 +543,12 @@ class RandomFunctions(Generator):
             input_dimension = rng.randint(
                 self.min_input_dimension, self.max_input_dimension + 1
             )
-        if output_dimension is None:
-            output_dimension = rng.randint(
-                self.min_output_dimension, self.max_output_dimension + 1
-            )
+        # if output_dimension is None:
+        #     output_dimension = rng.randint(
+        #         self.min_output_dimension, self.max_output_dimension + 1
+        #     )
+        output_dimension = input_dimension
+
         if nb_binary_ops is None:
             min_binary_ops = self.min_binary_ops_per_dim * input_dimension
             max_binary_ops = self.max_binary_ops_per_dim * input_dimension
@@ -754,83 +760,33 @@ class RandomFunctions(Generator):
         tree_with_constants = env.word_to_infix(prefix, is_float=False, str_array=False)
         return tree_with_constants
 
-    def order_datapoints(self, inputs, outputs):
-        mean_input = inputs.mean(0)
-        distance_to_mean = np.linalg.norm(inputs - mean_input, axis=-1)
-        order_by_distance = np.argsort(distance_to_mean)
-        return inputs[order_by_distance], outputs[order_by_distance]
-
-    def _generate_datapoints(
-        self,
-        tree,
-        n_points,
-        input_dimension,
-    ):
-        
-        return np.random.randn((n_points,input_dimension))
-        points = []
-        initial_conditions = np.random.randn(input_dimension)
-        t = 0; delta_t = 1
-        curr = initial_conditions
-        prev = initial_conditions
-
-        while t < n_points:
-            
-            derivative = tree.val(t, curr)
-            second_derivate = ((next-curr)-(curr-prev))/2
-            next = curr + delta_t * tree.val(t, curr)
-            if delta_t * derivative < 0.1 * curr: delta_t *= 2
-            if delta_t * derivative > 0.1 * second_derivate: delta_t /= 2
-
-            curr = next
-            prev = curr
-            t += delta_t
-            points.append(t, next)
-
-            if np.any(np.isnan(next)): return None
-        
-        points = np.concatenate(points, 0)[:n_points]
-        return points
 
     def generate_datapoints(
         self,
         tree,
-        n_input_points,
-        n_prediction_points,
-        prediction_sigmas,
-        rotate=True,
-        offset=None,
-        **kwargs,
-    ):
-        inputs, outputs = self._generate_datapoints(
-            tree=tree,
-            n_points=n_input_points,
-            scale=1,
-            rotate=rotate,
-            offset=offset,
-            **kwargs,
-        )
+        rng,
+        input_dimension,
+        n_points
+        ):
 
-        if inputs is None:
+        y0 = rng.randn(input_dimension)
+        t = np.linspace(0,1,n_points)
+
+        def func(y,t):
+            return tree.val(y,t)[0]
+        
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            trajectory = scipy.integrate.odeint(func, y0, t)
+        if len(caught_warnings) > 0 or np.any(np.isnan(trajectory)):
             return None, None
-        datapoints = {"fit": (inputs, outputs)}
 
-        if n_prediction_points == 0:
-            return tree, datapoints
-        for sigma_factor in prediction_sigmas:
-            inputs, outputs = self._generate_datapoints(
-                tree=tree,
-                n_points=n_prediction_points,
-                scale=sigma_factor,
-                rotate=rotate,
-                offset=offset,
-                **kwargs,
-            )
-            if inputs is None:
-                return None, None
-            datapoints["predict_{}".format(sigma_factor)] = (inputs, outputs)
-
-        return tree, datapoints
+        #trajectory = np.concatenate((t.reshape(-1,1),trajectory), axis=-1)
+        if self.params.subsample_ratio:
+            indices_to_remove = np.random.choice(trajectory.shape[0], int(trajectory.shape[0] * self.params.subsample_ratio), replace=False)
+            trajectory = np.delete(trajectory, indices_to_remove, axis=0)
+            t = np.delete(t, indices_to_remove, axis=0)
+        
+        return tree, (t, trajectory)
 
 
 if __name__ == "__main__":

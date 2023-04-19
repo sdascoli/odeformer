@@ -199,7 +199,6 @@ class FunctionEnvironment(object):
     def gen_expr(
         self,
         train,
-        input_length_modulo=-1,
         nb_binary_ops=None,
         nb_unary_ops=None,
         input_dimension=None,
@@ -221,7 +220,6 @@ class FunctionEnvironment(object):
             try:
                 expr, error = self._gen_expr(
                     train,
-                    input_length_modulo=input_length_modulo,
                     nb_binary_ops=nb_binary_ops,
                     nb_unary_ops=nb_unary_ops,
                     input_dimension=input_dimension,
@@ -230,23 +228,23 @@ class FunctionEnvironment(object):
                     input_distribution_type=input_distribution_type,
                 )
                 if error:
+                    if self.params.debug: print(error)
                     errors[error[0]] += 1
                     assert False
                 return expr, errors
             except:
                 if self.params.debug:
                     # print(expr['tree'])
-                    # print(traceback.format_exc())
+                    print(traceback.format_exc())
                     pass
                     # print(error)
                 # self.errors["gen expr error"]+=1
                 continue
 
-    @timeout(1)
+    #@timeout(1)
     def _gen_expr(
         self,
         train,
-        input_length_modulo=-1,
         nb_binary_ops=None,
         nb_unary_ops=None,
         input_dimension=None,
@@ -268,6 +266,7 @@ class FunctionEnvironment(object):
             input_dimension=input_dimension,
             output_dimension=output_dimension,
         )
+
         if tree is None:
             return {"tree": tree}, ["bad tree"]
         sum_binary_ops = max(nb_binary_ops)
@@ -309,62 +308,38 @@ class FunctionEnvironment(object):
                 )
             )
 
-        if train:
-            n_prediction_points = 0
-        else:
-            n_prediction_points = self.params.n_prediction_points
-
-        input_distribution_type_to_int = {"gaussian": 0, "uniform": 1}
-        if input_distribution_type is None:
-            input_distribution_type = (
-                "gaussian" if self.rng.random() < 0.5 else "uniform"
-            )
-        n_centroids = self.rng.randint(1, self.params.max_centroids)
-
-        if self.params.prediction_sigmas is None:
-            prediction_sigmas = []
-        else:
-            prediction_sigmas = [
-                float(sigma) for sigma in self.params.prediction_sigmas.split(",")
-            ]
-
+        # generate trajectory
         tree, datapoints = self.generator.generate_datapoints(
             tree=tree,
             rng=self.rng,
             input_dimension=dimensions["input_dimension"],
-            n_input_points=n_input_points,
-            n_prediction_points=n_prediction_points,
-            prediction_sigmas=prediction_sigmas,
-            input_distribution_type=input_distribution_type,
-            n_centroids=n_centroids,
-            max_trials=self.params.max_trials,
+            n_points=n_input_points,
         )
 
         if datapoints is None:
-            return {"tree": tree}, ["generation error"]
+            return {"tree": tree}, ["datapoint generation error"]
 
-        x_to_fit, y_to_fit = datapoints["fit"]
-        predict_datapoints = copy.deepcopy(datapoints)
-        del predict_datapoints["fit"]
+        times, trajectory = datapoints
+        n_input_points = trajectory.shape[0]
 
-        all_outputs = np.concatenate([y for k, (x, y) in datapoints.items()])
+        ##output noise added to trajectory
+        if self.params.train_noise_gamma > 0 or self.params.eval_noise_gamma > 0:
+            try:
+                gamma = (
+                    self.rng.uniform(0, self.params.train_noise_gamma)
+                    if train
+                    else self.params.eval_noise_gamma
+                )
+                norm = scipy.linalg.norm(
+                    (np.abs(trajectory) + 1e-100) / np.sqrt(trajectory.shape[0])
+                )
+                noise = gamma * norm * np.random.randn(*trajectory.shape)
+                trajectory += noise
+            except Exception as e:
+                print(e, "norm computation error")
+                return {"tree": tree}, ["norm computation error"]
 
-        ##output noise added to y_to_fit
-        try:
-            gamma = (
-                self.rng.uniform(0, self.params.train_noise_gamma)
-                if train
-                else self.params.eval_noise_gamma
-            )
-            norm = scipy.linalg.norm(
-                (np.abs(all_outputs) + 1e-100) / np.sqrt(all_outputs.shape[0])
-            )
-            noise = gamma * norm * np.random.randn(*y_to_fit.shape)
-            y_to_fit += noise
-        except Exception as e:
-            print(e, "norm computation error")
-            return {"tree": tree}, ["norm computation error"]
-
+        # encode tree
         tree_encoded = self.equation_encoder.encode(tree)
         skeleton_tree, _ = self.generator.function_to_skeleton(tree)
         skeleton_tree_encoded = self.equation_encoder.encode(skeleton_tree)
@@ -373,54 +348,24 @@ class FunctionEnvironment(object):
             [x in self.equation_word2id for x in tree_encoded]
         ), "tree: {}\n encoded: {}".format(tree, tree_encoded)
 
-        if input_length_modulo != -1 and not train:
-            indexes_to_keep = np.arange(
-                min(input_length_modulo, self.params.max_len),
-                self.params.max_len + 1,
-                step=input_length_modulo,
-            )
-        else:
-            indexes_to_keep = [n_input_points]
-
-        X_to_fit, Y_to_fit = [], []
         info = {
-            "n_input_points": [],
-            "n_unary_ops": [],
-            "n_binary_ops": [],
-            "d_in": [],
-            "d_out": [],
-            "input_distribution_type": [],
-            "n_centroids": [],
+            "n_input_points": [n_input_points],
+            "n_unary_ops": [sum(nb_unary_ops)],
+            "n_binary_ops": [sum(nb_binary_ops)],
+            "d_in": [dimensions["input_dimension"]],
+            "d_out": [dimensions["input_dimension"]],
         }
-        n_input_points = x_to_fit.shape[0]
-
-        for idx in indexes_to_keep:
-            _x_to_fit = x_to_fit[:idx] if idx > 0 else x_to_fit
-            _y_to_fit = y_to_fit[:idx] if idx > 0 else y_to_fit
-            X_to_fit.append(_x_to_fit)
-            Y_to_fit.append(_y_to_fit)
-            info["n_input_points"].append(idx)
-            info["n_unary_ops"].append(sum(nb_unary_ops))
-            info["n_binary_ops"].append(sum(nb_binary_ops))
-            info["d_in"].append(dimensions["input_dimension"])
-            info["d_out"].append(dimensions["output_dimension"])
-            info["input_distribution_type"].append(
-                input_distribution_type_to_int[input_distribution_type]
-            )
-            info["n_centroids"].append(n_centroids)
 
         expr = {
-            "X_to_fit": X_to_fit,
-            "Y_to_fit": Y_to_fit,
-            "tree_encoded": tree_encoded,
-            "skeleton_tree_encoded": skeleton_tree_encoded,
-            "tree": tree,
-            "skeleton_tree": skeleton_tree,
-            "infos": info,
+            "times": [times],
+            "trajectory": [trajectory],
+            "tree_encoded": [tree_encoded],
+            "skeleton_tree_encoded": [skeleton_tree_encoded],
+            "tree": [tree],
+            "skeleton_tree": [skeleton_tree],
+            "infos": [info],
         }
-        for k, (x, y) in predict_datapoints.items():
-            expr["x_to_" + k] = x
-            expr["y_to_" + k] = y
+
         return expr, []
 
     def create_train_iterator(self, task, data_path, params, **args):
@@ -470,7 +415,6 @@ class FunctionEnvironment(object):
         batch_size,
         params,
         size,
-        input_length_modulo,
         **args,
     ):
         """
@@ -487,7 +431,6 @@ class FunctionEnvironment(object):
             path=(None if data_path is None else data_path[task][int(data_type[5:])]),
             size=size,
             type=data_type,
-            input_length_modulo=input_length_modulo,
             **args,
         )
 
@@ -724,6 +667,12 @@ class FunctionEnvironment(object):
             help="Probability to generate n in leafs",
         )
         parser.add_argument(
+            "--subsample_ratio",
+            type=float,
+            default=0.2,
+            help="Ratio of timesteps to remove",
+        )
+        parser.add_argument(
             "--max_trials",
             type=int,
             default=1,
@@ -738,12 +687,6 @@ class FunctionEnvironment(object):
             help="number of next terms to predict",
         )
 
-        parser.add_argument(
-            "--prediction_sigmas",
-            type=str,
-            default="1,2,4,8,16",
-            help="sigmas value for generation predicts",
-        )
 
 
 class EnvDataset(Dataset):
@@ -757,7 +700,6 @@ class EnvDataset(Dataset):
         skip=False,
         size=None,
         type=None,
-        input_length_modulo=-1,
         **args,
     ):
         super(EnvDataset).__init__()
@@ -771,7 +713,6 @@ class EnvDataset(Dataset):
         self.count = 0
         self.remaining_data = 0
         self.type = type
-        self.input_length_modulo = input_length_modulo
         self.params = params
         self.errors = defaultdict(int)
 
@@ -1096,20 +1037,16 @@ class EnvDataset(Dataset):
             return np.array(lst)
 
         x = copy.deepcopy(self.data[idx])
-        x["x_to_fit"] = str_list_to_float_array(x["x_to_fit"])
-        x["y_to_fit"] = str_list_to_float_array(x["y_to_fit"])
-        x["x_to_predict"] = str_list_to_float_array(x["x_to_predict"])
-        x["y_to_predict"] = str_list_to_float_array(x["y_to_predict"])
+        x["times"] = str_list_to_float_array(x["times"])
+        x["trajectory"] = str_list_to_float_array(x["trajectory"])
         x["tree"] = self.env.equation_encoder.decode(x["tree"].split(","))
         x["tree_encoded"] = self.env.equation_encoder.encode(x["tree"])
         infos = {}
 
         for col in x.keys():
             if col not in [
-                "x_to_fit",
-                "y_to_fit",
-                "x_to_predict",
-                "y_to_predict",
+                "times",
+                "trajectory",
                 "tree",
                 "tree_encoded",
             ]:
@@ -1125,26 +1062,24 @@ class EnvDataset(Dataset):
         """
 
         if self.remaining_data == 0:
-            self.expr, errors = self.env.gen_expr(
-                self.train, input_length_modulo=self.input_length_modulo,
-            )
+            self.expr, errors = self.env.gen_expr(self.train)
             for error, count in errors.items():
                 self.errors[error] += count
 
-            self.remaining_data = len(self.expr["X_to_fit"])
+            self.remaining_data = len(self.expr["times"])
 
         self.remaining_data -= 1
-        x_to_fit = self.expr["X_to_fit"][-self.remaining_data]
-        y_to_fit = self.expr["Y_to_fit"][-self.remaining_data]
+        times = self.expr["times"][-self.remaining_data]
+        trajectory = self.expr["trajectory"][-self.remaining_data]
         sample = copy.deepcopy(self.expr)
-        sample["x_to_fit"] = x_to_fit
-        sample["y_to_fit"] = y_to_fit
-        del sample["X_to_fit"]
-        del sample["Y_to_fit"]
+        sample["times"] = times
+        sample["trajectory"] = trajectory
+        del sample["times"]
+        del sample["trajectory"]
         sample["infos"] = select_dico_index(sample["infos"], -self.remaining_data)
         sequence = []
         for n in range(sample["infos"]["n_input_points"]):
-            sequence.append([sample["x_to_fit"][n], sample["y_to_fit"][n]])
+            sequence.append([sample["times"][n], sample["trajectory"][n]])
         sample["infos"]["input_sequence_length"] = self.env.get_length_after_batching(
             [sequence]
         )[0].item()

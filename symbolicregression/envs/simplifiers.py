@@ -99,7 +99,7 @@ class Simplifier:
             expr = sp.simplify(expr)
         return expr
 
-    def tree_to_sympy_expr(self, tree, round=True):
+    def _tree_to_sympy_expr(self, tree, round=True):
         prefix = tree.prefix().split(",")
         sympy_compatible_infix = self.prefix_to_sympy_compatible_infix(prefix)
         expr = parse_expr(
@@ -107,6 +107,9 @@ class Simplifier:
         )
         if round: expr = self.round_expr(expr)
         return expr
+    
+    def tree_to_sympy_expr(self, tree, round=True):
+        return [self._tree_to_sympy_expr(node, round=round) for node in tree.nodes]
 
     def tree_to_torch_module(self, tree, dtype=torch.float32):
         expr = self.tree_to_sympy_expr(tree)

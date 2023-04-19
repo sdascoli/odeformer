@@ -189,15 +189,15 @@ class Evaluator(object):
             )
             y = np.expand_dims(y, -1)
 
-            x_to_fit, x_to_predict, y_to_fit, y_to_predict = train_test_split(
+            times, trajectory = train_test_split(
                 X, y, test_size=0.25, shuffle=True, random_state=random_state
             )
 
-            scale = target_noise * np.sqrt(np.mean(np.square(y_to_fit)))
-            noise = rng.normal(loc=0.0, scale=scale, size=y_to_fit.shape)
-            y_to_fit += noise
+            scale = target_noise * np.sqrt(np.mean(np.square(trajectory)))
+            noise = rng.normal(loc=0.0, scale=scale, size=trajectory.shape)
+            trajectory += noise
 
-            dstr.fit(x_to_fit, y_to_fit, verbose=verbose)
+            dstr.fit(times, trajectory, verbose=verbose)
             problem_results = defaultdict(list)
            
             for refinement_type in dstr.retrieve_refinements_types():
@@ -218,10 +218,10 @@ class Evaluator(object):
                 for info, val in best_gen.items():
                     problem_results[info].append(val)
 
-                y_tilde_to_fit = dstr.predict(x_to_fit, refinement_type=refinement_type)
+                y_tilde_to_fit = dstr.predict(times, refinement_type=refinement_type)
                 results_fit = compute_metrics(
                     {
-                        "true": [y_to_fit],
+                        "true": [trajectory],
                         "predicted": [y_tilde_to_fit],
                         "predicted_tree": [predicted_tree],
                     },
@@ -249,7 +249,7 @@ class Evaluator(object):
             problem_results = pd.DataFrame.from_dict(problem_results)
             problem_results.insert(0, "problem", problem_name)
             problem_results.insert(0, "formula", formula)
-            problem_results["input_dimension"] = x_to_fit.shape[1]
+            problem_results["input_dimension"] = times.shape[1]
 
             if save:
                 if first_write:
@@ -317,7 +317,6 @@ class Evaluator(object):
             batch_size=params.batch_size_eval,
             params=params,
             size=eval_size_per_gpu,
-            input_length_modulo=params.eval_input_length_modulo,
             test_env_seed=self.params.test_env_seed,
         )
 
@@ -370,12 +369,12 @@ class Evaluator(object):
         batch_results = defaultdict(list)
 
         for samples, _ in iterator:
-            x_to_fit = samples["x_to_fit"]
-            y_to_fit = samples["y_to_fit"]
+            times = samples["times"]
+            trajectory = samples["trajectory"]
             infos = samples["infos"]
             tree = samples["tree"]
 
-            dstr.fit(x_to_fit, y_to_fit, verbose=verbose)
+            dstr.fit(times, trajectory, verbose=verbose)
 
             # dstr.tree = [[{"predicted_tree": tree_i, "refinement_type": ref} for ref in dstr.retrieve_refinements_types()] for tree_i in tree] ##TO DEBUG METRICS
             # dstr.beam_selection_metrics=0
@@ -410,19 +409,19 @@ class Evaluator(object):
                     batch_results["info_" + k].extend(v)
 
                 y_tilde_to_fit = dstr.predict(
-                    x_to_fit, refinement_type=refinement_type, batch=True
+                    times, refinement_type=refinement_type, batch=True
                 )
-                assert len(y_to_fit) == len(
+                assert len(trajectory) == len(
                     y_tilde_to_fit
                 ), "issue with len, tree: {}, x:{} true: {}, predicted: {}".format(
                     len(predicted_tree),
-                    len(x_to_fit),
-                    len(y_to_fit),
+                    len(times),
+                    len(trajectory),
                     len(y_tilde_to_fit),
                 )
                 results_fit = compute_metrics(
                     {
-                        "true": y_to_fit,
+                        "true": trajectory,
                         "predicted": y_tilde_to_fit,
                         "tree": tree,
                         "predicted_tree": predicted_tree,
@@ -432,32 +431,6 @@ class Evaluator(object):
                 for k, v in results_fit.items():
                     batch_results[k + "_fit"].extend(v)
                 del results_fit
-
-                if self.params.prediction_sigmas is None:
-                    prediction_sigmas = []
-                else:
-                    prediction_sigmas = [
-                        float(sigma)
-                        for sigma in self.params.prediction_sigmas.split(",")
-                    ]
-                for sigma in prediction_sigmas:
-                    x_to_predict = samples["x_to_predict_{}".format(sigma)]
-                    y_to_predict = samples["y_to_predict_{}".format(sigma)]
-                    y_tilde_to_predict = dstr.predict(
-                        x_to_predict, refinement_type=refinement_type, batch=True
-                    )
-                    results_predict = compute_metrics(
-                        {
-                            "true": y_to_predict,
-                            "predicted": y_tilde_to_predict,
-                            "tree": tree,
-                            "predicted_tree": predicted_tree,
-                        },
-                        metrics=params.validation_metrics,
-                    )
-                    for k, v in results_predict.items():
-                        batch_results[k + "_predict_{}".format(sigma)].extend(v)
-                    del results_predict
 
                 batch_results["tree"].extend(tree)
                 batch_results["tree_prefix"].extend([_tree.prefix() for _tree in tree])
@@ -486,7 +459,7 @@ class Evaluator(object):
                     batch_before_writing = batch_before_writing_threshold
                     batch_results = defaultdict(list)
 
-            bs = len(x_to_fit)
+            bs = len(times)
             pbar.update(bs)
 
         try:

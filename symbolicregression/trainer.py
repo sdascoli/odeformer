@@ -678,19 +678,11 @@ class Trainer(object):
             outputs = {**get_dictionary_slice(i, samples["infos"])}
             x_to_fit = samples["x_to_fit"][i].tolist()
             y_to_fit = samples["y_to_fit"][i].tolist()
-            x_to_predict = samples["x_to_predict"][i].tolist()
-            y_to_predict = samples["y_to_predict"][i].tolist()
             outputs["x_to_fit"] = float_list_to_str_lst(
                 x_to_fit, self.params.float_precision
             )
             outputs["y_to_fit"] = float_list_to_str_lst(
                 y_to_fit, self.params.float_precision
-            )
-            outputs["x_to_predict"] = float_list_to_str_lst(
-                x_to_predict, self.params.float_precision
-            )
-            outputs["y_to_predict"] = float_list_to_str_lst(
-                y_to_predict, self.params.float_precision
             )
             outputs["tree"] = samples["tree"][i].prefix()
 
