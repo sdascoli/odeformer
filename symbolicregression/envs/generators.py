@@ -10,17 +10,14 @@ from operator import length_hint, xor
 
 # from turtle import degrees
 import numpy as np
-import math
 import scipy.special
 import copy
 from logging import getLogger
-import time
-from numpy.compat.py3k import npy_load_module
-from sympy import Min
-from symbolicregression.envs import encoders
 from collections import defaultdict
-from scipy.stats import special_ortho_group
 import warnings
+from symbolicregression.envs import encoders
+from symbolicregression.envs.utils import *
+from ..utils import bool_flag, timeout, MyTimeoutError
 warnings.filterwarnings("ignore")
 
 logger = getLogger()
@@ -328,10 +325,8 @@ class RandomFunctions(Generator):
         self.max_binary_ops_per_dim = params.max_binary_ops_per_dim
         self.min_unary_ops = params.min_unary_ops
         self.max_unary_ops = params.max_unary_ops
-        self.min_output_dimension = params.min_output_dimension
-        self.min_input_dimension = params.min_input_dimension
-        self.max_input_dimension = params.max_input_dimension
-        self.max_output_dimension = params.max_output_dimension
+        self.min_dimension = params.min_dimension
+        self.max_dimension = params.max_dimension
         self.max_number = 10 ** (params.max_exponent + params.float_precision)
         self.operators = copy.deepcopy(operators_real)
 
@@ -386,14 +381,14 @@ class RandomFunctions(Generator):
 
         self.unary = False  # len(self.unaries) > 0
         self.distrib = self.generate_dist(
-            2 * self.max_binary_ops_per_dim * self.max_input_dimension
+            2 * self.max_binary_ops_per_dim * self.max_dimension
         )
 
         self.constants = [
             str(i) for i in range(-self.max_int, self.max_int + 1) if i != 0
         ]
         self.constants += math_constants
-        self.variables = ["rand"] + [f"x_{i}" for i in range(self.max_input_dimension)] + ["t"]
+        self.variables = ["rand"] + [f"x_{i}" for i in range(self.max_dimension)] + ["t"]
         self.symbols = (
             list(self.operators)
             + self.constants
@@ -458,13 +453,13 @@ class RandomFunctions(Generator):
     def generate_int(self, rng):
         return str(rng.choice(self.constants + self.extra_constants))
 
-    def generate_leaf(self, rng, input_dimension):
+    def generate_leaf(self, rng, dimension):
         if rng.rand() < self.prob_rand:
             return "rand"
         elif rng.rand() < self.prob_t:
             return "t"
         else:
-            if self.n_used_dims < input_dimension:
+            if self.n_used_dims < dimension:
                 dimension = self.n_used_dims
                 self.n_used_dims += 1
                 return f"x_{dimension}"
@@ -473,7 +468,7 @@ class RandomFunctions(Generator):
                 if draw < self.prob_const:
                     return self.generate_int(rng)
                 else:
-                    dimension = rng.randint(0, input_dimension)
+                    dimension = rng.randint(0, dimension)
                     return f"x_{dimension}"
 
     def generate_ops(self, rng, arity):
@@ -505,7 +500,7 @@ class RandomFunctions(Generator):
         e %= nb_empty
         return e, arity
 
-    def generate_tree(self, rng, nb_binary_ops, input_dimension):
+    def generate_tree(self, rng, nb_binary_ops, dimension):
         self.n_used_dims = 0
         tree = Node(0, self.params)
         empty_nodes = [tree]
@@ -526,54 +521,48 @@ class RandomFunctions(Generator):
         rng.shuffle(empty_nodes)
         for n in empty_nodes:
             if len(n.children) == 0:
-                n.value = self.generate_leaf(rng, input_dimension)
+                n.value = self.generate_leaf(rng, dimension)
         return tree
 
     def generate_multi_dimensional_tree(
         self,
         rng,
-        input_dimension=None,
-        output_dimension=None,
+        dimension=None,
         nb_unary_ops=None,
         nb_binary_ops=None,
     ):
         trees = []
 
-        if input_dimension is None:
-            input_dimension = rng.randint(
-                self.min_input_dimension, self.max_input_dimension + 1
+        if dimension is None:
+            dimension = rng.randint(
+                self.min_dimension, self.max_dimension + 1
             )
-        # if output_dimension is None:
-        #     output_dimension = rng.randint(
-        #         self.min_output_dimension, self.max_output_dimension + 1
-        #     )
-        output_dimension = input_dimension
 
         if nb_binary_ops is None:
-            min_binary_ops = self.min_binary_ops_per_dim * input_dimension
-            max_binary_ops = self.max_binary_ops_per_dim * input_dimension
+            min_binary_ops = self.min_binary_ops_per_dim * dimension
+            max_binary_ops = self.max_binary_ops_per_dim * dimension
             nb_binary_ops_to_use = [
                 rng.randint(
                     min_binary_ops, self.params.max_binary_ops_offset + max_binary_ops
                 )
-                for dim in range(output_dimension)
+                for dim in range(dimension)
             ]
         elif isinstance(nb_binary_ops, int):
-            nb_binary_ops_to_use = [nb_binary_ops for _ in range(output_dimension)]
+            nb_binary_ops_to_use = [nb_binary_ops for _ in range(dimension)]
         else:
             nb_binary_ops_to_use = nb_binary_ops
         if nb_unary_ops is None:
             nb_unary_ops_to_use = [
                 rng.randint(self.min_unary_ops, self.max_unary_ops + 1)
-                for dim in range(output_dimension)
+                for dim in range(dimension)
             ]
         elif isinstance(nb_unary_ops, int):
-            nb_unary_ops_to_use = [nb_unary_ops for _ in range(output_dimension)]
+            nb_unary_ops_to_use = [nb_unary_ops for _ in range(dimension)]
         else:
             nb_unary_ops_to_use = nb_unary_ops
 
-        for i in range(output_dimension):
-            tree = self.generate_tree(rng, nb_binary_ops_to_use[i], input_dimension)
+        for i in range(dimension):
+            tree = self.generate_tree(rng, nb_binary_ops_to_use[i], dimension)
             tree = self.add_unaries(rng, tree, nb_unary_ops_to_use[i])
             ##Adding constants
             if self.params.reduce_num_constants:
@@ -596,13 +585,12 @@ class RandomFunctions(Generator):
         for op in self.required_operators:
             if op not in tree.infix():
                 return self.generate_multi_dimensional_tree(
-                    rng, input_dimension, output_dimension, nb_unary_ops, nb_binary_ops
+                    rng, dimension, nb_unary_ops, nb_binary_ops
                 )
 
         return (
             tree,
-            input_dimension,
-            output_dimension,
+            dimension,
             nb_unary_ops_to_use,
             nb_binary_ops_to_use,
         )
@@ -697,13 +685,13 @@ class RandomFunctions(Generator):
             if elem.startswith("x_"):
                 active_variables.append(elem)
         active_variables = list(set(active_variables))
-        input_dimension = len(active_variables)
-        if input_dimension == 0:
+        dimension = len(active_variables)
+        if dimension == 0:
             return 0
         active_variables.sort(key=lambda x: int(x[2:]))
         for j, xi in enumerate(active_variables):
             tree.replace_node_value(xi, "x_{}".format(j))
-        return input_dimension
+        return dimension
 
     def function_to_skeleton(
         self, tree, skeletonize_integers=False, constants_with_idx=False
@@ -760,24 +748,40 @@ class RandomFunctions(Generator):
         tree_with_constants = env.word_to_infix(prefix, is_float=False, str_array=False)
         return tree_with_constants
 
-
+    #@timeout(1)
     def generate_datapoints(
         self,
         tree,
         rng,
-        input_dimension,
+        dimension,
         n_points
         ):
 
-        y0 = rng.randn(input_dimension)
-        t = np.linspace(0,1,n_points)
+        y0 = rng.randn(dimension)
 
-        def func(y,t):
-            return tree.val(y,t)[0]
-        
-        with warnings.catch_warnings(record=True) as caught_warnings:
-            trajectory = scipy.integrate.odeint(func, y0, t)
+        if self.params.ode_integrator == "odeint":
+            t = np.linspace(0,1,n_points)
+            def func(y,t):
+                return tree.val(y,t)[0]
+            with stdout_redirected():
+                with warnings.catch_warnings(record=True) as caught_warnings:
+                    trajectory = scipy.integrate.odeint(func, y0, t)
+        elif self.params.ode_integrator == "solve_ivp":
+            t = (0,1)
+            def func(t,y):
+                return tree.val([y],t)[0]
+            with warnings.catch_warnings(record=True) as caught_warnings:
+                try: trajectory = scipy.integrate.solve_ivp(func, t, y0)
+                except: return None, None
+                t = sol.t[:n_points]
+                trajectory = trajectory.y.T[:n_points]
+        else:
+            raise NotImplementedError
+
         if len(caught_warnings) > 0 or np.any(np.isnan(trajectory)):
+            return None, None
+        
+        if np.any(np.abs(trajectory)>10**self.params.max_exponent):
             return None, None
 
         #trajectory = np.concatenate((t.reshape(-1,1),trajectory), axis=-1)
@@ -799,7 +803,7 @@ if __name__ == "__main__":
     generator = RandomFunctions(params, SPECIAL_WORDS)
     rng = np.random.RandomState(0)
     tree, _, _, _, _ = generator.generate_multi_dimensional_tree(
-        np.random.RandomState(0), input_dimension=1
+        np.random.RandomState(0), dimension=1
     )
     print(tree)
     x, y = generator.generate_datapoints(rng, tree, "gaussian", 10, 200, 200)

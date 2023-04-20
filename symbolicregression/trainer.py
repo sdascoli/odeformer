@@ -104,6 +104,7 @@ class Trainer(object):
         self.modules = modules
         self.params = params
         self.env = env
+        self.logger = logger
 
         # epoch / iteration size
         self.n_steps_per_epoch = params.n_steps_per_epoch
@@ -676,13 +677,13 @@ class Trainer(object):
         for i in range(processed_e):
             # prefix
             outputs = {**get_dictionary_slice(i, samples["infos"])}
-            x_to_fit = samples["x_to_fit"][i].tolist()
-            y_to_fit = samples["y_to_fit"][i].tolist()
-            outputs["x_to_fit"] = float_list_to_str_lst(
-                x_to_fit, self.params.float_precision
+            times = samples["times"][i].tolist()
+            trajectory = samples["trajectory"][i].tolist()
+            outputs["times"] = float_list_to_str_lst(
+                times, self.params.float_precision
             )
-            outputs["y_to_fit"] = float_list_to_str_lst(
-                y_to_fit, self.params.float_precision
+            outputs["trajectory"] = float_list_to_str_lst(
+                trajectory, self.params.float_precision
             )
             outputs["tree"] = samples["tree"][i].prefix()
 
@@ -717,14 +718,14 @@ class Trainer(object):
             for error_type, count in errors.items():
                 self.errors_statistics[error_type] += count
 
-        x_to_fit = samples["x_to_fit"]
-        y_to_fit = samples["y_to_fit"]
+        times = samples["times"]
+        trajectory = samples["trajectory"]
 
         x1 = []
-        for seq_id in range(len(x_to_fit)):
+        for seq_id in range(len(times)):
             x1.append([])
-            for seq_l in range(len(x_to_fit[seq_id])):
-                x1[seq_id].append([x_to_fit[seq_id][seq_l], y_to_fit[seq_id][seq_l]])
+            for seq_l in range(len(times[seq_id])):
+                x1[seq_id].append([times[seq_id][seq_l], trajectory[seq_id][seq_l]])
 
         x1, len1 = embedder(x1)
 

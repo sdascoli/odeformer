@@ -125,7 +125,7 @@ def main():
         args.master_port = np.random.randint(10001, 20000)
         args.float_constants = True
         args.prediction_sigmas="1,2,4,8,16,32"
-        args.max_input_dimension = 10
+        args.max_dimension = 10
         args.n_steps_per_epoch = 3000
         args.use_volta32 = True
         args.eval_size = 2000

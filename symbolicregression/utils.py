@@ -26,7 +26,7 @@ from .logger import create_logger
 FALSY_STRINGS = {"off", "false", "0"}
 TRUTHY_STRINGS = {"on", "true", "1"}
 
-DUMP_PATH = "./experiments/dumped"
+DUMP_PATH = "/scratch/dascoli/odeformer     /"
 CUDA = True
 
 

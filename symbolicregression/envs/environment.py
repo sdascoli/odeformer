@@ -201,8 +201,7 @@ class FunctionEnvironment(object):
         train,
         nb_binary_ops=None,
         nb_unary_ops=None,
-        input_dimension=None,
-        output_dimension=None,
+        dimension=None,
         n_input_points=None,
         input_distribution_type=None,
     ):
@@ -212,9 +211,9 @@ class FunctionEnvironment(object):
                 nb_unary_ops = self.rng.randint(
                     self.params.min_unary_ops, self.params.max_unary_ops + 1
                 )
-            if input_dimension is None:
-                input_dimension = self.rng.randint(
-                    self.params.min_input_dimension, self.params.max_input_dimension + 1
+            if dimension is None:
+                dimension = self.rng.randint(
+                    self.params.min_dimension, self.params.max_dimension + 1
                 )
         while True:
             try:
@@ -222,8 +221,7 @@ class FunctionEnvironment(object):
                     train,
                     nb_binary_ops=nb_binary_ops,
                     nb_unary_ops=nb_unary_ops,
-                    input_dimension=input_dimension,
-                    output_dimension=output_dimension,
+                    dimension=dimension,
                     n_input_points=n_input_points,
                     input_distribution_type=input_distribution_type,
                 )
@@ -232,39 +230,39 @@ class FunctionEnvironment(object):
                     errors[error[0]] += 1
                     assert False
                 return expr, errors
+            except (AssertionError, MyTimeoutError):
+                continue
             except:
+                print(traceback.format_exc())
+                continue
                 if self.params.debug:
                     # print(expr['tree'])
-                    print(traceback.format_exc())
                     pass
                     # print(error)
                 # self.errors["gen expr error"]+=1
                 continue
 
-    #@timeout(1)
+    @timeout(1)
     def _gen_expr(
         self,
         train,
         nb_binary_ops=None,
         nb_unary_ops=None,
-        input_dimension=None,
-        output_dimension=None,
+        dimension=None,
         n_input_points=None,
         input_distribution_type=None,
     ):
 
         (
             tree,
-            original_input_dimension,
-            output_dimension,
+            dimension,
             nb_unary_ops,
             nb_binary_ops,
         ) = self.generator.generate_multi_dimensional_tree(
             rng=self.rng,
             nb_unary_ops=nb_unary_ops,
             nb_binary_ops=nb_binary_ops,
-            input_dimension=input_dimension,
-            output_dimension=output_dimension,
+            dimension=dimension,
         )
 
         if tree is None:
@@ -272,9 +270,10 @@ class FunctionEnvironment(object):
         sum_binary_ops = max(nb_binary_ops)
         sum_unary_ops = max(nb_unary_ops)
         sum_ops = sum_binary_ops + sum_unary_ops
-        input_dimension = self.generator.relabel_variables(tree)
-        if input_dimension == 0 or (
-            self.params.enforce_dim and original_input_dimension > input_dimension
+
+        effective_dimension = self.generator.relabel_variables(tree)
+        if dimension == 0 or (
+            self.params.enforce_dim and effective_dimension < dimension
         ):
             return {"tree": tree}, ["bad input dimension"]
 
@@ -291,17 +290,14 @@ class FunctionEnvironment(object):
             if tree is None or len_after > 2 * len_before:
                 return {"tree": tree}, ["simplification error"]
 
-        dimensions = {
-            "input_dimension": input_dimension,
-            "output_dimension": output_dimension,
-        }
+
         if n_input_points is None:
             n_input_points = (
                 self.params.max_len
                 if not train
                 else self.rng.randint(
                     min(
-                        self.params.min_len_per_dim * input_dimension,
+                        self.params.min_len_per_dim * dimension,
                         self.params.max_len,
                     ),
                     self.params.max_len + 1,
@@ -312,7 +308,7 @@ class FunctionEnvironment(object):
         tree, datapoints = self.generator.generate_datapoints(
             tree=tree,
             rng=self.rng,
-            input_dimension=dimensions["input_dimension"],
+            dimension=dimension,
             n_points=n_input_points,
         )
 
@@ -349,21 +345,20 @@ class FunctionEnvironment(object):
         ), "tree: {}\n encoded: {}".format(tree, tree_encoded)
 
         info = {
-            "n_input_points": [n_input_points],
-            "n_unary_ops": [sum(nb_unary_ops)],
-            "n_binary_ops": [sum(nb_binary_ops)],
-            "d_in": [dimensions["input_dimension"]],
-            "d_out": [dimensions["input_dimension"]],
+            "n_input_points": n_input_points,
+            "n_unary_ops":    sum(nb_unary_ops),
+            "n_binary_ops":   sum(nb_binary_ops),
+            "dimension":           dimension,
         }
 
         expr = {
-            "times": [times],
-            "trajectory": [trajectory],
-            "tree_encoded": [tree_encoded],
-            "skeleton_tree_encoded": [skeleton_tree_encoded],
-            "tree": [tree],
-            "skeleton_tree": [skeleton_tree],
-            "infos": [info],
+            "times":                 times,
+            "trajectory":            trajectory,
+            "tree_encoded":          tree_encoded,
+            "skeleton_tree_encoded": skeleton_tree_encoded,
+            "tree":                  tree,
+            "skeleton_tree":         skeleton_tree,
+            "infos":                 info,
         }
 
         return expr, []
@@ -522,21 +517,18 @@ class FunctionEnvironment(object):
             help="Additional int constants floats instead of ints",
         )
 
-        parser.add_argument("--min_input_dimension", type=int, default=1)
-        parser.add_argument("--max_input_dimension", type=int, default=10)
-        parser.add_argument("--min_output_dimension", type=int, default=1)
-        parser.add_argument("--max_output_dimension", type=int, default=1)
+        parser.add_argument("--min_dimension", type=int, default=1)
+        parser.add_argument("--max_dimension", type=int, default=2)
         parser.add_argument(
             "--enforce_dim",
             type=bool,
-            default=True,
+            default=False,
             help="should we enforce that we get as many examples of each dim ?",
         )
-
         parser.add_argument(
             "--use_controller",
             type=bool,
-            default=True,
+            default=False,
             help="should we enforce that we get as many examples of each dim ?",
         )
 
@@ -671,6 +663,13 @@ class FunctionEnvironment(object):
             type=float,
             default=0.2,
             help="Ratio of timesteps to remove",
+        )
+        parser.add_argument(
+            "--ode_integrator",
+            type=str,
+            choices = ["odeint", "solve_ivp"],
+            default = "odeint",
+            help="ODE integrator to use",
         )
         parser.add_argument(
             "--max_trials",
@@ -850,7 +849,7 @@ class EnvDataset(Dataset):
             if self.path is None:
                 sample = self.generate_sample()
             else:
-                ##TODO
+                # TODO
                 assert (
                     False
                 ), "need to finish implementing load dataset, but do not know how to handle read index"
@@ -1061,33 +1060,42 @@ class EnvDataset(Dataset):
         Generate a sample.
         """
 
-        if self.remaining_data == 0:
-            self.expr, errors = self.env.gen_expr(self.train)
-            for error, count in errors.items():
-                self.errors[error] += count
-
-            self.remaining_data = len(self.expr["times"])
-
-        self.remaining_data -= 1
-        times = self.expr["times"][-self.remaining_data]
-        trajectory = self.expr["trajectory"][-self.remaining_data]
-        sample = copy.deepcopy(self.expr)
-        sample["times"] = times
-        sample["trajectory"] = trajectory
-        del sample["times"]
-        del sample["trajectory"]
-        sample["infos"] = select_dico_index(sample["infos"], -self.remaining_data)
-        sequence = []
-        for n in range(sample["infos"]["n_input_points"]):
-            sequence.append([sample["times"][n], sample["trajectory"][n]])
-        sample["infos"]["input_sequence_length"] = self.env.get_length_after_batching(
-            [sequence]
-        )[0].item()
+        sample, errors = self.env.gen_expr(self.train)
+        for error, count in errors.items():
+            self.errors[error] += count
+        sample["infos"]["input_sequence_length"] = self.env.get_length_after_batching([sample['times'], sample['trajectory']])[0].item()
         if sample["infos"]["input_sequence_length"] > self.params.tokens_per_batch:
-            # print(sample["infos"]["input_sequence_length"],  self.params.tokens_per_batch)
             return self.generate_sample()
-        self.count += 1
         return sample
+        
+
+        # if self.remaining_data == 0:
+        #     self.expr, errors = self.env.gen_expr(self.train)
+        #     for error, count in errors.items():
+        #         self.errors[error] += count
+
+        #     self.remaining_data = len(self.expr["times"])
+
+        # self.remaining_data -= 1
+        # times = self.expr["times"][-self.remaining_data]
+        # trajectory = self.expr["trajectory"][-self.remaining_data]
+        # sample = copy.deepcopy(self.expr)
+        # sample["times"] = times
+        # sample["trajectory"] = trajectory
+        # del sample["times"]
+        # del sample["trajectory"]
+        # sample["infos"] = select_dico_index(sample["infos"], -self.remaining_data)
+        # sequence = []
+        # for n in range(sample["infos"]["n_input_points"]):
+        #     sequence.append([sample["times"][n], sample["trajectory"][n]])
+        # sample["infos"]["input_sequence_length"] = self.env.get_length_after_batching(
+        #     [sequence]
+        # )[0].item()
+        # if sample["infos"]["input_sequence_length"] > self.params.tokens_per_batch:
+        #     # print(sample["infos"]["input_sequence_length"],  self.params.tokens_per_batch)
+        #     return self.generate_sample()
+        # self.count += 1
+        # return sample
 
 
 def select_dico_index(dico, idx):

@@ -110,7 +110,7 @@ class MinMaxScaler(Scaler):
     def __init__(self):
         """
         transformation is: 
-        x' =  2.*(x-xmin)/(xmax-xmin)-1.
+        x' =  (x-xmin)/(xmax-xmin)
         """
         self.scaler = sklearn.preprocessing.MinMaxScaler(feature_range=(-1,1))
 
@@ -123,11 +123,11 @@ class MinMaxScaler(Scaler):
 
     def transform(self, X):
         val_min, val_max = self.scaler.data_min_, self.scaler.data_max_
-        return 2*(X-val_min)/(val_max-val_min)-1.
+        return (X-val_min)/(val_max-val_min)
 
     def get_params(self):
         val_min, val_max = self.scaler.data_min_, self.scaler.data_max_
-        a, b = 2./(val_max-val_min), -1.-2.*val_min/(val_max-val_min)
+        a, b = 1./(val_max-val_min), -val_min/(val_max-val_min)
         return (a, b)
 
 class BFGSRefinement():

@@ -22,11 +22,15 @@ from symbolicregression.envs import build_env
 from symbolicregression.trainer import Trainer
 from evaluate import Evaluator
 from parsers import get_parser
+import setproctitle
 
 np.seterr(all="raise")
 
 
 def main(params):
+
+    setproctitle.setproctitle(params.exp_id)
+
 
     # initialize the multi-GPU / multi-node training
     # initialize experiment / SLURM signal handler for time limit / pre-emption
@@ -122,18 +126,18 @@ def main(params):
             )
             logger.info("__log__:%s" % json.dumps(scores))
 
-        if params.eval_on_pmlb:
-            feynman_scores = evaluator.evaluate_pmlb(
-                filter_fn=lambda x: x["dataset"].str.contains("feynman")
-            )
-            logger.info("__feynman__:%s" % json.dumps(feynman_scores))
+        # if params.eval_on_pmlb:
+        #     feynman_scores = evaluator.evaluate_pmlb(
+        #         filter_fn=lambda x: x["dataset"].str.contains("feynman")
+        #     )
+        #     logger.info("__feynman__:%s" % json.dumps(feynman_scores))
 
-            filter_fn = lambda x: ~(
-                x["dataset"].str.contains("strogatz")
-                | x["dataset"].str.contains("feynman")
-            )
-            black_box_scores = evaluator.evaluate_pmlb(filter_fn=filter_fn)
-            logger.info("__black_box__:%s" % json.dumps(black_box_scores))
+        #     filter_fn = lambda x: ~(
+        #         x["dataset"].str.contains("strogatz")
+        #         | x["dataset"].str.contains("feynman")
+        #     )
+        #     black_box_scores = evaluator.evaluate_pmlb(filter_fn=filter_fn)
+        #     logger.info("__black_box__:%s" % json.dumps(black_box_scores))
 
         trainer.save_best_model(scores, prefix="functions", suffix="fit")
         # end of epoch

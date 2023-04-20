@@ -58,7 +58,7 @@ class LinearPointEmbedder(Embedder):
             padding_idx=self.env.float_word2id["<PAD>"],
         )
         self.float_scalar_descriptor_len = (2 + self.params.mantissa_len)
-        self.total_dimension = self.params.max_input_dimension + self.params.max_output_dimension
+        self.total_dimension = 1 + self.params.max_dimension
         self.float_vector_descriptor_len = self.float_scalar_descriptor_len * self.total_dimension
 
         self.activation_fn = F.relu
@@ -103,20 +103,20 @@ class LinearPointEmbedder(Embedder):
                 output_dim = int(len(y_toks) / (2 + self.params.mantissa_len))
                 x_toks = [
                     *x_toks,
-                    *[
-                        "<INPUT_PAD>"
-                        for _ in range(
-                            (self.params.max_input_dimension - input_dim)
-                            * self.float_scalar_descriptor_len
-                        )
-                    ],
+                    # *[
+                    #     "<INPUT_PAD>"
+                    #     for _ in range(
+                    #         (self.params.max_dimension - input_dim)
+                    #         * self.float_scalar_descriptor_len
+                    #     )
+                    # ],
                 ]
                 y_toks = [
                     *y_toks,
                     *[
                         "<OUTPUT_PAD>"
                         for _ in range(
-                            (self.params.max_output_dimension - output_dim)
+                            (self.params.max_dimension - output_dim)
                             * self.float_scalar_descriptor_len
                         )
                     ],

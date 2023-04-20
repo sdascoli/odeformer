@@ -58,7 +58,9 @@ class FloatSequences(Encoder):
         Write a float number
         """
         precision = self.float_precision
-
+        if isinstance(values, float):
+            values = [values]
+        values = np.array(values)
         if len(values.shape) == 1:
             seq = []
             value = values
@@ -76,10 +78,7 @@ class FloatSequences(Encoder):
                 seq.extend([sign, *["N" + token for token in tokens], "E" + str(expon)])
             return seq
         else:
-            seqs = [self.encode(values[0])]
-            N = values.shape[0]
-            for n in range(1, N):
-                seqs += [self.encode(values[n])]
+            seqs = [self.encode(val) for val in values]
         return seqs
 
     def decode(self, lst):

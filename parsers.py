@@ -20,12 +20,6 @@ def get_parser():
     parser.add_argument(
         "--dump_path", type=str, default="", help="Experiment dump path"
     )
-    parser.add_argument(
-        "--refinements_types",
-        type=str,
-        default="method=BFGS_batchsize=256_metric=/_mse",
-        help="What refinement to use. Should separate by _ each arg and value by =. None does not do any refinement",
-    )
 
     parser.add_argument(
         "--eval_dump_path", type=str, default=None, help="Evaluation dump path"
@@ -170,7 +164,7 @@ def get_parser():
     parser.add_argument(
         "--batch_size_eval",
         type=int,
-        default=64,
+        default=16,
         help="Number of sentences per batch during evaluation (if None, set to 1.5*batch_size)",
     )
     parser.add_argument(
@@ -227,7 +221,7 @@ def get_parser():
     )
 
     parser.add_argument(
-        "--max_input_points",
+        "--ft_points",
         type=int,
         default=200,
         help="split into chunks of size max_input_points at eval",
@@ -318,7 +312,6 @@ def get_parser():
         default=True,
         help="Early stopping, stop as soon as we have `beam_size` hypotheses, although longer ones may have better scores.",
     )
-    parser.add_argument("--beam_selection_metrics", type=int, default=1)
 
     parser.add_argument("--max_number_bags", type=int, default=1)
 
@@ -337,6 +330,7 @@ def get_parser():
         default="r2_zero,r2,accuracy_l1_biggio,accuracy_l1_1e-3,accuracy_l1_1e-2,accuracy_l1_1e-1,_complexity",
         help="What metrics should we report? accuracy_tolerance/_l1_error/r2/_complexity/_relative_complexity/is_symbolic_solution",
     )
+    parser.add_argument("--beam_selection_metrics", type=str, default='r2_zero')
 
     parser.add_argument(
         "--debug_train_statistics",

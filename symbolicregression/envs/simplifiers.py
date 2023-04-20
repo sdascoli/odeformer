@@ -177,7 +177,7 @@ class Simplifier:
         def wrapped_numexpr_fn(_infix, x, extra_local_dict={}):
             assert isinstance(x, np.ndarray) and len(x.shape) == 2
             local_dict = {}
-            for d in range(self.params.max_input_dimension):
+            for d in range(self.params.max_dimension):
                 if "x_{}".format(d) in _infix:
                     if d >= x.shape[1]:
                         local_dict["x_{}".format(d)] = np.zeros(x.shape[0])
