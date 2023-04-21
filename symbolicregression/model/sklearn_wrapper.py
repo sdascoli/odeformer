@@ -13,6 +13,10 @@ from sklearn.base import BaseEstimator
 import symbolicregression.model.utils_wrapper as utils_wrapper
 import traceback
 from sklearn import feature_selection 
+from symbolicregression.envs.generators import integrate_ode
+from symbolicregression.envs.utils import *
+import warnings
+import scipy
 
 def exchange_node_values(tree, dico):
     new_tree = copy.deepcopy(tree)
@@ -106,7 +110,7 @@ class SymbolicTransformerRegressor(BaseEstimator):
     @torch.no_grad()
     def evaluate_tree(self, tree, times, trajectory, metric):
         pred_trajectory = self.predict(times, trajectory[0], tree=tree)
-        metrics = compute_metrics({"true": [trajectory], "predicted": [pred_trajectory], "predicted_tree": [tree]}, metrics=metric)
+        metrics = compute_metrics(pred_trajectory, trajectory, predicted_tree=tree, metrics=metric)
         return metrics[metric][0]
 
     def order_candidates(self, times, y, candidates, metric="_mse", verbose=False):
@@ -130,15 +134,9 @@ class SymbolicTransformerRegressor(BaseEstimator):
             if self.trees[0] is None:
                 return None
             else:
-                tree = self.trees[0][0] 
+                tree = self.trees[0][0]
 
-        def func(y,t):
-            return tree.val(y,t)[0]
-        with stdout_redirected():
-            with warnings.catch_warnings(record=True) as caught_warnings:
-                trajectory = scipy.integrate.odeint(func, y0, times)
-        if len(caught_warnings) > 0 or np.any(np.isnan(trajectory)):
-            return None
+        trajectory = integrate_ode(tree, y0, times)
         
         return trajectory
             

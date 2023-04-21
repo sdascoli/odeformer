@@ -87,9 +87,10 @@ class Evaluator(object):
         self,
         data_type,
         task,
-        verbose=True,
+        verbose=False,
         ablation_to_keep=None,
         save=False,
+        n_batches_per_write=10,
         logger=None,
         save_file=None,
     ):
@@ -100,7 +101,8 @@ class Evaluator(object):
         scores = OrderedDict({"epoch": self.trainer.epoch})
 
         params = self.params
-        logger.info(
+        if logger:
+            logger.info(
             "====== STARTING EVALUATION (multi-gpu: {}) =======".format(
                 params.multi_gpu
             )
@@ -170,11 +172,6 @@ class Evaluator(object):
                 os.makedirs(save_file)
             save_file = os.path.join(save_file, "eval_in_domain.csv")
 
-        batch_before_writing_threshold = min(
-            2, eval_size_per_gpu // params.batch_size_eval
-        )
-        batch_before_writing = batch_before_writing_threshold
-
         if ablation_to_keep is not None:
             ablation_to_keep = list(
                 map(lambda x: "info_" + x, ablation_to_keep.split(","))
@@ -186,49 +183,47 @@ class Evaluator(object):
 
         batch_results = defaultdict(list)
 
-        for samples, _ in iterator:
+        for i, (samples, _) in enumerate(iterator):
 
             times = samples["times"]
             trajectories = samples["trajectory"]
             infos = samples["infos"]
-            tree = samples["tree"]
+            trees = samples["tree"]
 
             all_candidates = dstr.fit(times, trajectories, verbose=verbose)
-            best_results = []
-            for time, trajectory, info, tree, candidates in zip(times, trajectories, infos, tree, all_candidates):
+            best_results = {metric:[] for metric in params.validation_metrics.split(',')}
+            best_candidates = []
+            for time, trajectory, candidates in zip(times, trajectories, all_candidates.values()):
                 results = []
+                if not candidates: 
+                    for k in best_results:
+                        best_results[k].append(np.nan)
+                    best_candidates.append(None)
+                    continue
                 for candidate in candidates:
-                    pred_trajectory = [dstr.predict(time, y0=trajectory[0], tree=candidate)]
-                    result = compute_metrics(
-                    {
-                        "true": trajectory,
-                        "predicted": pred_trajectory,
-                        "tree": candidate,
-                    },
-                    metrics=params.validation_metrics,
-                    )
+                    pred_trajectory = dstr.predict(time, y0=trajectory[0], tree=candidate)
+                    result = compute_metrics(pred_trajectory, trajectory, predicted_tree=candidate, metrics=params.validation_metrics)
                     results.append(result)
-                best_result = max(results, key=lambda x: x[params.beam_selection_metric])
-                best_results.append(best_result)
-
-            final_results = defaultdict(list)
-            for best_result in best_results:
+                best_result_id = max(range(len(results)), key=lambda i: results[i][params.beam_selection_metric])
+                best_result = results[best_result_id]
+                best_candidate = candidates[best_result_id]
                 for k, v in best_result.items():
-                    final_results[k].append(v)
+                    best_results[k].append(v[0])
+                best_candidates.append(best_candidate)
  
             for k, v in infos.items():
                 infos[k] = v.tolist()
 
-            batch_results = defaultdict(list)
-            batch_results["tree"].extend(candidates)
+            batch_results["trees"].extend(trees)
+            batch_results["predicted_trees"].extend(best_candidates)
+            #print(trees, best_candidates)
             for k, v in infos.items():
                 batch_results["info_" + k].extend(v)        
-            for k, v in final_results.items():
+            for k, v in best_results.items():
                 batch_results[k ].extend(v)
                 
             if save:
-                batch_before_writing -= 1
-                if batch_before_writing <= 0:
+                if i % n_batches_per_write == 0:
                     batch_results = pd.DataFrame.from_dict(batch_results)
                     if first_write:
                         batch_results.to_csv(save_file, index=False)
@@ -243,10 +238,9 @@ class Evaluator(object):
                             logger.info(
                                 "Saved {} equations".format(
                                     self.params.batch_size_eval
-                                    * batch_before_writing_threshold
+                                    * n_batches_per_write
                                 )
                             )
-                    batch_before_writing = batch_before_writing_threshold
                     batch_results = defaultdict(list)
             bs = len(times)
             pbar.update(bs)

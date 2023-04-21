@@ -456,7 +456,7 @@ class TransformerModel(nn.Module):
         return scores, loss
 
     def generate(
-        self, src_enc, src_len, max_len=200, top_p=1.0, sample_temperature=None
+        self, src_enc, src_len, max_len=200, top_p=1.0, sample_temperature=None, seed=0
     ):
         """
         Decode a sentence given initial start.
@@ -470,7 +470,7 @@ class TransformerModel(nn.Module):
             - False, for regular "arange" positions (LM)
             - True, to reset positions from the new generation (MT)
         """
-
+        torch.manual_seed(seed)
         # input batch
         bs = len(src_len)
         assert src_enc.size(0) == bs

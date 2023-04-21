@@ -758,39 +758,46 @@ class RandomFunctions(Generator):
         ):
 
         y0 = rng.randn(dimension)
+        times = np.linspace(0,1,n_points)
+        trajectory = integrate_ode(tree, y0, times, self.params.ode_integrator)
 
-        if self.params.ode_integrator == "odeint":
-            t = np.linspace(0,1,n_points)
-            def func(y,t):
-                return tree.val(y,t)[0]
-            with stdout_redirected():
-                with warnings.catch_warnings(record=True) as caught_warnings:
-                    trajectory = scipy.integrate.odeint(func, y0, t)
-        elif self.params.ode_integrator == "solve_ivp":
-            t = (0,1)
-            def func(t,y):
-                return tree.val([y],t)[0]
-            with warnings.catch_warnings(record=True) as caught_warnings:
-                try: trajectory = scipy.integrate.solve_ivp(func, t, y0)
-                except: return None, None
-                t = sol.t[:n_points]
-                trajectory = trajectory.y.T[:n_points]
-        else:
-            raise NotImplementedError
-
-        if len(caught_warnings) > 0 or np.any(np.isnan(trajectory)):
-            return None, None
-        
-        if np.any(np.abs(trajectory)>10**self.params.max_exponent):
+        if trajectory is None or np.any(np.abs(trajectory)>10**self.params.max_exponent):
             return None, None
 
         #trajectory = np.concatenate((t.reshape(-1,1),trajectory), axis=-1)
         if self.params.subsample_ratio:
             indices_to_remove = np.random.choice(trajectory.shape[0], int(trajectory.shape[0] * self.params.subsample_ratio), replace=False)
             trajectory = np.delete(trajectory, indices_to_remove, axis=0)
-            t = np.delete(t, indices_to_remove, axis=0)
+            times = np.delete(times, indices_to_remove, axis=0)
         
-        return tree, (t, trajectory)
+        return tree, (times, trajectory)
+    
+def integrate_ode(tree, y0, times, ode_integrator = 'odeint'):
+
+    if ode_integrator == "odeint":
+        def func(y,t):
+            return tree.val(y,t)[0]
+        with stdout_redirected():
+            with warnings.catch_warnings(record=True) as caught_warnings:
+                try: trajectory = scipy.integrate.odeint(func, y0, times)
+                except: return None
+    elif ode_integrator == "solve_ivp":
+        n_points = len(times)
+        t = (0,1)
+        def func(t,y):
+            return tree.val([y],t)[0]
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            try: trajectory = scipy.integrate.solve_ivp(func, t, y0)
+            except: return None
+            t = sol.t[:n_points]
+            trajectory = trajectory.y.T[:n_points]
+    else:
+        raise NotImplementedError
+    
+    if len(caught_warnings) > 0 or np.any(np.isnan(trajectory)):
+        return None
+
+    return trajectory
 
 
 if __name__ == "__main__":
