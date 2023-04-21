@@ -789,7 +789,6 @@ def integrate_ode(tree, y0, times, ode_integrator = 'odeint'):
             try: 
                 trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times)
             except: 
-                print(traceback.format_exc())
                 return None
             trajectory = trajectory.y.T
     else:

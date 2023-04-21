@@ -164,7 +164,7 @@ def get_parser():
     parser.add_argument(
         "--batch_size_eval",
         type=int,
-        default=16,
+        default=32,
         help="Number of sentences per batch during evaluation (if None, set to 1.5*batch_size)",
     )
     parser.add_argument(
@@ -343,7 +343,7 @@ def get_parser():
         help="Should we evaluate with additional output noise",
     )
     parser.add_argument(
-        "--eval_size", type=int, default=10000, help="Size of valid and test samples"
+        "--eval_size", type=int, default=100, help="Size of valid and test samples"
     )
     parser.add_argument(
         "--eval_noise_type",

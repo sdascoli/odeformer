@@ -149,7 +149,7 @@ def timeout(seconds=10, error_message=os.strerror(errno.ETIME)):
             # logger.warning(f"Catched the signal ({repeat_id}) Setting signal handler {repeat_id + 1}")
             signal.signal(signal.SIGALRM, partial(_handle_timeout, repeat_id + 1))
             signal.alarm(seconds)
-            raise TimeoutError(error_message)
+            raise MyTimeoutError(error_message)
 
         def wrapper(*args, **kwargs):
             old_signal = signal.signal(signal.SIGALRM, partial(_handle_timeout, 0))

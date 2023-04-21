@@ -228,7 +228,7 @@ class FunctionEnvironment(object):
                     errors[error[0]] += 1
                     assert False
                 return expr, errors
-            except (AssertionError, TimeoutError):
+            except (AssertionError, MyTimeoutError):
                 continue
             except:
                 if self.params.debug:
@@ -666,7 +666,7 @@ class FunctionEnvironment(object):
             "--ode_integrator",
             type=str,
             choices = ["odeint", "solve_ivp"],
-            default = "odeint",
+            default = "solve_ivp",
             help="ODE integrator to use",
         )
         parser.add_argument(
