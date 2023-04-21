@@ -529,7 +529,28 @@ class FunctionEnvironment(object):
             default=False,
             help="should we enforce that we get as many examples of each dim ?",
         )
-
+        parser.add_argument(
+            "--train_noise_gamma",
+            type=float,
+            default=0.0,
+            help="Should we train with additional output noise",
+        )
+        parser.add_argument(
+            "--eval_noise_gamma",
+            type=float,
+            default=0.0,
+            help="Should we evaluate with additional output noise",
+        )
+        parser.add_argument(
+            "--eval_noise_type",
+            type=str,
+            default="additive",
+            choices=["additive", "multiplicative"],
+            help="Type of noise added at test time",
+        )
+        parser.add_argument(
+            "--eval_noise", type=float, default=0, help="Size of valid and test samples"
+        )
         parser.add_argument(
             "--float_precision",
             type=int,

@@ -17,42 +17,22 @@ def get_parser():
     parser = argparse.ArgumentParser(description="Function prediction", add_help=False)
 
     # main parameters
-    parser.add_argument(
-        "--dump_path", type=str, default="", help="Experiment dump path"
-    )
-
-    parser.add_argument(
-        "--eval_dump_path", type=str, default=None, help="Evaluation dump path"
-    )
-    parser.add_argument(
-        "--save_results", type=bool, default=True, help="Should we save results?"
-    )
+    parser.add_argument("--dump_path", type=str, default="", help="Experiment dump path")
+    parser.add_argument("--eval_dump_path", type=str, default=None, help="Evaluation dump path")
+    parser.add_argument("--save_results", type=bool, default=True, help="Should we save results?")
 
     parser.add_argument("--exp_name", type=str, default="debug", help="Experiment name")
-    parser.add_argument(
-        "--print_freq", type=int, default=100, help="Print every n steps"
-    )
-    parser.add_argument(
-        "--save_periodic",
-        type=int,
-        default=25,
-        help="Save the model periodically (0 to disable)",
-    )
+    parser.add_argument("--print_freq", type=int, default=100, help="Print every n steps")
+    parser.add_argument("--save_periodic",type=int,default=25,help="Save the model periodically (0 to disable)",)
     parser.add_argument("--exp_id", type=str, default="", help="Experiment ID")
 
     # float16 / AMP API
     parser.add_argument(
         "--fp16", type=bool_flag, default=False, help="Run model with float16"
     )
-    parser.add_argument(
-        "--amp",
-        type=int,
-        default=-1,
-        help="Use AMP wrapper for float16 / distributed / gradient accumulation. Level of optimization. -1 to disable.",
-    )
-    parser.add_argument(
-        "--rescale", type=bool, default=True, help="Whether to rescale at inference.",
-    )
+    parser.add_argument("--amp",type=int,default=-1,
+                        help="Use AMP wrapper for float16 / distributed / gradient accumulation. Level of optimization. -1 to disable.")
+    parser.add_argument("--rescale", type=bool, default=True, help="Whether to rescale at inference.")
 
     # model parameters
     parser.add_argument(
@@ -181,7 +161,7 @@ def get_parser():
         help="Clip gradients norm (0 to disable)",
     )
     parser.add_argument(
-        "--n_steps_per_epoch", type=int, default=3000, help="Number of steps per epoch",
+        "--n_steps_per_epoch", type=int, default=10000, help="Number of steps per epoch",
     )
     parser.add_argument(
         "--max_epoch", type=int, default=100000, help="Number of epochs"
@@ -207,16 +187,9 @@ def get_parser():
     )
 
     parser.add_argument(
-        "--train_noise_gamma",
-        type=float,
-        default=0.0,
-        help="Should we train with additional output noise",
-    )
-
-    parser.add_argument(
         "--ablation_to_keep",
         type=str,
-        default="n_unary_ops,n_binary_ops,n_points",
+        default="n_unary_ops,dimension",
         help="which ablation should we do",
     )
 
@@ -324,7 +297,7 @@ def get_parser():
     parser.add_argument(
         "--validation_metrics",
         type=str,
-        default="r2_zero,r2,accuracy_l1_biggio,accuracy_l1_1e-3,accuracy_l1_1e-2,accuracy_l1_1e-1,_complexity",
+        default="r2_zero,accuracy_l1_1e-3,accuracy_l1_1e-1,_complexity",
         help="What metrics should we report? accuracy_tolerance/_l1_error/r2/_complexity/_relative_complexity/is_symbolic_solution",
     )
     parser.add_argument("--beam_selection_metric", type=str, default='r2_zero')
@@ -335,25 +308,8 @@ def get_parser():
         default=False,
         help="whether we should print infos distributions",
     )
-
     parser.add_argument(
-        "--eval_noise_gamma",
-        type=float,
-        default=0.0,
-        help="Should we evaluate with additional output noise",
-    )
-    parser.add_argument(
-        "--eval_size", type=int, default=100, help="Size of valid and test samples"
-    )
-    parser.add_argument(
-        "--eval_noise_type",
-        type=str,
-        default="additive",
-        choices=["additive", "multiplicative"],
-        help="Type of noise added at test time",
-    )
-    parser.add_argument(
-        "--eval_noise", type=float, default=0, help="Size of valid and test samples"
+        "--eval_size", type=int, default=1000, help="Size of valid and test samples"
     )
     parser.add_argument(
         "--eval_only", type=bool_flag, default=False, help="Only run evaluations"

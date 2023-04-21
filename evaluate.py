@@ -251,12 +251,16 @@ class Evaluator(object):
             return
         info_columns = filter(lambda x: x.startswith("info_"), df.columns)
         df = df.drop(columns=filter(lambda x: x not in ablation_to_keep, info_columns))
+        df = df.drop(columns=["trees","predicted_trees"])
 
+        for metric in params.validation_metrics.split(','):
+            scores[metric] = df[metric].mean()
         for ablation in ablation_to_keep:
             for val, df_ablation in df.groupby(ablation):
                 avg_scores_ablation = df_ablation.mean()
                 for k, v in avg_scores_ablation.items():
                     scores[k + "_{}_{}".format(ablation, val)] = v
+                    
         return scores
 
 
