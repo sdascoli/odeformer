@@ -18,7 +18,9 @@ import warnings
 from symbolicregression.envs import encoders
 from symbolicregression.envs.utils import *
 from ..utils import bool_flag, timeout, MyTimeoutError
+
 warnings.filterwarnings("ignore")
+import traceback
 
 logger = getLogger()
 import random
@@ -748,7 +750,6 @@ class RandomFunctions(Generator):
         tree_with_constants = env.word_to_infix(prefix, is_float=False, str_array=False)
         return tree_with_constants
 
-    #@timeout(1)
     def generate_datapoints(
         self,
         tree,
@@ -758,7 +759,7 @@ class RandomFunctions(Generator):
         ):
 
         y0 = rng.randn(dimension)
-        times = np.linspace(0,1,n_points)
+        times = np.linspace(1,2,n_points)
         trajectory = integrate_ode(tree, y0, times, self.params.ode_integrator)
 
         if trajectory is None or np.any(np.abs(trajectory)>10**self.params.max_exponent):
@@ -782,21 +783,25 @@ def integrate_ode(tree, y0, times, ode_integrator = 'odeint'):
                 try: trajectory = scipy.integrate.odeint(func, y0, times)
                 except: return None
     elif ode_integrator == "solve_ivp":
-        n_points = len(times)
-        t = (0,1)
         def func(t,y):
             return tree.val([y],t)[0]
         with warnings.catch_warnings(record=True) as caught_warnings:
-            try: trajectory = scipy.integrate.solve_ivp(func, t, y0)
-            except: return None
-            t = sol.t[:n_points]
-            trajectory = trajectory.y.T[:n_points]
+            try: 
+                trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times)
+            except: 
+                print(traceback.format_exc())
+                return None
+            trajectory = trajectory.y.T
     else:
         raise NotImplementedError
     
-    if len(caught_warnings) > 0 or np.any(np.isnan(trajectory)):
+    if len(caught_warnings) > 0 :
         return None
-
+    if np.any(np.isnan(trajectory)):
+        return None
+    if len(times)!=len(trajectory):
+        return None
+    
     return trajectory
 
 

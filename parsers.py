@@ -216,7 +216,7 @@ def get_parser():
     parser.add_argument(
         "--ablation_to_keep",
         type=str,
-        default=None,
+        default="n_unary_ops,n_binary_ops,n_points",
         help="which ablation should we do",
     )
 
@@ -225,9 +225,6 @@ def get_parser():
         type=int,
         default=200,
         help="split into chunks of size max_input_points at eval",
-    )
-    parser.add_argument(
-        "--n_trees_to_refine", type=int, default=10, help="refine top n trees"
     )
 
     # export data / reload it
@@ -375,12 +372,6 @@ def get_parser():
         type=bool_flag,
         default=False,
         help="Print evaluation details",
-    )
-    parser.add_argument(
-        "--eval_input_length_modulo",
-        type=int,
-        default=-1,
-        help="Compute accuracy for all input lengths modulo X. -1 is equivalent to no ablation",
     )
     parser.add_argument("--eval_on_pmlb", type=bool, default=True)
     parser.add_argument("--eval_in_domain", type=bool, default=True)

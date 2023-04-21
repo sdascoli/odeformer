@@ -202,8 +202,7 @@ class FunctionEnvironment(object):
         nb_binary_ops=None,
         nb_unary_ops=None,
         dimension=None,
-        n_input_points=None,
-        input_distribution_type=None,
+        n_points=None,
     ):
         errors = defaultdict(int)
         if not train or self.params.use_controller:
@@ -222,18 +221,18 @@ class FunctionEnvironment(object):
                     nb_binary_ops=nb_binary_ops,
                     nb_unary_ops=nb_unary_ops,
                     dimension=dimension,
-                    n_input_points=n_input_points,
-                    input_distribution_type=input_distribution_type,
+                    n_points=n_points,
                 )
                 if error:
                     if self.params.debug: print(error)
                     errors[error[0]] += 1
                     assert False
                 return expr, errors
-            except (AssertionError, MyTimeoutError):
+            except (AssertionError, TimeoutError):
                 continue
             except:
-                print(traceback.format_exc())
+                if self.params.debug:
+                    print(traceback.format_exc())
                 continue
                 if self.params.debug:
                     # print(expr['tree'])
@@ -249,8 +248,7 @@ class FunctionEnvironment(object):
         nb_binary_ops=None,
         nb_unary_ops=None,
         dimension=None,
-        n_input_points=None,
-        input_distribution_type=None,
+        n_points=None,
     ):
 
         (
@@ -291,16 +289,16 @@ class FunctionEnvironment(object):
                 return {"tree": tree}, ["simplification error"]
 
 
-        if n_input_points is None:
-            n_input_points = (
-                self.params.max_len
+        if n_points is None:
+            n_points = (
+                self.params.max_points
                 if not train
                 else self.rng.randint(
                     min(
-                        self.params.min_len_per_dim * dimension,
-                        self.params.max_len,
+                        self.params.min_points_per_dim * dimension,
+                        self.params.max_points,
                     ),
-                    self.params.max_len + 1,
+                    self.params.max_points + 1,
                 )
             )
 
@@ -309,14 +307,14 @@ class FunctionEnvironment(object):
             tree=tree,
             rng=self.rng,
             dimension=dimension,
-            n_points=n_input_points,
+            n_points=n_points,
         )
 
         if datapoints is None:
             return {"tree": tree}, ["datapoint generation error"]
 
         times, trajectory = datapoints
-        n_input_points = trajectory.shape[0]
+        n_points = trajectory.shape[0]
 
         ##output noise added to trajectory
         if self.params.train_noise_gamma > 0 or self.params.eval_noise_gamma > 0:
@@ -345,7 +343,7 @@ class FunctionEnvironment(object):
         ), "tree: {}\n encoded: {}".format(tree, tree_encoded)
 
         info = {
-            "n_input_points": n_input_points,
+            "n_points": n_points,
             "n_unary_ops":    sum(nb_unary_ops),
             "n_binary_ops":   sum(nb_binary_ops),
             "dimension":           dimension,
@@ -391,7 +389,7 @@ class FunctionEnvironment(object):
             )
         return DataLoader(
             dataset,
-            timeout=(0 if params.num_workers == 0 else 3600),
+            #timeout=(0 if params.num_workers == 0 else 3600),
             batch_size=params.batch_size,
             num_workers=(
                 params.num_workers
@@ -431,7 +429,7 @@ class FunctionEnvironment(object):
 
         return DataLoader(
             dataset,
-            timeout=0,
+            #timeout=0,
             batch_size=batch_size,
             num_workers=1,
             shuffle=False,
@@ -613,10 +611,10 @@ class FunctionEnvironment(object):
             help="Minimum probability of generating an example with given n_op, for our curriculum strategy",
         )
         parser.add_argument(
-            "--max_len", type=int, default=200, help="Max number of terms in the series"
+            "--max_points", type=int, default=200, help="Max number of terms in the series"
         )
         parser.add_argument(
-            "--min_len_per_dim", type=int, default=5, help="Min number of terms per dim"
+            "--min_points_per_dim", type=int, default=5, help="Min number of terms per dim"
         )
         parser.add_argument(
             "--max_centroids",
@@ -1086,7 +1084,7 @@ class EnvDataset(Dataset):
         # del sample["trajectory"]
         # sample["infos"] = select_dico_index(sample["infos"], -self.remaining_data)
         # sequence = []
-        # for n in range(sample["infos"]["n_input_points"]):
+        # for n in range(sample["infos"]["n_points"]):
         #     sequence.append([sample["times"][n], sample["trajectory"][n]])
         # sample["infos"]["input_sequence_length"] = self.env.get_length_after_batching(
         #     [sequence]

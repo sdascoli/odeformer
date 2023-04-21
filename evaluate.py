@@ -155,8 +155,7 @@ class Evaluator(object):
 
         dstr = SymbolicTransformerRegressor(
             model=mw,
-            max_input_points=params.max_len,
-            n_trees_to_refine=params.n_trees_to_refine,
+            max_input_points=params.max_points,
             rescale=False,
         )
 
@@ -359,6 +358,4 @@ if __name__ == "__main__":
     params.beam_size = 1
     params.rescale = True
     params.max_input_points = 200
-    params.pmlb_data_type = "black_box"
-    params.n_trees_to_refine = 10
     main(params)

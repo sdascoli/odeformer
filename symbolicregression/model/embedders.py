@@ -69,7 +69,7 @@ class LinearPointEmbedder(Embedder):
         for i in range(self.params.n_emb_layers-1):
             self.hidden_layers.append(nn.Linear(hidden_size, hidden_size))
         self.fc = nn.Linear(hidden_size, self.output_dim)
-        self.max_seq_len = self.params.max_len
+        self.max_seq_len = self.params.max_points
 
     def compress(
         self, sequences_embeddings: torch.Tensor
