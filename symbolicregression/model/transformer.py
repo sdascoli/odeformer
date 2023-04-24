@@ -189,7 +189,7 @@ class TransformerFFN(nn.Module):
 
 class TransformerModel(nn.Module):
 
-    STORE_OUTPUTS = True
+    STORE_OUTPUTS = False
 
     def __init__(
         self,

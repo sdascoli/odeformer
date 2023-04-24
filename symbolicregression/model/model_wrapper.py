@@ -31,6 +31,7 @@ class ModelWrapper(nn.Module):
         beam_early_stopping=True,
         max_generated_output_len=200,
         beam_temperature=1.0,
+        average_embeddings=False,
     ):
         super().__init__()
 
@@ -45,12 +46,10 @@ class ModelWrapper(nn.Module):
         self.beam_length_penalty = beam_length_penalty
         self.beam_temperature = beam_temperature
         self.device = next(self.embedder.parameters()).device
+        self.average_embeddings = False
 
     @torch.no_grad()
-    def forward(
-        self, input,
-    ):
-
+    def forward(self, input):
         """
         x: bags of sequences (B, T)
         """
@@ -128,6 +127,9 @@ class ModelWrapper(nn.Module):
 
             elif self.beam_type == "sampling":
                 num_samples = self.beam_size
+                if self.average_embeddings:
+                    encoded = encoded.mean(dim=0, keepdims=True)
+                    bs = 1
                 encoded = (
                     encoded.unsqueeze(1)
                     .expand((bs, num_samples) + encoded.shape[1:])

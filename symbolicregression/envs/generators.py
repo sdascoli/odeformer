@@ -758,8 +758,8 @@ class RandomFunctions(Generator):
         n_points
         ):
 
-        y0 = rng.randn(dimension)
-        times = np.linspace(1,2,n_points)
+        y0 = self.params.init_scale * rng.randn(dimension)
+        times = np.linspace(1, self.params.time_range, n_points)
         trajectory = integrate_ode(tree, y0, times, self.params.ode_integrator)
 
         if trajectory is None or np.any(np.abs(trajectory)>10**self.params.max_exponent):

@@ -84,6 +84,8 @@ class SymbolicTransformerRegressor(BaseEstimator):
                     inputs.append([])
                     inputs_ids.append(seq_id)
                 inputs[-1].append([scaled_times[seq_id][seq_l], y_seq[seq_l]])
+            # inputs.append([])
+            # inputs_ids.append(seq_id)
 
         if self.max_number_bags>0:
             inputs = inputs[:self.max_number_bags]

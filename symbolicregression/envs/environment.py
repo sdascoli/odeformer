@@ -671,10 +671,18 @@ class FunctionEnvironment(object):
             default=0.0,
             help="Probability to generate n in leafs",
         )
+
+        # ODE
+        parser.add_argument(
+            "--time_range",
+            type=float,
+            default=10.0,
+            help="Time range for ODE integration",
+        )
         parser.add_argument(
             "--prob_t",
             type=float,
-            default=0.2,
+            default=0.,
             help="Probability to generate n in leafs",
         )
         parser.add_argument(
@@ -691,20 +699,11 @@ class FunctionEnvironment(object):
             help="ODE integrator to use",
         )
         parser.add_argument(
-            "--max_trials",
-            type=int,
-            default=1,
-            help="How many trials we have for a given function",
+            "--init_scale",
+            type=float,
+            default = 1.0,
+            help="Scale for initial conditions",
         )
-
-        # evaluation
-        parser.add_argument(
-            "--n_prediction_points",
-            type=int,
-            default=200,
-            help="number of next terms to predict",
-        )
-
 
 
 class EnvDataset(Dataset):
