@@ -45,37 +45,50 @@ class Scaler(ABC):
     Base class for scalers
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, range_shift=1, feature_scale=.5):
+        self.time_scaler = sklearn.preprocessing.MinMaxScaler()
+        self.traj_scale  = None
+        self.range_shift = range_shift
+        self.feature_scale = feature_scale
 
-    @abstractmethod
-    def fit(self, X):
-        pass
+    def fit(self, time, trajectory):
+        self.time_scaler.fit(time.reshape(-1,1))
+        self.traj_scale = trajectory[0]
 
-    @abstractmethod
-    def fit_transform(self, X):
-        pass
-
-    @abstractmethod
-    def transform(self, X):
-        pass
-
-    @abstractmethod
+    def transform(self, time, trajectory):
+        scaled_time = self.time_scaler.transform(time.reshape(-1,1))+self.range_shift
+        scaled_traj = self.feature_scale * trajectory/(self.traj_scale.reshape(1,-1))
+        return scaled_time[:,0], scaled_traj
+        
+    def fit_transform(self, time, trajectory):
+        self.fit(time, trajectory)
+        scaled_time, scaled_trajectory = self.transform(time, trajectory)
+        return scaled_time, scaled_trajectory
+    
     def get_params(self):
-        pass
+        scale = self.feature_scale/self.traj_scale
 
-    def rescale_function(self, env, tree, a, b):
+        val_min, val_max = self.time_scaler.data_min_[0], self.time_scaler.data_max_[0]
+        a_t, b_t = 1./(val_max-val_min), -val_min/(val_max-val_min)+self.range_shift
+        return (a_t, b_t, scale)
+
+    def rescale_function(self, env, tree, a_t, b_t, scale):
         prefix = tree.prefix().split(",")
         idx = 0
         while idx < len(prefix):
-            if prefix[idx].startswith("x_"):
-                k = int(prefix[idx][-1])
-                if k>=len(a): 
-                    continue
-                a_k, b_k = str(a[k]), str(b[k])
-                prefix_to_add = ["add", b_k, "mul", a_k, prefix[idx]]
+            if prefix[idx].startswith("x_") or prefix[idx] == "t":
+                if prefix[idx].startswith("x_"):
+                    k = int(prefix[idx][-1])
+                    if k>=len(scale): 
+                        continue
+                    a = str(scale[k])
+                    prefix_to_add = ["mul", a, prefix[idx]]
+                else:
+                    a, b = str(a_t), str(b_t)
+                    prefix_to_add = ["add", b, "mul", a, prefix[idx]]
                 prefix = prefix[:idx] + prefix_to_add + prefix[min(idx + 1, len(prefix)):]
                 idx += len(prefix_to_add)
+                #print(scale, idx, len(prefix), prefix[idx], len(prefix_to_add))
             else:
                 idx+=1
                 continue
@@ -88,13 +101,13 @@ class StandardScaler(Scaler):
         transformation is: 
         x' =  (x - mean)/std
         """
-        self.scaler = sklearn.preprocessing.StandardScaler()
 
-    def fit(self, X):
+    def fit(self, ):
         self.scaler.fit(X)
 
     def fit_transform(self, X):
-        scaled_X = self.scaler.fit_transform(X)
+        scaled_time       = self.time_scaler.fit_transform(time)
+        scaled_trajectory = self.traj_scaler.fit_transform(trajectory)
         return scaled_X
     
     def transform(self, X):

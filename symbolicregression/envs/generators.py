@@ -107,7 +107,7 @@ class Node:
 
     def __str__(self):
         # infix a default print
-        return self.infix()
+        return self.prefix()
 
     def __repr__(self):
         # infix a default print

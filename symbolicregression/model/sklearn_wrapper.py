@@ -51,7 +51,7 @@ class SymbolicTransformerRegressor(BaseEstimator):
         self,
         times,
         trajectories,
-        verbose=False
+        verbose=False,
     ):
         self.start_fit = time.time()
 
@@ -60,20 +60,24 @@ class SymbolicTransformerRegressor(BaseEstimator):
             trajectories = [trajectories]
         n_datasets = len(times)
     
-        scaler = utils_wrapper.MinMaxScaler() if self.rescale else None
+        scaler = utils_wrapper.Scaler() if self.rescale else None
         scale_params = {}
         if scaler is not None:
             scaled_times = []
-            for i, x in enumerate(times):
-                scaled_times.append(scaler.fit_transform(x))
+            scaled_trajectories = []
+            for i, (time_, trajectory) in enumerate(zip(times, trajectories)):
+                scaled_time, scaled_trajectory = scaler.fit_transform(time_, trajectory)
+                scaled_times.append(scaled_time)
+                scaled_trajectories.append(scaled_trajectory)
                 scale_params[i]=scaler.get_params()
         else:
             scaled_times = times
+            scaled_trajectories = trajectories
 
         inputs, inputs_ids = [], []
         for seq_id in range(len(scaled_times)):
             for seq_l in range(len(scaled_times[seq_id])):
-                y_seq = trajectories[seq_id]
+                y_seq = scaled_trajectories[seq_id]
                 if len(y_seq.shape)==1:
                     y_seq = np.expand_dims(y_seq,-1)
                 if seq_l%self.max_input_points == 0:
@@ -95,15 +99,13 @@ class SymbolicTransformerRegressor(BaseEstimator):
         for i in range(len(inputs)):
             input_id = inputs_ids[i]
             candidates = outputs[i]
-            all_candidates[input_id].extend(candidates)
+            for candidate in candidates:
+                if scaler is not None:
+                    candidate = scaler.rescale_function(self.model.env, candidate, *scale_params[input_id])                    
+                all_candidates[input_id].append(candidate)
         assert len(all_candidates.keys())==n_datasets
             
-        self.trees = {}
-        for input_id, candidates in all_candidates.items():
-            if len(candidates)==0: 
-                self.trees[input_id] = None
-            else:
-                self.trees[input_id] = candidates
+        self.trees = all_candidates
 
         return all_candidates
 

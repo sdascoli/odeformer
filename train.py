@@ -80,16 +80,9 @@ def main(params):
 
         if params.eval_on_pmlb:
             feynman_scores = evaluator.evaluate_pmlb(
-                filter_fn=lambda x: x["dataset"].str.contains("feynman")
+                filter_fn=lambda x: x["dataset"].str.contains("strogatz")
             )
-            logger.info("__feynman__:%s" % json.dumps(feynman_scores))
-
-            filter_fn = lambda x: ~(
-                x["dataset"].str.contains("strogatz")
-                | x["dataset"].str.contains("feynman")
-            )
-            black_box_scores = evaluator.evaluate_pmlb(filter_fn=filter_fn)
-            logger.info("__black_box__:%s" % json.dumps(black_box_scores))
+            logger.info("__strogatz__:%s" % json.dumps(feynman_scores))
         exit()
 
     trainer.n_equations = 0

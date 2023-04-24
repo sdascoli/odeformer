@@ -61,13 +61,7 @@ class ModelWrapper(nn.Module):
         B, T = len(input), max([len(xi) for xi in input])
         outputs = []
 
-        for chunk in chunks(
-            np.arange(B),
-            min(
-                int(10000 / T),
-                int(100000 / self.beam_size / self.max_generated_output_len),
-            ),
-        ):
+        for chunk in chunks(np.arange(B), int(20000/T)):
             x, x_len = embedder([input[idx] for idx in chunk])
             encoded = encoder("fwd", x=x, lengths=x_len, causal=False).transpose(0, 1)
             bs = encoded.shape[0]
@@ -129,7 +123,8 @@ class ModelWrapper(nn.Module):
                     for i in range(bs)
                 ]
                 for i in range(bs):
-                    generations[i].extend(search_generations[i])
+                    #generations[i].extend(search_generations[i])
+                    generations[i] = search_generations[i]
 
             elif self.beam_type == "sampling":
                 num_samples = self.beam_size
@@ -167,7 +162,8 @@ class ModelWrapper(nn.Module):
                     for i in range(bs)
                 ]
                 for i in range(bs):
-                    generations[i].extend(sampling_generations[i])
+                    #generations[i].extend(sampling_generations[i])
+                    generations[i] = sampling_generations[i]
             else:
                 raise NotImplementedError
             outputs.extend(generations)
