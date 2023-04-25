@@ -32,7 +32,7 @@ def get_parser():
     )
     parser.add_argument("--amp",type=int,default=-1,
                         help="Use AMP wrapper for float16 / distributed / gradient accumulation. Level of optimization. -1 to disable.")
-    parser.add_argument("--rescale", type=bool, default=True, help="Whether to rescale at inference.")
+    parser.add_argument("--rescale", type=bool, default=False, help="Whether to rescale at inference.")
 
     # model parameters
     parser.add_argument(

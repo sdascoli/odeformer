@@ -569,7 +569,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--max_exponent_prefactor",
             type=int,
-            default=1,
+            default=0,
             help="Maximal order of magnitude in prefactors",
         )
         parser.add_argument(
@@ -676,7 +676,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--time_range",
             type=float,
-            default=4.0,
+            default=5.0,
             help="Time range for ODE integration",
         )
         parser.add_argument(

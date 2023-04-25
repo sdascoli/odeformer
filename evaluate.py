@@ -164,9 +164,12 @@ class Evaluator(object):
             if save_file is None:
                 save_file = (
                     self.params.eval_dump_path
-                    if self.params.eval_dump_path is not None
+                    if self.params.eval_dump_path
                     else self.params.dump_path
+                    if self.params.dump_path
+                    else self.params.reload_checkpoint
                 )
+
             if not os.path.exists(save_file):
                 os.makedirs(save_file)
             save_file = os.path.join(save_file, "eval_in_domain.csv")
@@ -337,29 +340,15 @@ if __name__ == "__main__":
 
     parser = get_parser()
     params = parser.parse_args()
-    # params.reload_checkpoint = "/checkpoint/sdascoli/symbolicregression/shift_all/use_skeleton_True_use_sympy_False_tokens_per_batch_10000_n_enc_layers_4_n_dec_layers_16"
-    #params.reload_checkpoint = "/checkpoint/sdascoli/symbolicregression/shift_all/use_skeleton_False_use_sympy_False_tokens_per_batch_10000_n_enc_layers_4_n_dec_layers_16/"
-    # params.reload_checkpoint = "/checkpoint/sdascoli/symbolicregression/newgen/use_skeleton_False_use_sympy_False_tokens_per_batch_10000_n_enc_layers_4_n_dec_layers_16/"
     pk = pickle.load(open(params.reload_checkpoint + "/params.pkl", "rb"))
     pickled_args = pk.__dict__
     for p in params.__dict__:
         if p in pickled_args and p not in ["dump_path", "reload_checkpoint"]:
             params.__dict__[p] = pickled_args[p]
 
-    params.multi_gpu = False
+    params.eval_size = 10
     params.is_slurm_job = False
-    params.eval_on_pmlb = True  # True
-    params.eval_in_domain = False
     params.local_rank = -1
     params.master_port = -1
-    params.num_workers = 1
-    params.target_noise = 0.0
-    params.max_input_points = 200
-    params.random_state = 14423
-    params.max_number_bags = 10
-    params.save_results = False
-    params.eval_verbose_print = True
-    params.beam_size = 1
-    params.rescale = True
-    params.max_input_points = 200
+
     main(params)

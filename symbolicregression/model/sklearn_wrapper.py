@@ -101,6 +101,7 @@ class SymbolicTransformerRegressor(BaseEstimator):
         for i in range(len(inputs)):
             input_id = inputs_ids[i]
             candidates = outputs[i]
+            all_candidates[input_id] = []
             for candidate in candidates:
                 if scaler is not None:
                     candidate = scaler.rescale_function(self.model.env, candidate, *scale_params[input_id])                    
