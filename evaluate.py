@@ -309,9 +309,9 @@ def main(params):
     scores = {}
     save = params.save_results
 
-    if params.eval_in_domain:
-       scores = evaluator.evaluate_in_domain("valid1","functions",save=save,)
-       logger.info("__log__:%s" % json.dumps(scores))
+    #if params.eval_in_domain:
+    #   scores = evaluator.evaluate_in_domain("valid1","functions",save=save,)
+    #   logger.info("__log__:%s" % json.dumps(scores))
 
     if params.eval_on_pmlb:
         pmlb_scores = evaluator.evaluate_on_pmlb()
