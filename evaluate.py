@@ -77,37 +77,8 @@ class Evaluator(object):
         self.modules = trainer.modules
         self.params = trainer.params
         self.env = trainer.env
+        self.logger = trainer.logger
         Evaluator.ENV = trainer.env
-
-    def set_env_copies(self, data_types):
-        for data_type in data_types:
-            setattr(self, "{}_env".format(data_type), deepcopy(self.env))
-
-    def evaluate_in_domain(
-        self,
-        data_type,
-        task,
-        verbose=False,
-        ablation_to_keep=None,
-        save=False,
-        n_batches_per_write=10,
-        logger=None,
-        save_file=None,
-    ):
-
-        """
-        Encoding / decoding step with beam generation and SymPy check.
-        """
-        scores = OrderedDict({"epoch": self.trainer.epoch})
-
-        params = self.params
-        if logger:
-            logger.info(
-            "====== STARTING EVALUATION (multi-gpu: {}) =======".format(
-                params.multi_gpu
-            )
-        )
-
         embedder = (
             self.modules["embedder"].module
             if params.multi_gpu
@@ -126,22 +97,8 @@ class Evaluator(object):
         embedder.eval()
         encoder.eval()
         decoder.eval()
-
-        env = getattr(self, "{}_env".format(data_type))
-
-        eval_size_per_gpu = params.eval_size
-        iterator = env.create_test_iterator(
-            data_type,
-            task,
-            data_path=self.trainer.data_path,
-            batch_size=params.batch_size_eval,
-            params=params,
-            size=eval_size_per_gpu,
-            test_env_seed=self.params.test_env_seed,
-        )
-
         mw = ModelWrapper(
-            env=env,
+            env=self.env,
             embedder=embedder,
             encoder=encoder,
             decoder=decoder,
@@ -152,37 +109,31 @@ class Evaluator(object):
             beam_temperature=params.beam_temperature,
             beam_type=params.beam_type,
         )
-
-        dstr = SymbolicTransformerRegressor(
+        self.dstr = SymbolicTransformerRegressor(
             model=mw,
             max_input_points=params.max_points,
             rescale=False,
         )
 
-        first_write = True
-        if save:
-            if save_file is None:
-                save_file = (
+        self.save_path = (
                     self.params.eval_dump_path
                     if self.params.eval_dump_path
                     else self.params.dump_path
                     if self.params.dump_path
                     else self.params.reload_checkpoint
                 )
+        if not os.path.exists(self.save_path): os.makedirs(self.save_path)
 
-            if not os.path.exists(save_file):
-                os.makedirs(save_file)
-            save_file = os.path.join(save_file, "eval_in_domain.csv")
+        self.ablation_to_keep = list(map(lambda x: "info_" + x, params.ablation_to_keep.split(",")))
 
-        if ablation_to_keep is not None:
-            ablation_to_keep = list(
-                map(lambda x: "info_" + x, ablation_to_keep.split(","))
-            )
-        else:
-            ablation_to_keep = []
-
-        pbar = tqdm(total=eval_size_per_gpu)
-
+    def evaluate_on_iterator(self,
+                             iterator,
+                             save_file,
+                             n_batches_per_write=10
+                             ):
+        
+        scores = OrderedDict({"epoch": self.trainer.epoch})
+        pbar = tqdm(total=self.params.eval_size)
         batch_results = defaultdict(list)
 
         for i, (samples, _) in enumerate(iterator):
@@ -192,7 +143,8 @@ class Evaluator(object):
             infos = samples["infos"]
             trees = samples["tree"]
 
-            all_candidates = dstr.fit(times, trajectories, verbose=verbose)
+            all_candidates = self.dstr.fit(times, trajectories, verbose=False)
+
             best_results = {metric:[] for metric in params.validation_metrics.split(',')}
             best_candidates = []
             for time, trajectory, candidates in zip(times, trajectories, all_candidates.values()):
@@ -203,7 +155,7 @@ class Evaluator(object):
                     best_candidates.append(None)
                     continue
                 for candidate in candidates:
-                    pred_trajectory = dstr.predict(time, y0=trajectory[0], tree=candidate)
+                    pred_trajectory = self.dstr.predict(time, y0=trajectory[0], tree=candidate)
                     result = compute_metrics(pred_trajectory, trajectory, predicted_tree=candidate, metrics=params.validation_metrics)
                     results.append(result)
                 best_result_id = max(range(len(results)), key=lambda i: results[i][params.beam_selection_metric])
@@ -218,19 +170,18 @@ class Evaluator(object):
 
             batch_results["trees"].extend(trees)
             batch_results["predicted_trees"].extend(best_candidates)
-            #print(trees, best_candidates)
+
             for k, v in infos.items():
                 batch_results["info_" + k].extend(v)        
             for k, v in best_results.items():
                 batch_results[k ].extend(v)
                 
-            if save:
+            first_write = True
+            if save_file:
                 if i % n_batches_per_write == 0:
                     batch_results = pd.DataFrame.from_dict(batch_results)
                     if first_write:
                         batch_results.to_csv(save_file, index=False)
-                        if logger is not None:
-                            logger.info("Just started saving")
                         first_write = False
                     else:
                         batch_results.to_csv(
@@ -253,17 +204,79 @@ class Evaluator(object):
             logger.info("WARNING: no results")
             return
         info_columns = filter(lambda x: x.startswith("info_"), df.columns)
-        df = df.drop(columns=filter(lambda x: x not in ablation_to_keep, info_columns))
+        df = df.drop(columns=filter(lambda x: x not in self.ablation_to_keep, info_columns))
         df = df.drop(columns=["trees","predicted_trees"])
 
         for metric in params.validation_metrics.split(','):
             scores[metric] = df[metric].mean()
-        for ablation in ablation_to_keep:
+        for ablation in self.ablation_to_keep:
             for val, df_ablation in df.groupby(ablation):
                 avg_scores_ablation = df_ablation.mean()
                 for k, v in avg_scores_ablation.items():
                     scores[k + "_{}_{}".format(ablation, val)] = v
                     
+        return scores
+        
+    def evaluate_in_domain(
+        self,
+        data_type,
+        task,
+        save=True,
+    ):
+
+        self.logger.info("====== STARTING EVALUATION IN DOMAIN (multi-gpu: {}) =======".format(self.params.multi_gpu))
+
+        iterator = self.env.create_test_iterator(
+            data_type,
+            task,
+            data_path=self.trainer.data_path,
+            batch_size=self.params.batch_size_eval,
+            params=self.params,
+            size=self.params.eval_size,
+            test_env_seed=self.params.test_env_seed,
+        )
+
+        if save:
+            save_file = os.path.join(self.save_path, "eval_in_domain.csv")
+
+        scores = self.evaluate_on_iterator(iterator,
+                                           save_file)
+
+        return scores
+
+    def evaluate_on_pmlb(
+        self,
+        save=True,
+    ):
+        
+        self.logger.info("====== STARTING EVALUATION PMLB (multi-gpu: {}) =======".format(self.params.multi_gpu))
+
+        iterator = []
+        from pmlb import fetch_data, dataset_names
+        strogatz_names = [name for name in dataset_names if "strogatz" in name]
+        times = np.linspace(0, 10, 100)
+        for name in strogatz_names:
+            data = fetch_data(name)
+            x = data['x'].values.reshape(-1,1)
+            y = data['y'].values.reshape(-1,1)
+            samples = defaultdict(list)
+            samples['infos'] = {'dimension':2, 'n_unary_ops':0, 'n_input_points':100}
+            for k,v in samples['infos'].items():
+                samples['infos'][k] = np.array([v]*4)
+            for j in range(4):
+                start = j * len(times)
+                stop = (j+1) * len(times)
+                samples['times'].append(times)
+                samples['trajectory'].append(np.concatenate((x[start:stop], y[start:stop]),axis=1))
+                samples['tree'].append('')
+            iterator.append((samples, None))
+
+        if save:
+            save_file = os.path.join(self.save_path, "eval_pmlb.csv")
+
+        scores = self.evaluate_on_iterator(iterator,
+                                           save_file)
+
         return scores
 
 
@@ -294,45 +307,12 @@ def main(params):
     scores = {}
     save = params.save_results
 
-    if params.eval_in_domain:
-        evaluator.set_env_copies(["valid1"])
-        scores = evaluator.evaluate_in_domain(
-            "valid1",
-            "functions",
-            save=save,
-            logger=logger,
-            ablation_to_keep=params.ablation_to_keep,
-        )
-        logger.info("__log__:%s" % json.dumps(scores))
+    #if params.eval_in_domain:
+    #    scores = evaluator.evaluate_in_domain("valid1","functions",save=save,)
+    #    logger.info("__log__:%s" % json.dumps(scores))
 
     if params.eval_on_pmlb:
-        target_noise = params.target_noise
-        random_state = params.random_state
-        data_type = params.pmlb_data_type
-
-        if data_type == "feynman":
-            filter_fn = lambda x: x["dataset"].str.contains("feynman")
-        elif data_type == "strogatz":
-            print("Strogatz data")
-            filter_fn = lambda x: x["dataset"].str.contains("strogatz")
-        elif data_type == "603_fri_c0_250_50":
-            filter_fn = lambda x: x["dataset"].str.contains("603_fri_c0_250_50")
-        else:
-            filter_fn = lambda x: ~(
-                x["dataset"].str.contains("strogatz")
-                | x["dataset"].str.contains("feynman")
-            )
-
-        pmlb_scores = evaluator.evaluate_pmlb(
-            target_noise=target_noise,
-            verbose=params.eval_verbose_print,
-            random_state=random_state,
-            save=save,
-            filter_fn=filter_fn,
-            logger=logger,
-            save_file=None,
-            save_suffix="eval_pmlb.csv",
-        )
+        pmlb_scores = evaluator.evaluate_on_pmlb()
         logger.info("__pmlb__:%s" % json.dumps(pmlb_scores))
 
 
