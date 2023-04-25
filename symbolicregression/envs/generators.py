@@ -19,6 +19,8 @@ from symbolicregression.envs import encoders
 from symbolicregression.envs.utils import *
 from ..utils import bool_flag, timeout, MyTimeoutError
 import numba as nb
+from functools import partial
+import numexpr as ne
 
 warnings.filterwarnings("ignore")
 import traceback
@@ -763,6 +765,7 @@ class RandomFunctions(Generator):
         y0 = self.params.init_scale * rng.randn(dimension)
         times = np.linspace(1, self.params.time_range, n_points)
         trajectory = integrate_ode(tree, y0, times, self.params.ode_integrator)
+        #tree = tree_to_numexpr_fn(tree)
 
         if trajectory is None or np.any(np.abs(trajectory)>10**self.params.max_exponent):
             return None, None
@@ -774,11 +777,51 @@ class RandomFunctions(Generator):
             times = np.delete(times, indices_to_remove, axis=0)
         
         return tree, (times, trajectory)
+
+def tree_to_numexpr_fn(tree, max_dim = 10):
+    infix = tree.infix()
+    numexpr_equivalence = {
+        "add": "+",
+        "sub": "-",
+        "mul": "*",
+        "pow": "**",
+        "inv": "1/",
+        " | ": "|"
+    }
+
+    for old, new in numexpr_equivalence.items():
+        infix = infix.replace(old, new)
+
+    def wrapped_numexpr_fn(_infix, t, x, extra_local_dict={}):
+        assert isinstance(x, np.ndarray) and len(x.shape) == 2
+        local_dict = {}
+        for d in range(max_dim):
+            if "x_{}".format(d) in _infix:
+                if d >= x.shape[1]:
+                    local_dict["x_{}".format(d)] = np.zeros(x.shape[0])
+                else:
+                    local_dict["x_{}".format(d)] = x[:, d]
+            if "t" in _infix:
+                local_dict["t"] = t[:]
+        local_dict.update(extra_local_dict)
+        try:
+            if '|' in _infix:
+                vals = np.concatenate([ne.evaluate(node, local_dict=local_dict).reshape(-1,1) for node in _infix.split('|')], axis=1)
+            else:
+                vals = ne.evaluate(_infix, local_dict=local_dict).reshape(-1,1)
+        except Exception as e:
+            print(e)
+            print("problem with tree", _infix)
+            traceback.format_exc()
+            vals = get_vals(x.shape[0], np.nan)
+        return vals
+
+    return partial(wrapped_numexpr_fn, infix)
     
 def integrate_ode(tree, y0, times, ode_integrator = 'odeint'):
 
     if ode_integrator == "odeint":
-        @nb.njit
+        #@nb.njit
         def func(y,t):
             return tree.val(y,t)[0]
         with stdout_redirected():
@@ -786,7 +829,7 @@ def integrate_ode(tree, y0, times, ode_integrator = 'odeint'):
                 try: trajectory = scipy.integrate.odeint(func, y0, times)
                 except: return None
     elif ode_integrator == "solve_ivp":
-        @nb.njit
+        #@nb.njit
         def func(t,y):
             return tree.val([y],t)[0]
         with warnings.catch_warnings(record=True) as caught_warnings:
@@ -806,6 +849,8 @@ def integrate_ode(tree, y0, times, ode_integrator = 'odeint'):
         return None
     
     return trajectory
+
+
 
 
 if __name__ == "__main__":

@@ -693,7 +693,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--init_scale",
             type=float,
-            default = 5.0,
+            default = 1.0,
             help="Scale for initial conditions",
         )
 

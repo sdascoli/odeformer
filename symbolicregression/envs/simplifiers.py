@@ -174,7 +174,7 @@ class Simplifier:
             vals_ar[:] = val
             return vals_ar
 
-        def wrapped_numexpr_fn(_infix, x, extra_local_dict={}):
+        def wrapped_numexpr_fn(_infix, t, x, extra_local_dict={}):
             assert isinstance(x, np.ndarray) and len(x.shape) == 2
             local_dict = {}
             for d in range(self.params.max_dimension):
@@ -183,6 +183,8 @@ class Simplifier:
                         local_dict["x_{}".format(d)] = np.zeros(x.shape[0])
                     else:
                         local_dict["x_{}".format(d)] = x[:, d]
+                if "t" in _infix:
+                    local_dict["t"] = t[:]
             local_dict.update(extra_local_dict)
             try:
                 vals = ne.evaluate(_infix, local_dict=local_dict)
