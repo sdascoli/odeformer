@@ -765,7 +765,6 @@ class RandomFunctions(Generator):
         y0 = self.params.init_scale * rng.randn(dimension)
         times = np.linspace(1, self.params.time_range, n_points)
         trajectory = integrate_ode(tree, y0, times, self.params.ode_integrator)
-        #tree = tree_to_numexpr_fn(tree)
 
         if trajectory is None or np.any(np.abs(trajectory)>10**self.params.max_exponent):
             return None, None
@@ -792,8 +791,8 @@ def tree_to_numexpr_fn(tree, max_dim = 10):
     for old, new in numexpr_equivalence.items():
         infix = infix.replace(old, new)
 
-    def wrapped_numexpr_fn(_infix, t, x, extra_local_dict={}):
-        assert isinstance(x, np.ndarray) and len(x.shape) == 2
+    def wrapped_numexpr_fn(_infix, x, t, extra_local_dict={}):
+        t, x = np.array(t), np.array(x)
         local_dict = {}
         for d in range(max_dim):
             if "x_{}".format(d) in _infix:
@@ -818,24 +817,32 @@ def tree_to_numexpr_fn(tree, max_dim = 10):
 
     return partial(wrapped_numexpr_fn, infix)
     
-def integrate_ode(tree, y0, times, ode_integrator = 'odeint'):
+def integrate_ode(tree, y0, times, ode_integrator = 'odeint', debug=False):
+
+    tree = tree_to_numexpr_fn(tree)
+    #print(tree(times[0], y0))
 
     if ode_integrator == "odeint":
         #@nb.njit
         def func(y,t):
-            return tree.val(y,t)[0]
+            return tree([y],[t])[0]
         with stdout_redirected():
             with warnings.catch_warnings(record=True) as caught_warnings:
                 try: trajectory = scipy.integrate.odeint(func, y0, times)
-                except: return None
+                except: 
+                    if debug:
+                        print(traceback.format_exc())
+                    return None
     elif ode_integrator == "solve_ivp":
         #@nb.njit
         def func(t,y):
-            return tree.val([y],t)[0]
+            return tree([y],[t])[0]
         with warnings.catch_warnings(record=True) as caught_warnings:
             try: 
                 trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times)
             except: 
+                if debug:
+                    print(traceback.format_exc())
                 return None
             trajectory = trajectory.y.T
     else:

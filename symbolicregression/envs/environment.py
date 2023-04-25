@@ -632,7 +632,7 @@ class FunctionEnvironment(object):
             help="Minimum probability of generating an example with given n_op, for our curriculum strategy",
         )
         parser.add_argument(
-            "--max_points", type=int, default=200, help="Max number of terms in the series"
+            "--max_points", type=int, default=150, help="Max number of terms in the series"
         )
         parser.add_argument(
             "--min_points_per_dim", type=int, default=5, help="Min number of terms per dim"
@@ -680,7 +680,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--subsample_ratio",
             type=float,
-            default=0.2,
+            default=0.5,
             help="Ratio of timesteps to remove",
         )
         parser.add_argument(
