@@ -98,6 +98,7 @@ def main(params):
             for task in params.tasks:
                 trainer.get_generation_statistics(task)
 
+        trainer.save_checkpoint("checkpoint")
         trainer.save_periodic()
 
         if params.eval_in_domain:

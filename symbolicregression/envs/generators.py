@@ -18,6 +18,7 @@ import warnings
 from symbolicregression.envs import encoders
 from symbolicregression.envs.utils import *
 from ..utils import bool_flag, timeout, MyTimeoutError
+import numba as nb
 
 warnings.filterwarnings("ignore")
 import traceback
@@ -755,7 +756,8 @@ class RandomFunctions(Generator):
         tree,
         rng,
         dimension,
-        n_points
+        n_points,
+        n_init_conditions=1
         ):
 
         y0 = self.params.init_scale * rng.randn(dimension)
@@ -776,6 +778,7 @@ class RandomFunctions(Generator):
 def integrate_ode(tree, y0, times, ode_integrator = 'odeint'):
 
     if ode_integrator == "odeint":
+        @nb.njit
         def func(y,t):
             return tree.val(y,t)[0]
         with stdout_redirected():
@@ -783,6 +786,7 @@ def integrate_ode(tree, y0, times, ode_integrator = 'odeint'):
                 try: trajectory = scipy.integrate.odeint(func, y0, times)
                 except: return None
     elif ode_integrator == "solve_ivp":
+        @nb.njit
         def func(t,y):
             return tree.val([y],t)[0]
         with warnings.catch_warnings(record=True) as caught_warnings:

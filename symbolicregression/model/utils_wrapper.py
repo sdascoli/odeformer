@@ -29,6 +29,8 @@ class Scaler(ABC):
     def fit(self, time, trajectory):
         self.time_scaler.fit(time.reshape(-1,1))
         self.traj_scale = trajectory[0]
+        if self.traj_scale == 0:
+            self.traj_scale = 1 
 
     def transform(self, time, trajectory):
         scaled_time = self.time_scaler.transform(time.reshape(-1,1))*self.time_scale+self.time_shift

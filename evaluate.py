@@ -226,6 +226,7 @@ class Evaluator(object):
         save=True,
     ):
 
+        dstr.rescale = False
         self.logger.info("====== STARTING EVALUATION IN DOMAIN (multi-gpu: {}) =======".format(self.params.multi_gpu))
 
         iterator = self.env.create_test_iterator(
@@ -251,6 +252,7 @@ class Evaluator(object):
         save=True,
     ):
         
+        dstr.rescale = self.params.rescale
         self.logger.info("====== STARTING EVALUATION PMLB (multi-gpu: {}) =======".format(self.params.multi_gpu))
 
         iterator = []
