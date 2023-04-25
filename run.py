@@ -14,14 +14,16 @@ dump_path = '/home/dascoli/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
 
 extra_args = {
-    'collate_queue_size': 100,
+    'collate_queue_size': 1000,
     'n_steps_per_epoch':1000,
     'print_freq': 10,
+    #'tokens_per_batch':20000
     #'optimizer':'adam_cosine,warmup_updates=1000,init_period=10000,period_mult=1.5,lr_shrink=0.5'
               }
 
 grid = {
     "ode_integrator": ["odeint","solve_ivp"],
+    "max_dimension":[2]
     #"optimizer": ['adam_cosine,warmup_updates=5000,init_period=50000,period_mult=1.5,lr_shrink=0.5'],
 }
 

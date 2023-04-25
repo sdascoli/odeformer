@@ -78,6 +78,7 @@ class Evaluator(object):
         self.params = trainer.params
         self.env = trainer.env
         self.logger = trainer.logger
+        params = self.params
         Evaluator.ENV = trainer.env
         embedder = (
             self.modules["embedder"].module
@@ -112,7 +113,8 @@ class Evaluator(object):
         self.dstr = SymbolicTransformerRegressor(
             model=mw,
             max_input_points=params.max_points,
-            rescale=False,
+            rescale=params.rescale,
+            params=params
         )
 
         self.save_path = (
@@ -145,7 +147,7 @@ class Evaluator(object):
 
             all_candidates = self.dstr.fit(times, trajectories, verbose=False)
 
-            best_results = {metric:[] for metric in params.validation_metrics.split(',')}
+            best_results = {metric:[] for metric in self.params.validation_metrics.split(',')}
             best_candidates = []
             for time, trajectory, candidates in zip(times, trajectories, all_candidates.values()):
                 results = []
@@ -156,9 +158,9 @@ class Evaluator(object):
                     continue
                 for candidate in candidates:
                     pred_trajectory = self.dstr.predict(time, y0=trajectory[0], tree=candidate)
-                    result = compute_metrics(pred_trajectory, trajectory, predicted_tree=candidate, metrics=params.validation_metrics)
+                    result = compute_metrics(pred_trajectory, trajectory, predicted_tree=candidate, metrics=self.params.validation_metrics)
                     results.append(result)
-                best_result_id = max(range(len(results)), key=lambda i: results[i][params.beam_selection_metric])
+                best_result_id = max(range(len(results)), key=lambda i: results[i][self.params.beam_selection_metric])
                 best_result = results[best_result_id]
                 best_candidate = candidates[best_result_id]
                 for k, v in best_result.items():
@@ -207,7 +209,7 @@ class Evaluator(object):
         df = df.drop(columns=filter(lambda x: x not in self.ablation_to_keep, info_columns))
         df = df.drop(columns=["trees","predicted_trees"])
 
-        for metric in params.validation_metrics.split(','):
+        for metric in self.params.validation_metrics.split(','):
             scores[metric] = df[metric].mean()
         for ablation in self.ablation_to_keep:
             for val, df_ablation in df.groupby(ablation):
@@ -307,9 +309,9 @@ def main(params):
     scores = {}
     save = params.save_results
 
-    #if params.eval_in_domain:
-    #    scores = evaluator.evaluate_in_domain("valid1","functions",save=save,)
-    #    logger.info("__log__:%s" % json.dumps(scores))
+    if params.eval_in_domain:
+       scores = evaluator.evaluate_in_domain("valid1","functions",save=save,)
+       logger.info("__log__:%s" % json.dumps(scores))
 
     if params.eval_on_pmlb:
         pmlb_scores = evaluator.evaluate_on_pmlb()

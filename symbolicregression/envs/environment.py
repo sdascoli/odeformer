@@ -637,12 +637,6 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--min_points_per_dim", type=int, default=5, help="Min number of terms per dim"
         )
-        parser.add_argument(
-            "--max_centroids",
-            type=int,
-            default=10,
-            help="Max number of centroids for the input distribution",
-        )
 
         parser.add_argument(
             "--prob_const",
@@ -650,14 +644,12 @@ class FunctionEnvironment(object):
             default=0.0,
             help="Probability to generate integer in leafs",
         )
-
         parser.add_argument(
             "--reduce_num_constants",
             type=bool,
             default=True,
             help="Use minimal amount of constants in eqs",
         )
-
         parser.add_argument(
             "--use_skeleton",
             type=bool,
@@ -701,7 +693,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--init_scale",
             type=float,
-            default = 1.0,
+            default = 5.0,
             help="Scale for initial conditions",
         )
 

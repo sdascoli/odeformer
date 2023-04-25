@@ -45,18 +45,20 @@ class Scaler(ABC):
     Base class for scalers
     """
 
-    def __init__(self, range_shift=1, feature_scale=.5):
+    def __init__(self, time_range=[1,5], feature_scale=1):
         self.time_scaler = sklearn.preprocessing.MinMaxScaler()
         self.traj_scale  = None
         self.range_shift = range_shift
         self.feature_scale = feature_scale
+        self.time_scale = (time_range[1]-time_range[0])
+        self.time_shift = time_range[0]
 
     def fit(self, time, trajectory):
         self.time_scaler.fit(time.reshape(-1,1))
         self.traj_scale = trajectory[0]
 
     def transform(self, time, trajectory):
-        scaled_time = self.time_scaler.transform(time.reshape(-1,1))+self.range_shift
+        scaled_time = self.time_scaler.transform(time.reshape(-1,1))*time_scale+time_shift
         scaled_traj = self.feature_scale * trajectory/(self.traj_scale.reshape(1,-1))
         return scaled_time[:,0], scaled_traj
         
@@ -69,7 +71,7 @@ class Scaler(ABC):
         scale = self.feature_scale/self.traj_scale
 
         val_min, val_max = self.time_scaler.data_min_[0], self.time_scaler.data_max_[0]
-        a_t, b_t = 1./(val_max-val_min), -val_min/(val_max-val_min)+self.range_shift
+        a_t, b_t = time_scale/(val_max-val_min), -time_scale*val_min/(val_max-val_min)+self.time_shift
         return (a_t, b_t, scale)
 
     def rescale_function(self, env, tree, a_t, b_t, scale):

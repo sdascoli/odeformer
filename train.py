@@ -64,25 +64,16 @@ def main(params):
         ]
     else:
         data_types = ["valid1"]
-    evaluator.set_env_copies(data_types)
 
     # evaluation
     if params.eval_only:
         if params.eval_in_domain:
-            scores = evaluator.evaluate_in_domain(
-                "valid1",
-                "functions",
-                logger=logger,
-                save=params.save_results,
-                ablation_to_keep=params.ablation_to_keep,
-            )
+            scores = evaluator.evaluate_in_domain("valid1","functions",save=save,)
             logger.info("__log__:%s" % json.dumps(scores))
 
         if params.eval_on_pmlb:
-            feynman_scores = evaluator.evaluate_pmlb(
-                filter_fn=lambda x: x["dataset"].str.contains("strogatz")
-            )
-            logger.info("__strogatz__:%s" % json.dumps(feynman_scores))
+            pmlb_scores = evaluator.evaluate_on_pmlb()
+            logger.info("__pmlb__:%s" % json.dumps(pmlb_scores))
         exit()
 
     trainer.n_equations = 0
@@ -110,27 +101,12 @@ def main(params):
         trainer.save_periodic()
 
         if params.eval_in_domain:
-            scores = evaluator.evaluate_in_domain(
-                "valid1",
-                "functions",
-                logger=logger,
-                save=params.save_results,
-                ablation_to_keep=params.ablation_to_keep,
-            )
+            scores = evaluator.evaluate_in_domain("valid1","functions")
             logger.info("__log__:%s" % json.dumps(scores))
 
-        # if params.eval_on_pmlb:
-        #     feynman_scores = evaluator.evaluate_pmlb(
-        #         filter_fn=lambda x: x["dataset"].str.contains("feynman")
-        #     )
-        #     logger.info("__feynman__:%s" % json.dumps(feynman_scores))
-
-        #     filter_fn = lambda x: ~(
-        #         x["dataset"].str.contains("strogatz")
-        #         | x["dataset"].str.contains("feynman")
-        #     )
-        #     black_box_scores = evaluator.evaluate_pmlb(filter_fn=filter_fn)
-        #     logger.info("__black_box__:%s" % json.dumps(black_box_scores))
+        if params.eval_on_pmlb:
+            pmlb_scores = evaluator.evaluate_on_pmlb()
+            logger.info("__pmlb__:%s" % json.dumps(pmlb_scores))
 
         trainer.save_best_model(scores, prefix="functions", suffix="fit")
         # end of epoch

@@ -32,7 +32,8 @@ class SymbolicTransformerRegressor(BaseEstimator):
                 max_number_bags=-1,
                 stop_refinement_after=1,
                 n_trees_to_refine=1,
-                rescale=False
+                rescale=False,
+                params=None
                 ):
 
         self.max_input_points = max_input_points
@@ -41,6 +42,7 @@ class SymbolicTransformerRegressor(BaseEstimator):
         self.stop_refinement_after = stop_refinement_after
         self.n_trees_to_refine = n_trees_to_refine
         self.rescale = rescale
+        self.params = params
 
     def set_args(self, args={}):
         for arg, val in args.items():
@@ -60,7 +62,10 @@ class SymbolicTransformerRegressor(BaseEstimator):
             trajectories = [trajectories]
         n_datasets = len(times)
     
-        scaler = utils_wrapper.Scaler() if self.rescale else None
+        if self.params:
+            scaler = utils_wrapper.Scaler(time_range=[1, self.params.time_range], feature_scale=self.params.init_scale) if self.rescale else None
+        else:
+            scaler = utils_wrapper.Scaler() if self.rescale else None
         scale_params = {}
         if scaler is not None:
             scaled_times = []
