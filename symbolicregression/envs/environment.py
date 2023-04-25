@@ -676,7 +676,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--time_range",
             type=float,
-            default=10.0,
+            default=4.0,
             help="Time range for ODE integration",
         )
         parser.add_argument(
