@@ -131,19 +131,21 @@ class Evaluator(object):
     def evaluate_on_iterator(self,
                              iterator,
                              save_file,
-                             n_batches_per_write=10
+                             n_batches_per_write=1
                              ):
         
         scores = OrderedDict({"epoch": self.trainer.epoch})
         pbar = tqdm(total=self.params.eval_size)
         batch_results = defaultdict(list)
 
-        for i, (samples, _) in enumerate(iterator):
+        for ibatch, (samples, _) in enumerate(iterator):
 
             times = samples["times"]
             trajectories = samples["trajectory"]
             infos = samples["infos"]
-            trees = samples["tree"]
+            if "tree" in samples.keys():
+                trees = samples["tree"]
+                batch_results["trees"].extend([self.env.simplifier.readable_tree(tree) for tree in trees])
 
             all_candidates = self.dstr.fit(times, trajectories, verbose=False)
 
@@ -170,44 +172,45 @@ class Evaluator(object):
             for k, v in infos.items():
                 infos[k] = v.tolist()
 
-            batch_results["trees"].extend(trees)
-            batch_results["predicted_trees"].extend(best_candidates)
+            batch_results["predicted_trees"].extend([self.env.simplifier.readable_tree(tree) for tree in best_candidates])
 
             for k, v in infos.items():
                 batch_results["info_" + k].extend(v)        
             for k, v in best_results.items():
                 batch_results[k ].extend(v)
                 
-            first_write = True
-            if save_file:
-                if i % n_batches_per_write == 0:
-                    batch_results = pd.DataFrame.from_dict(batch_results)
-                    if first_write:
-                        batch_results.to_csv(save_file, index=False)
-                        first_write = False
-                    else:
-                        batch_results.to_csv(
-                            save_file, mode="a", header=False, index=False
-                        )
-                        if logger is not None:
-                            logger.info(
-                                "Saved {} equations".format(
-                                    self.params.batch_size_eval
-                                    * n_batches_per_write
-                                )
-                            )
-                    batch_results = defaultdict(list)
+            # first_write = True
+            # if save_file:
+            #     if ibatch % n_batches_per_write == 0:
+            #         batch_results = pd.DataFrame.from_dict(batch_results)
+            #         if first_write:
+            #             batch_results.to_csv(save_file, index=False)
+            #             first_write = False
+            #             if self.logger is not None:
+            #                 self.logger.info("Saving {} equations to {}".format(self.params.batch_size_eval* n_batches_per_write, save_file))
+            #         else:
+            #             batch_results.to_csv(
+            #                 save_file, mode="a", header=False, index=False
+            #             )
+            #         batch_results = defaultdict(list)
             bs = len(times)
             pbar.update(bs)
+
+        batch_results = pd.DataFrame.from_dict(batch_results)
+        batch_results.to_csv(save_file, index=False)
+        self.logger.info("Saved {} equations to {}".format(len(batch_results), save_file))
 
         try:
             df = pd.read_csv(save_file, na_filter=True)
         except:
             logger.info("WARNING: no results")
             return
+
         info_columns = filter(lambda x: x.startswith("info_"), df.columns)
         df = df.drop(columns=filter(lambda x: x not in self.ablation_to_keep, info_columns))
-        df = df.drop(columns=["trees","predicted_trees"])
+        df = df.drop(columns=["predicted_trees"])
+        if "trees" in df: df.drop(columns=["trees"])
+        if "info_name" in df.columns: df.drop(columns=["info_name"])
 
         for metric in self.params.validation_metrics.split(','):
             scores[metric] = df[metric].mean()
@@ -264,7 +267,7 @@ class Evaluator(object):
             x = data['x'].values.reshape(-1,1)
             y = data['y'].values.reshape(-1,1)
             samples = defaultdict(list)
-            samples['infos'] = {'dimension':2, 'n_unary_ops':0, 'n_input_points':100}
+            samples['infos'] = {'dimension':2, 'n_unary_ops':0, 'n_input_points':100, 'name':name}
             for k,v in samples['infos'].items():
                 samples['infos'][k] = np.array([v]*4)
             for j in range(4):
@@ -272,7 +275,6 @@ class Evaluator(object):
                 stop = (j+1) * len(times)
                 samples['times'].append(times)
                 samples['trajectory'].append(np.concatenate((x[start:stop], y[start:stop]),axis=1))
-                samples['tree'].append('')
             iterator.append((samples, None))
 
         if save:
@@ -308,7 +310,6 @@ def main(params):
     modules = build_modules(env, params)
     trainer = Trainer(modules, env, params)
     evaluator = Evaluator(trainer)
-    scores = {}
     save = params.save_results
 
     #if params.eval_in_domain:
@@ -316,7 +317,7 @@ def main(params):
     #   logger.info("__log__:%s" % json.dumps(scores))
 
     if params.eval_on_pmlb:
-        pmlb_scores = evaluator.evaluate_on_pmlb()
+        pmlb_scores = evaluator.evaluate_on_pmlb(save=save)
         logger.info("__pmlb__:%s" % json.dumps(pmlb_scores))
 
 
@@ -327,7 +328,7 @@ if __name__ == "__main__":
     pk = pickle.load(open(params.reload_checkpoint + "/params.pkl", "rb"))
     pickled_args = pk.__dict__
     for p in params.__dict__:
-        if p in pickled_args and p not in ["dump_path", "reload_checkpoint"]:
+        if p in pickled_args and p not in ["dump_path", "reload_checkpoint", "rescale", "validation_metrics"]:
             params.__dict__[p] = pickled_args[p]
 
     params.eval_size = 10

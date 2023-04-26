@@ -110,6 +110,11 @@ class Simplifier:
     
     def tree_to_sympy_expr(self, tree, round=True):
         return [self._tree_to_sympy_expr(node, round=round) for node in tree.nodes]
+    
+    def readable_tree(self, tree):
+        tree_sympy = self.tree_to_sympy_expr(tree, round=True)
+        readable_tree = '  ,  '.join([str(tree) for tree in tree_sympy])
+        return readable_tree
 
     def tree_to_torch_module(self, tree, dtype=torch.float32):
         expr = self.tree_to_sympy_expr(tree)

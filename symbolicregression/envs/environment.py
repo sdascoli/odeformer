@@ -343,10 +343,10 @@ class FunctionEnvironment(object):
         ), "tree: {}\n encoded: {}".format(tree, tree_encoded)
 
         info = {
-            "n_points": n_points,
+            "n_points":       n_points,
             "n_unary_ops":    sum(nb_unary_ops),
             "n_binary_ops":   sum(nb_binary_ops),
-            "dimension":           dimension,
+            "dimension":      dimension,
         }
 
         expr = {
@@ -519,13 +519,13 @@ class FunctionEnvironment(object):
         parser.add_argument("--max_dimension", type=int, default=4)
         parser.add_argument(
             "--enforce_dim",
-            type=bool,
+            type=bool_flag,
             default=False,
             help="should we enforce that we get as many examples of each dim ?",
         )
         parser.add_argument(
             "--use_controller",
-            type=bool,
+            type=bool_flag,
             default=False,
             help="should we enforce that we get as many examples of each dim ?",
         )
@@ -586,7 +586,7 @@ class FunctionEnvironment(object):
         )
         parser.add_argument(
             "--pad_to_max_dim",
-            type=bool,
+            type=bool_flag,
             default=True,
             help="should we pad inputs to the maximum dimension?",
         )
@@ -646,13 +646,13 @@ class FunctionEnvironment(object):
         )
         parser.add_argument(
             "--reduce_num_constants",
-            type=bool,
+            type=bool_flag,
             default=True,
             help="Use minimal amount of constants in eqs",
         )
         parser.add_argument(
             "--use_skeleton",
-            type=bool,
+            type=bool_flag,
             default=False,
             help="should we use a skeleton rather than functions with constants",
         )

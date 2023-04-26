@@ -19,7 +19,7 @@ def get_parser():
     # main parameters
     parser.add_argument("--dump_path", type=str, default="", help="Experiment dump path")
     parser.add_argument("--eval_dump_path", type=str, default=None, help="Evaluation dump path")
-    parser.add_argument("--save_results", type=bool, default=True, help="Should we save results?")
+    parser.add_argument("--save_results", type=bool_flag, default=True, help="Should we save results?")
 
     parser.add_argument("--exp_name", type=str, default="debug", help="Experiment name")
     parser.add_argument("--print_freq", type=int, default=100, help="Print every n steps")
@@ -32,7 +32,6 @@ def get_parser():
     )
     parser.add_argument("--amp",type=int,default=-1,
                         help="Use AMP wrapper for float16 / distributed / gradient accumulation. Level of optimization. -1 to disable.")
-    parser.add_argument("--rescale", type=bool, default=True, help="Whether to rescale at inference.")
 
     # model parameters
     parser.add_argument(
@@ -297,14 +296,14 @@ def get_parser():
     parser.add_argument(
         "--validation_metrics",
         type=str,
-        default="r2_zero,accuracy_l1_1e-3,accuracy_l1_1e-1,_complexity",
+        default="r2_zero,snmse,accuracy_l1_1e-1,_complexity",
         help="What metrics should we report? accuracy_tolerance/_l1_error/r2/_complexity/_relative_complexity/is_symbolic_solution",
     )
     parser.add_argument("--beam_selection_metric", type=str, default='r2_zero')
 
     parser.add_argument(
         "--debug_train_statistics",
-        type=bool,
+        type=bool_flag,
         default=False,
         help="whether we should print infos distributions",
     )
@@ -329,8 +328,10 @@ def get_parser():
         default=False,
         help="Print evaluation details",
     )
-    parser.add_argument("--eval_on_pmlb", type=bool, default=True)
-    parser.add_argument("--eval_in_domain", type=bool, default=True)
+    parser.add_argument("--eval_on_pmlb", type=bool_flag, default=True)
+    parser.add_argument("--eval_in_domain", type=bool_flag, default=True)
+    parser.add_argument("--rescale", type=bool_flag, default=True, help="Whether to rescale at inference.")
+
 
     # debug
     parser.add_argument(
