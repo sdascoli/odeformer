@@ -146,27 +146,28 @@ class MyTimeoutError(BaseException):
 def timeout(seconds=10, error_message=os.strerror(errno.ETIME)):
     def decorator(func):
         def _handle_timeout(repeat_id, signum, frame):
-            # logger.warning(f"Catched the signal ({repeat_id}) Setting signal handler {repeat_id + 1}")
             signal.signal(signal.SIGALRM, partial(_handle_timeout, repeat_id + 1))
-            signal.alarm(seconds)
+            signal.setitimer(signal.ITIMER_REAL, seconds)
             raise MyTimeoutError(error_message)
 
         def wrapper(*args, **kwargs):
             old_signal = signal.signal(signal.SIGALRM, partial(_handle_timeout, 0))
-            old_time_left = signal.alarm(seconds)
-            assert type(old_time_left) is int and old_time_left >= 0
+            old_time_left = signal.getitimer(signal.ITIMER_REAL)[0]
+            assert type(old_time_left) is float and old_time_left >= 0
             if 0 < old_time_left < seconds:  # do not exceed previous timer
-                signal.alarm(old_time_left)
+                signal.setitimer(signal.ITIMER_REAL, old_time_left)
+            else:
+                signal.setitimer(signal.ITIMER_REAL, seconds)
             start_time = time.time()
             try:
                 result = func(*args, **kwargs)
             finally:
                 if old_time_left == 0:
-                    signal.alarm(0)
+                    signal.setitimer(signal.ITIMER_REAL, 0)
                 else:
-                    sub = time.time() - start_time
+                    time_elapsed = time.time() - start_time
                     signal.signal(signal.SIGALRM, old_signal)
-                    signal.alarm(max(0, math.ceil(old_time_left - sub)))
+                    signal.setitimer(signal.ITIMER_REAL, max(0, old_time_left - time_elapsed))
             return result
 
         return wraps(func)(wrapper)

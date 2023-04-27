@@ -18,10 +18,17 @@ import warnings
 from symbolicregression.envs import encoders
 from symbolicregression.envs.utils import *
 from ..utils import bool_flag, timeout, MyTimeoutError
-import numba as nb
 from functools import partial
 import numexpr as ne
 
+import numba as nb
+from numba import njit
+from numbalsoda import lsoda_sig, lsoda
+import nbkode
+
+# from julia.api import Julia
+# jl = Julia(compiled_modules=False)
+# from diffeqpy import ode
 warnings.filterwarnings("ignore")
 import traceback
 
@@ -764,9 +771,14 @@ class RandomFunctions(Generator):
 
         y0 = self.params.init_scale * rng.randn(dimension)
         times = np.linspace(1, self.params.time_range, n_points)
-        trajectory = integrate_ode(tree, y0, times, self.params.ode_integrator)
+        #times = times.repeat(n_init_conditions, axis=0)
+        trajectory = integrate_ode(y0, times, tree, self.params.ode_integrator, debug=self.params.debug)
 
-        if trajectory is None or np.any(np.abs(trajectory)>10**self.params.max_exponent):
+        if trajectory is None:
+            return None, None
+        if np.any(np.isnan(trajectory)):
+            return None, None
+        if np.any(np.abs(trajectory)>10**self.params.max_exponent):
             return None, None
 
         #trajectory = np.concatenate((t.reshape(-1,1),trajectory), axis=-1)
@@ -776,6 +788,59 @@ class RandomFunctions(Generator):
             times = np.delete(times, indices_to_remove, axis=0)
         
         return tree, (times, trajectory)
+
+
+def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=True):
+
+    tree = tree_to_numexpr_fn(tree)
+
+    if ode_integrator == 'numba':
+        def func(u,p,t):
+            derivs = tree([u],[t])[0]  
+        #func = numba.jit(func)
+        try: 
+            sol = ode.ODEProblem(func, y0, (times[0],times[1])).solve()
+            trajectory = sol(times)
+        except: 
+            if debug:
+                print(traceback.format_exc())
+            return None    
+    elif ode_integrator == "nbkode":
+        @njit
+        def func(y,t):
+            return tree([y],[t])[0]
+        solver = nbkode.ForwardEuler(func, times[0], y0)
+        trajectory = solver.run(times)
+    elif ode_integrator == "odeint":
+        #@njit
+        def func(y,t):
+            return tree([y],[t])[0]
+        with stdout_redirected():
+            with warnings.catch_warnings(record=True) as caught_warnings:
+                try: trajectory = scipy.integrate.odeint(func, y0, times)
+                except: 
+                    if debug:
+                        print(traceback.format_exc())
+                    return None
+    elif ode_integrator == "solve_ivp":
+        #@njit
+        def func(t,y):
+            return tree([y],[t])[0]
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            try: 
+                trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times)
+            except: 
+                if debug:
+                    print(traceback.format_exc())
+                return None
+            trajectory = trajectory.y.T
+    else:
+        raise NotImplementedError
+    
+    if len(caught_warnings) > 0 or np.any(np.isnan(trajectory)) or len(times)!=len(trajectory):
+        return [np.nan for _ in range(len(times))]
+    
+    return trajectory
 
 def tree_to_numexpr_fn(tree, max_dim = 10):
     infix = tree.infix()
@@ -791,71 +856,33 @@ def tree_to_numexpr_fn(tree, max_dim = 10):
     for old, new in numexpr_equivalence.items():
         infix = infix.replace(old, new)
 
-    def wrapped_numexpr_fn(_infix, x, t, extra_local_dict={}):
+    #@njit
+    def wrapped_numexpr_fn(x, t, extra_local_dict={}):
         t, x = np.array(t), np.array(x)
         local_dict = {}
         for d in range(max_dim):
-            if "x_{}".format(d) in _infix:
+            if "x_{}".format(d) in infix:
                 if d >= x.shape[1]:
                     local_dict["x_{}".format(d)] = np.zeros(x.shape[0])
                 else:
                     local_dict["x_{}".format(d)] = x[:, d]
-            if "t" in _infix:
+            if "t" in infix:
                 local_dict["t"] = t[:]
         local_dict.update(extra_local_dict)
         try:
-            if '|' in _infix:
-                vals = np.concatenate([ne.evaluate(node, local_dict=local_dict).reshape(-1,1) for node in _infix.split('|')], axis=1)
+            if '|' in infix:
+                vals = np.concatenate([ne.evaluate(node, local_dict=local_dict).reshape(-1,1) for node in infix.split('|')], axis=1)
             else:
-                vals = ne.evaluate(_infix, local_dict=local_dict).reshape(-1,1)
+                vals = ne.evaluate(infix, local_dict=local_dict).reshape(-1,1)
         except Exception as e:
             print(e)
-            print("problem with tree", _infix)
+            print("problem with tree", infix)
             traceback.format_exc()
             vals = get_vals(x.shape[0], np.nan)
         return vals
 
-    return partial(wrapped_numexpr_fn, infix)
-    
-def integrate_ode(tree, y0, times, ode_integrator = 'odeint', debug=False):
+    return wrapped_numexpr_fn
 
-    tree = tree_to_numexpr_fn(tree)
-    #print(tree(times[0], y0))
-
-    if ode_integrator == "odeint":
-        #@nb.njit
-        def func(y,t):
-            return tree([y],[t])[0]
-        with stdout_redirected():
-            with warnings.catch_warnings(record=True) as caught_warnings:
-                try: trajectory = scipy.integrate.odeint(func, y0, times)
-                except: 
-                    if debug:
-                        print(traceback.format_exc())
-                    return None
-    elif ode_integrator == "solve_ivp":
-        #@nb.njit
-        def func(t,y):
-            return tree([y],[t])[0]
-        with warnings.catch_warnings(record=True) as caught_warnings:
-            try: 
-                trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times)
-            except: 
-                if debug:
-                    print(traceback.format_exc())
-                return None
-            trajectory = trajectory.y.T
-    else:
-        raise NotImplementedError
-    
-    if len(caught_warnings) > 0 :
-        return None
-    if np.any(np.isnan(trajectory)):
-        return None
-    if len(times)!=len(trajectory):
-        return None
-    
-    return trajectory
 
 
 

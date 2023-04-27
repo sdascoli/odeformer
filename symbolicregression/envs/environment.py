@@ -35,6 +35,8 @@ from ..utils import bool_flag, timeout, MyTimeoutError
 import math
 import scipy
 
+TIMEOUT = 1
+
 SPECIAL_WORDS = [
     "<EOS>",
     "<X>",
@@ -106,6 +108,10 @@ class FunctionEnvironment(object):
         logger.info(
             f"vocabulary: {len(self.float_word2id)} float words, {len(self.equation_word2id)} equation words"
         )
+
+        if params.debug: 
+            global TIMEOUT
+            TIMEOUT = 100000
 
     def mask_from_seperator(self, x, sep):
         sep_id = self.float_word2id[sep]
@@ -241,7 +247,7 @@ class FunctionEnvironment(object):
                 # self.errors["gen expr error"]+=1
                 continue
 
-    @timeout(1)
+    @timeout(TIMEOUT)
     def _gen_expr(
         self,
         train,
@@ -250,7 +256,6 @@ class FunctionEnvironment(object):
         dimension=None,
         n_points=None,
     ):
-
         (
             tree,
             dimension,
@@ -635,7 +640,7 @@ class FunctionEnvironment(object):
             "--max_points", type=int, default=150, help="Max number of terms in the series"
         )
         parser.add_argument(
-            "--min_points_per_dim", type=int, default=5, help="Min number of terms per dim"
+            "--min_points_per_dim", type=int, default=30, help="Min number of terms per dim"
         )
 
         parser.add_argument(
@@ -686,7 +691,6 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--ode_integrator",
             type=str,
-            choices = ["odeint", "solve_ivp"],
             default = "solve_ivp",
             help="ODE integrator to use",
         )
