@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from abc import ABC, abstractmethod
+from typing import List
 import numpy as np
 import math
 from .generators import Node, NodeList
@@ -31,11 +32,37 @@ class Encoder(ABC):
 
 class GeneralEncoder:
     def __init__(self, params, symbols, all_operators):
+        self.constant_encoder = ConstantEncoder(params) if params.use_two_hot else None
         self.float_encoder = FloatSequences(params)
         self.equation_encoder = Equation(
-            params, symbols, self.float_encoder, all_operators
+            params, symbols, self.float_encoder, all_operators, self.constant_encoder
         )
 
+class ConstantEncoder(Encoder):
+    
+    def __init__(self, params):
+        # TODO: this needs to be consistent with the sign-mantissa-exponent 
+        # way of specifying the float range as well as with params.min_int / max_int
+        # TODO: do we want / need to remove int tokens from the vocabulary?
+        # TODO: the decoder output needs to be adapted to cover the range of constants
+        self.min = -100
+        self.max = 100
+        # self.symbols is used to determine the required number of idcs for the embedding layer
+        self.symbols = [f"c{i}" for i in range(self.min, self.max+1)]
+
+    def encode(self, values):
+        if isinstance(values, (int, float)): # TODO: Are there other valid numeric types?
+            values = [values]
+        assert isinstance(values, np.ndarray) or isinstance(values, List), type(values)
+        assert len(values) == 1, len(values)
+        return [f"{values[0]:+}"]
+    
+    def decode(self, lst):
+        if isinstance(lst, str) or isinstance(lst, float) or isinstance(int):
+            lst = [lst]
+        assert isinstance(lst, List) or isinstance(lst, np.ndarray), type(lst)
+        assert len(lst) == 1, lst
+        return lst
 
 class FloatSequences(Encoder):
     def __init__(self, params):
@@ -86,6 +113,7 @@ class FloatSequences(Encoder):
         Parse a list that starts with a float.
         Return the float value, and the position it ends in the list.
         """
+        # TODO: does it really return the position it ends in the list?
         if len(lst) == 0:
             return None
         seq = []
@@ -109,7 +137,7 @@ class FloatSequences(Encoder):
 
 
 class Equation(Encoder):
-    def __init__(self, params, symbols, float_encoder, all_operators):
+    def __init__(self, params, symbols, float_encoder, all_operators, constant_encoder=None):
         super().__init__(params)
         self.params = params
         self.max_int = self.params.max_int
@@ -124,16 +152,20 @@ class Equation(Encoder):
             self.extra_binary_operators = []
         self.float_encoder = float_encoder
         self.all_operators = all_operators
+        self.constant_encoder = constant_encoder
 
     def encode(self, tree):
         res = []
         for elem in tree.prefix().split(","):
             try:
                 val = float(elem)
-                if elem.lstrip("-").isdigit():
-                    res.extend(self.write_int(int(elem)))
+                if self.constant_encoder is not None:
+                    res.extend(self.constant_encoder.encode(val))
                 else:
-                    res.extend(self.float_encoder.encode(np.array([val])))
+                    if elem.lstrip("-").isdigit():
+                        res.extend(self.write_int(int(elem)))
+                    else:
+                        res.extend(self.float_encoder.encode(np.array([val])))
             except ValueError:
                 res.append(elem)
         return res
@@ -166,6 +198,11 @@ class Equation(Encoder):
                 # print(e, "error in encoding, lst: {}".format(lst))
                 return None, 0
             return Node(str(val), self.params), 3
+        elif lst[0].startswith("+") or lst[0].startswith("-"):
+            assert self.constant_encoder is not None
+            # val = self.float_encoder.decode(lst[0])[0]
+            # decode just returns the value from the list
+            return Node(str(lst[0]), self.params), 1
         elif (
             lst[0].startswith("CONSTANT") or lst[0] == "y"
         ):  ##added this manually CAREFUL!!
