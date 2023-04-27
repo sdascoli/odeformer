@@ -483,6 +483,7 @@ class TransformerModel(nn.Module):
 
         # generated sentences
         generated = src_len.new(max_len, bs)  # upcoming output
+        generated = src_len.new(max_len, bs).to(torch.double)  # upcoming output
         generated.fill_(self.pad_index)  # fill upcoming ouput with <PAD>
         generated[0].fill_(self.eos_index)  # we use <EOS> for <BOS> everywhere
 
