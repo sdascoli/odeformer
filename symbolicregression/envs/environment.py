@@ -13,7 +13,8 @@ import sys
 import copy
 import json
 import operator
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
+from typing_extensions import Literal
 from collections import deque, defaultdict
 import time
 import traceback
@@ -80,8 +81,11 @@ class FunctionEnvironment(object):
         self.float_words = self.generator.float_words
         self.equation_encoder = self.generator.equation_encoder
         self.equation_words = self.generator.equation_words
-        self.equation_words += self.float_words
-
+        if params.use_two_hot:
+            self.constant_words = self.equation_encoder.constant_encoder.symbols
+        else:
+            self.equation_words += self.float_words
+            self.constant_words = None
         self.simplifier = simplifiers.Simplifier(self.generator)
 
         # number of words / indices
@@ -89,6 +93,15 @@ class FunctionEnvironment(object):
         self.equation_id2word = {i: s for i, s in enumerate(self.equation_words)}
         self.float_word2id = {s: i for i, s in self.float_id2word.items()}
         self.equation_word2id = {s: i for i, s in self.equation_id2word.items()}
+        # NOTE: we never want to use these constant ids, we are only interested 
+        # in knowing the number of words (=support). 
+        # TODO: refactor so that we only need to save the len instead of a dict
+        if params.use_two_hot:
+            _offset = max(self.equation_word2id.values()) + 1
+            self.constant_id2word = {
+                i + _offset: s for i, s in enumerate(self.constant_words)
+            }
+            self.constant_word2id = {s: i for i, s in self.constant_id2word.items()}
 
         for ood_unary_op in self.generator.extra_unary_operators:
             self.equation_word2id[ood_unary_op] = self.equation_word2id["OOD_unary_op"]
@@ -131,18 +144,25 @@ class FunctionEnvironment(object):
         a tensor of size (slen, n) where slen is the length of the longest
         sentence, and a vector lengths containing the length of each sentence.
         """
+        
         lengths = torch.LongTensor([2 + len(eq) for eq in equations])
-        sent = torch.LongTensor(lengths.max().item(), lengths.size(0)).fill_(
-            self.float_word2id["<PAD>"]
-        )
-        sent[0] = self.equation_word2id["<EOS>"]
+        if self.equation_encoder.constant_encoder is not None:
+            sent = torch.DoubleTensor(lengths.max().item(), lengths.size(0)).fill_(
+                self.float_word2id["<PAD>"]
+            )
+        else:
+            sent = torch.LongTensor(lengths.max().item(), lengths.size(0)).fill_(
+                self.float_word2id["<PAD>"]
+            )
+        sent[0] = self.equation_word2id["<EOS>"] # TODO: shouldnt this be a beginning-of-seq token?
         for i, eq in enumerate(equations):
             sent[1 : lengths[i] - 1, i].copy_(eq)
             sent[lengths[i] - 1, i] = self.equation_word2id["<EOS>"]
         return sent, lengths
 
-    def word_to_idx(self, words, float_input=True):
-        if float_input:
+    def word_to_idx(self, words, input_mode: Literal["equation", "float", "2hot"]="float"):
+        assert input_mode in ["equation", "float", "two_hot"], input_mode
+        if input_mode == "float":
             return [
                 [
                     torch.LongTensor([self.float_word2id[dim] for dim in point])
@@ -150,10 +170,49 @@ class FunctionEnvironment(object):
                 ]
                 for seq in words
             ]
-        else:
+        elif input_mode == "equation":
             return [
                 torch.LongTensor([self.equation_word2id[w] for w in eq]) for eq in words
             ]
+        else:# input_mode == "two_hot"
+            assert self.equation_encoder.constant_encoder is not None
+            id_offset = max(self.equation_word2id.values())
+            output = []
+            for eq in words:
+                lst = []
+                for w in eq:
+                    try:
+                        # NOTE: Assuming that encoder embedding layer and decoder embedding are NOT shared
+                        # otherwise, we need to ensure that indices of float encoder and constant encoder do not overlap
+                        lst.append(float(w) + id_offset - self.equation_encoder.constant_encoder.min)
+                        # in the line above, float(w) raises an error for non-constant words
+                    except ValueError:
+                        lst.append(self.equation_word2id[w])
+                        
+                output.append(torch.DoubleTensor(lst))
+            return output
+
+    def ids_to_two_hot(self, ids: torch.Tensor, support_size: int):
+        """
+        Take a list of int or float 'ids' and convert them to 2-hot representation.
+        """
+        id_left = ids.floor()
+        id_right = id_left + 1
+        prob_left = 1 - (ids - id_left)
+        prob_right = 1 - prob_left    
+        logits = torch.zeros(ids.shape[0], ids.shape[1], support_size).type_as(ids)
+        return logits.scatter_(
+            dim=2, 
+            index=id_left.long().unsqueeze(-1), 
+            src=prob_left.unsqueeze(-1)
+        ).scatter_(
+            dim=2, 
+            index=id_right.long().unsqueeze(-1), 
+            src=prob_right.unsqueeze(-1)
+        ).squeeze(1)
+        
+    def two_hot_to_ids(self, two_hot: torch.Tensor):
+        raise NotImplementedError()
 
     def word_to_infix(self, words, is_float=True, str_array=True):
         if is_float:
@@ -193,7 +252,15 @@ class FunctionEnvironment(object):
         if is_float:
             idx_to_words = [self.float_id2word[int(i)] for i in lst]
         else:
-            idx_to_words = [self.equation_id2word[int(term)] for term in lst]
+            id_offset = max(self.equation_word2id.values())
+            idx_to_words = []
+            
+            for term in lst:
+                print(id_offset, term)
+                if term > id_offset:
+                    idx_to_words.append(w - id_offset + self.equation_encoder.constant_encoder.min)
+                else:
+                    idx_to_words.append(self.equation_id2word[int(term)])
         return self.word_to_infix(idx_to_words, is_float, str_array)
 
     def gen_expr(
@@ -309,7 +376,6 @@ class FunctionEnvironment(object):
             dimension=dimension,
             n_points=n_points,
         )
-
         if datapoints is None:
             return {"tree": tree}, ["datapoint generation error"]
 
@@ -338,9 +404,22 @@ class FunctionEnvironment(object):
         skeleton_tree, _ = self.generator.function_to_skeleton(tree)
         skeleton_tree_encoded = self.equation_encoder.encode(skeleton_tree)
 
-        assert all(
-            [x in self.equation_word2id for x in tree_encoded]
-        ), "tree: {}\n encoded: {}".format(tree, tree_encoded)
+        if self.equation_encoder.constant_encoder is not None:
+            def is_number(s):
+                # TODO: move to some utils file?
+                try:
+                    float(s)
+                    return True
+                except ValueError:
+                    return False
+                
+            assert all(
+                [is_number(x) or x in self.equation_word2id for x in tree_encoded]
+            ), "tree: {}\n encoded: {}".format(tree, tree_encoded)
+        else:
+            assert all(
+                [x in self.equation_word2id for x in tree_encoded]
+            ), "tree: {}\n encoded: {}".format(tree, tree_encoded)
 
         info = {
             "n_points": n_points,
