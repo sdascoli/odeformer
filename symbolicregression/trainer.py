@@ -770,7 +770,7 @@ class Trainer(object):
                 src_enc=encoded.transpose(0, 1),
                 src_len=len1,
             )
-            _, loss = decoder(
+            _scores, loss = decoder(
                 "predict", tensor=decoded, pred_mask=pred_mask, y=y, get_scores=False
             )
         else:
@@ -784,7 +784,7 @@ class Trainer(object):
                     src_enc=encoded.transpose(0, 1),
                     src_len=len1,
                 )
-                _, loss = decoder(
+                _scores, loss = decoder(
                     "predict",
                     tensor=decoded,
                     pred_mask=pred_mask,
@@ -801,3 +801,4 @@ class Trainer(object):
         self.n_equations += len1.size(0)
         self.stats["processed_e"] += len1.size(0)
         self.stats["processed_w"] += (len1 + len2 - 2).sum().item()
+        return _scores
