@@ -160,9 +160,9 @@ class FunctionEnvironment(object):
             sent[lengths[i] - 1, i] = self.equation_word2id["<EOS>"]
         return sent, lengths
 
-    def word_to_idx(self, words, input_mode: Literal["equation", "float", "2hot"]="float"):
-        assert input_mode in ["equation", "float", "two_hot"], input_mode
-        if input_mode == "float":
+    def word_to_idx(self, words, float_input=True):
+        
+        if float_input:
             return [
                 [
                     torch.LongTensor([self.float_word2id[dim] for dim in point])
@@ -170,12 +170,7 @@ class FunctionEnvironment(object):
                 ]
                 for seq in words
             ]
-        elif input_mode == "equation":
-            return [
-                torch.LongTensor([self.equation_word2id[w] for w in eq]) for eq in words
-            ]
-        else:# input_mode == "two_hot"
-            assert self.equation_encoder.constant_encoder is not None
+        elif self.equation_encoder.constant_encoder is not None:
             id_offset = max(self.equation_word2id.values())
             output = []
             for eq in words:
@@ -191,6 +186,10 @@ class FunctionEnvironment(object):
                         
                 output.append(torch.DoubleTensor(lst))
             return output
+        else:
+            return [
+                torch.LongTensor([self.equation_word2id[w] for w in eq]) for eq in words
+            ]
 
     def ids_to_two_hot(self, ids: torch.Tensor, support_size: int):
         """

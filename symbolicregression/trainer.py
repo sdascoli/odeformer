@@ -748,6 +748,14 @@ class Trainer(object):
 
         y = x2[1:].masked_select(pred_mask[:-1])
         assert len(y) == (len2 - 1).sum().item()
+        
+        if params.use_two_hot:
+            assert self.env.equation_encoder.constant_encoder is not None
+            y = self.env.ids_to_two_hot(
+                ids=y.reshape(-1, 1), 
+                support_size=len(self.env.equation_words) + len(self.env.constant_words)
+            )
+        
         # cuda
         x2, len2, y = to_cuda(x2, len2, y)
         # forward / loss
