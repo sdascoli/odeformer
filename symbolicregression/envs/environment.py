@@ -253,13 +253,14 @@ class FunctionEnvironment(object):
         else:
             id_offset = max(self.equation_word2id.values())
             idx_to_words = []
-            
             for term in lst:
-                print(id_offset, term)
                 if term > id_offset:
-                    idx_to_words.append(w - id_offset + self.equation_encoder.constant_encoder.min)
+                    # constants
+                    idx_to_words.append(f"{term.item() - id_offset + self.equation_encoder.constant_encoder.min:+}")
                 else:
+                    # non-constants, e.g. operators
                     idx_to_words.append(self.equation_id2word[int(term)])
+                    
         return self.word_to_infix(idx_to_words, is_float, str_array)
 
     def gen_expr(
