@@ -4,7 +4,6 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 #
-
 from logging import getLogger
 import math
 import itertools
@@ -13,6 +12,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from symbolicregression.model.embedders import TwoHotEmbedder
 
 N_MAX_POSITIONS = 4096  # maximum input sequence length
 
@@ -20,8 +20,11 @@ N_MAX_POSITIONS = 4096  # maximum input sequence length
 logger = getLogger()
 
 
-def Embedding(num_embeddings, embedding_dim, padding_idx=None):
-    m = nn.Embedding(num_embeddings, embedding_dim, padding_idx=padding_idx)
+def Embedding(num_embeddings, embedding_dim, padding_idx=None, use_two_hot=False):
+    if use_two_hot:
+        m = TwoHotEmbedder(num_embeddings, embedding_dim, padding_idx=padding_idx)
+    else:
+        m = nn.Embedding(num_embeddings, embedding_dim, padding_idx=padding_idx)
     nn.init.normal_(m.weight, mean=0, std=embedding_dim ** -0.5)
     if padding_idx is not None:
         nn.init.constant_(m.weight[padding_idx], 0)
@@ -260,7 +263,10 @@ class TransformerModel(nn.Module):
         self.use_prior_embeddings = use_prior_embeddings
         if not use_prior_embeddings:
             self.embeddings = Embedding(
-                self.n_words, self.dim, padding_idx=self.pad_index
+                self.n_words, 
+                self.dim, 
+                padding_idx=self.pad_index, 
+                use_two_hot=((not is_encoder) and params.use_two_hot), # use in decoder only and only if asked for
             )
         else:
             self.embeddings = None
