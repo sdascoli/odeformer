@@ -836,7 +836,7 @@ def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=True):
             return tree([y],[t])[0]
         with warnings.catch_warnings(record=True) as caught_warnings:
             try: 
-                trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times, method='RK23', rtol=1e-2, atol=1e-6)
+                trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times, method='RK23', rtol=1e-2, atol=1e-6, vectorized=False)
                 trajectory = trajectory.y.T
             except: 
                 if debug:

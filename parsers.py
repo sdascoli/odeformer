@@ -40,7 +40,12 @@ def get_parser():
         default="LinearPoint",
         help="[TNet, LinearPoint, Flat, AttentionPoint] How to pre-process sequences before passing to a transformer.",
     )
-
+    parser.add_argument(
+        "--use_cross_attention",
+        type=bool_flag,
+        default=True,
+        help="Whether to average trajectories at inference. In this case decoder takes as input the averaged embedding of encoder.",
+    )
     parser.add_argument(
         "--emb_emb_dim", type=int, default=64, help="Embedder embedding layer size"
     )

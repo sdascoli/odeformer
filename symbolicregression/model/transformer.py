@@ -210,6 +210,7 @@ class TransformerModel(nn.Module):
         self.is_encoder = is_encoder
         self.is_decoder = not is_encoder
         self.with_output = with_output
+        self.use_cross_attention = params.use_cross_attention
 
         self.apex = params.nvidia_apex
 
@@ -245,7 +246,7 @@ class TransformerModel(nn.Module):
 
         # embeddings
 
-        if positional_embeddings is None or positional_embeddings == "alibi":
+        if positional_embeddings is None or positional_embeddings in ["alibi","none"]:
             self.position_embeddings = None
         elif positional_embeddings == "sinusoidal":
             self.position_embeddings = Embedding(N_MAX_POSITIONS, self.dim)
@@ -396,6 +397,10 @@ class TransformerModel(nn.Module):
         else:
             tensor = x
 
+        if self.use_cross_attention and self.is_decoder and src_enc is not None:
+            src_enc = src_enc.mean(dim=1)  # B,D
+            tensor[:,0,:] = src_enc
+
         if self.position_embeddings is not None:
             tensor = tensor + self.position_embeddings(positions).expand_as(tensor)
         tensor = self.layer_norm_emb(tensor)
@@ -415,7 +420,7 @@ class TransformerModel(nn.Module):
             tensor = self.layer_norm1[i](tensor)
 
             # encoder attention (for decoder only)
-            if self.is_decoder and src_enc is not None:
+            if self.is_decoder and src_enc is not None and not self.use_cross_attention: 
                 self.encoder_attn[i].cache = self.cache
                 attn = self.encoder_attn[i](
                     tensor, src_mask, kv=src_enc, use_cache=use_cache
