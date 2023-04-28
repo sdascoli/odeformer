@@ -335,8 +335,8 @@ class RandomFunctions(Generator):
         self.max_int = params.max_int
         self.min_binary_ops_per_dim = params.min_binary_ops_per_dim
         self.max_binary_ops_per_dim = params.max_binary_ops_per_dim
-        self.min_unary_ops = params.min_unary_ops
-        self.max_unary_ops = params.max_unary_ops
+        self.min_unary_ops_per_dim = params.min_unary_ops_per_dim
+        self.max_unary_ops_per_dim = params.max_unary_ops_per_dim
         self.min_dimension = params.min_dimension
         self.max_dimension = params.max_dimension
         self.max_number = 10 ** (params.max_exponent + params.float_precision)
@@ -455,7 +455,7 @@ class RandomFunctions(Generator):
             -self.params.max_exponent_prefactor - (self.params.float_precision + 1) // 2
         )
         max_power = (
-            self.params.max_exponent_prefactor - (self.params.float_precision + 1) // 2
+            self.params.max_exponent_prefactor - 1 - (self.params.float_precision + 1) // 2
         )
         if not exponent:
             exponent = rng.randint(min_power, max_power + 1)
@@ -565,7 +565,7 @@ class RandomFunctions(Generator):
             nb_binary_ops_to_use = nb_binary_ops
         if nb_unary_ops is None:
             nb_unary_ops_to_use = [
-                rng.randint(self.min_unary_ops, self.max_unary_ops + 1)
+                rng.randint(self.min_unary_ops_per_dim, self.max_unary_ops_per_dim + 1)
                 for dim in range(dimension)
             ]
         elif isinstance(nb_unary_ops, int):
@@ -648,15 +648,20 @@ class RandomFunctions(Generator):
 
         s = str(tree.value)
         a, b = self.generate_float(rng), self.generate_float(rng)
+        add_prefactor = f",add,{a}," if rng.rand() < self.params.prob_prefactor else ""
+        mul_prefactor = f",mul,{b}," if rng.rand() < self.params.prob_prefactor else ""
+        total_prefactor = add_prefactor.rstrip(",") + "," + mul_prefactor.lstrip(",")
+        if total_prefactor == ",":  # no prefactor
+            total_prefactor = ""
         if s in ["add", "sub"]:
             s += (
-                "," if tree.children[0].value in ["add", "sub"] else f",mul,{a},"
+                "," if tree.children[0].value in ["add", "sub"] else mul_prefactor
             ) + self._add_prefactors(rng, tree.children[0])
             s += (
-                "," if tree.children[1].value in ["add", "sub"] else f",mul,{b},"
+                "," if tree.children[1].value in ["add", "sub"] else mul_prefactor
             ) + self._add_prefactors(rng, tree.children[1])
         elif s in self.unaries and tree.children[0].value not in ["add", "sub"]:
-            s += f",add,{a},mul,{b}," + self._add_prefactors(rng, tree.children[0])
+            s += total_prefactor + self._add_prefactors(rng, tree.children[0])
         else:
             for c in tree.children:
                 s += f"," + self._add_prefactors(rng, c)
@@ -817,7 +822,7 @@ def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=True):
             return tree([y],[t])[0]
         with stdout_redirected():
             with warnings.catch_warnings(record=True) as caught_warnings:
-                try: trajectory = scipy.integrate.odeint(func, y0, times)
+                try: trajectory = scipy.integrate.odeint(func, y0, times, rtol=1e-2, atol=1e-6)
                 except: 
                     if debug:
                         print(traceback.format_exc())
@@ -828,12 +833,12 @@ def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=True):
             return tree([y],[t])[0]
         with warnings.catch_warnings(record=True) as caught_warnings:
             try: 
-                trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times)
+                trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times, method='RK23', rtol=1e-2, atol=1e-6)
+                trajectory = trajectory.y.T
             except: 
                 if debug:
                     print(traceback.format_exc())
                 return None
-            trajectory = trajectory.y.T
     else:
         raise NotImplementedError
     

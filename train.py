@@ -99,7 +99,7 @@ def main(params):
                 trainer.get_generation_statistics(task)
 
         trainer.save_checkpoint("checkpoint")
-        trainer.save_periodic()
+        if _: trainer.save_periodic()
 
         if params.eval_in_domain:
             scores = evaluator.evaluate_in_domain("valid1","functions")

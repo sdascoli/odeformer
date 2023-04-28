@@ -146,7 +146,7 @@ class SymbolicTransformerRegressor(BaseEstimator):
             else:
                 tree = self.trees[0][0]
 
-        trajectory = integrate_ode(tree, y0, times)
+        trajectory = integrate_ode(y0, times, tree)
         
         return trajectory
             

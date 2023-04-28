@@ -99,7 +99,9 @@ class Simplifier:
             expr = sp.simplify(expr)
         return expr
 
-    def _tree_to_sympy_expr(self, tree, round=True):
+    def tree_to_sympy_expr(self, tree, round=True):
+        if hasattr(tree, 'nodes'):
+            return [self.tree_to_sympy_expr(node, round=round) for node in tree.nodes]
         prefix = tree.prefix().split(",")
         sympy_compatible_infix = self.prefix_to_sympy_compatible_infix(prefix)
         expr = parse_expr(
@@ -107,11 +109,10 @@ class Simplifier:
         )
         if round: expr = self.round_expr(expr)
         return expr
-    
-    def tree_to_sympy_expr(self, tree, round=True):
-        return [self._tree_to_sympy_expr(node, round=round) for node in tree.nodes]
-    
+
     def readable_tree(self, tree):
+        if tree is None:
+            return None
         tree_sympy = self.tree_to_sympy_expr(tree, round=True)
         readable_tree = '  ,  '.join([str(tree) for tree in tree_sympy])
         return readable_tree
@@ -222,8 +223,8 @@ class Simplifier:
         ints = [fl for fl in floats if int(fl) == fl]
         expr = expr.xreplace(dict(zip(ints, [int(i) for i in ints])))
         return expr
-
-    def apply_fn(self, tree, fn_stack=[]):
+    
+    def _apply_fn(self, trees, fn_stack=[]):
         expr = self.tree_to_sympy_expr(tree)
         for (fn, arg) in fn_stack:
             expr = getattr(self, fn)(expr=expr, **arg)
@@ -231,6 +232,18 @@ class Simplifier:
         if new_tree is None:
             new_tree = tree
         return new_tree
+
+    def apply_fn(self, tree, fn_stack=[]):
+        if hasattr(tree, "nodes"):
+            return NodeList([self.apply_fn(node, fn_stack=fn_stack) for node in tree.nodes])
+        else:
+            expr = self.tree_to_sympy_expr(tree)
+            for (fn, arg) in fn_stack:
+                expr = getattr(self, fn)(expr=expr, **arg)
+            new_tree = self.sympy_expr_to_tree(expr)
+            if new_tree is None:
+                new_tree = tree
+            return new_tree
 
     def write_infix(self, token, args):
         """

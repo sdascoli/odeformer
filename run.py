@@ -8,7 +8,7 @@ from pathlib import Path
 import shutil
 from distutils import dir_util
 
-exp_folder = 'first'
+exp_folder = 'second'
 
 dump_path = '/home/dascoli/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
@@ -23,7 +23,7 @@ extra_args = {
 
 grid = {
     "ode_integrator": ["odeint","solve_ivp"],
-    "max_dimension":[2,4]
+    "max_dimension":[2]
     #"optimizer": ['adam_cosine,warmup_updates=5000,init_period=50000,period_mult=1.5,lr_shrink=0.5'],
 }
 

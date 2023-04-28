@@ -212,10 +212,10 @@ class FunctionEnvironment(object):
     ):
         errors = defaultdict(int)
         if not train or self.params.use_controller:
-            if nb_unary_ops is None:
-                nb_unary_ops = self.rng.randint(
-                    self.params.min_unary_ops, self.params.max_unary_ops + 1
-                )
+            # if nb_unary_ops is None:
+            #     nb_unary_ops = self.rng.randint(
+            #         self.params.min_unary_ops, self.params.max_unary_ops + 1
+            #     )
             if dimension is None:
                 dimension = self.rng.randint(
                     self.params.min_dimension, self.params.max_dimension + 1
@@ -286,9 +286,8 @@ class FunctionEnvironment(object):
 
         if self.params.use_sympy:
             len_before = len(tree.prefix().split(","))
-            tree = (
-                self.simplifier.simplify_tree(tree) if self.params.use_sympy else tree
-            )
+            print(tree)
+            tree = (self.simplifier.apply_fn(tree, []) if self.params.use_sympy else tree)
             len_after = len(tree.prefix().split(","))
             if tree is None or len_after > 2 * len_before:
                 return {"tree": tree}, ["simplification error"]
@@ -478,7 +477,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--operators_to_downsample",
             type=str,
-            default="div_0,arcsin_0,arccos_0,tan_0,arctan_0,sqrt_0,pow2_0,pow3_0,inv_1,abs_0,exp_0,log_0",
+            default="sin_1,cos_1,tan_0,arcsin_0,arccos_0,arctan_0,sqrt_1,pow2_5,pow3_1,inv_5,div_0,abs_0,exp_0,log_0",
             help="Which operator to remove",
         )
         parser.add_argument(
@@ -491,7 +490,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--max_unary_depth",
             type=int,
-            default=6,
+            default=2,
             help="Max number of operators inside unary",
         )
 
@@ -531,7 +530,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--use_controller",
             type=bool_flag,
-            default=False,
+            default=True,
             help="should we enforce that we get as many examples of each dim ?",
         )
         parser.add_argument(
@@ -574,7 +573,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--max_exponent_prefactor",
             type=int,
-            default=0,
+            default=1,
             help="Maximal order of magnitude in prefactors",
         )
         parser.add_argument(
@@ -618,16 +617,19 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--max_binary_ops_offset",
             type=int,
-            default=4,
+            default=3,
             help="Offset for max number of binary operators",
         )
         parser.add_argument(
-            "--min_unary_ops", type=int, default=0, help="Min number of unary operators"
+            "--min_unary_ops_per_dim", 
+            type=int, 
+            default=0, 
+            help="Min number of unary operators"
         )
         parser.add_argument(
-            "--max_unary_ops",
+            "--max_unary_ops_per_dim",
             type=int,
-            default=1,
+            default=2,
             help="Max number of unary operators",
         )
         parser.add_argument(
@@ -647,7 +649,13 @@ class FunctionEnvironment(object):
             "--prob_const",
             type=float,
             default=0.0,
-            help="Probability to generate integer in leafs",
+            help="Probability to generate const in leafs",
+        )
+        parser.add_argument(
+            "--prob_prefactor",
+            type=float,
+            default=1.0,
+            help="Probability to generate prefactor",
         )
         parser.add_argument(
             "--reduce_num_constants",

@@ -77,7 +77,6 @@ class Evaluator(object):
         self.modules = trainer.modules
         self.params = trainer.params
         self.env = trainer.env
-        self.logger = trainer.logger
         params = self.params
         Evaluator.ENV = trainer.env
         embedder = (
@@ -186,8 +185,8 @@ class Evaluator(object):
             #         if first_write:
             #             batch_results.to_csv(save_file, index=False)
             #             first_write = False
-            #             if self.logger is not None:
-            #                 self.logger.info("Saving {} equations to {}".format(self.params.batch_size_eval* n_batches_per_write, save_file))
+            #             if self.trainer.logger is not None:
+            #                 self.trainer.logger.info("Saving {} equations to {}".format(self.params.batch_size_eval* n_batches_per_write, save_file))
             #         else:
             #             batch_results.to_csv(
             #                 save_file, mode="a", header=False, index=False
@@ -198,7 +197,7 @@ class Evaluator(object):
 
         batch_results = pd.DataFrame.from_dict(batch_results)
         batch_results.to_csv(save_file, index=False)
-        self.logger.info("Saved {} equations to {}".format(len(batch_results), save_file))
+        self.trainer.logger.info("Saved {} equations to {}".format(len(batch_results), save_file))
 
         try:
             df = pd.read_csv(save_file, na_filter=True)
@@ -209,8 +208,8 @@ class Evaluator(object):
         info_columns = filter(lambda x: x.startswith("info_"), df.columns)
         df = df.drop(columns=filter(lambda x: x not in self.ablation_to_keep, info_columns))
         df = df.drop(columns=["predicted_trees"])
-        if "trees" in df: df.drop(columns=["trees"])
-        if "info_name" in df.columns: df.drop(columns=["info_name"])
+        if "trees" in df: df = df.drop(columns=["trees"])
+        if "info_name" in df.columns: df = df.drop(columns=["info_name"])
 
         for metric in self.params.validation_metrics.split(','):
             scores[metric] = df[metric].mean()
@@ -230,7 +229,7 @@ class Evaluator(object):
     ):
 
         self.dstr.rescale = False
-        self.logger.info("====== STARTING EVALUATION IN DOMAIN (multi-gpu: {}) =======".format(self.params.multi_gpu))
+        self.trainer.logger.info("====== STARTING EVALUATION IN DOMAIN (multi-gpu: {}) =======".format(self.params.multi_gpu))
 
         iterator = self.env.create_test_iterator(
             data_type,
@@ -256,7 +255,7 @@ class Evaluator(object):
     ):
         
         self.dstr.rescale = self.params.rescale
-        self.logger.info("====== STARTING EVALUATION PMLB (multi-gpu: {}) =======".format(self.params.multi_gpu))
+        self.trainer.logger.info("====== STARTING EVALUATION PMLB (multi-gpu: {}) =======".format(self.params.multi_gpu))
 
         iterator = []
         from pmlb import fetch_data, dataset_names
@@ -312,9 +311,9 @@ def main(params):
     evaluator = Evaluator(trainer)
     save = params.save_results
 
-    #if params.eval_in_domain:
-    #   scores = evaluator.evaluate_in_domain("valid1","functions",save=save,)
-    #   logger.info("__log__:%s" % json.dumps(scores))
+    if params.eval_in_domain:
+      scores = evaluator.evaluate_in_domain("valid1","functions",save=save,)
+      logger.info("__log__:%s" % json.dumps(scores))
 
     if params.eval_on_pmlb:
         pmlb_scores = evaluator.evaluate_on_pmlb(save=save)
