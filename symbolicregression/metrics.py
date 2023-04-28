@@ -24,7 +24,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
         #    true[i]=true[i][:,0]
         #if len(predicted[i].shape)==2:
         #    predicted[i]=predicted[i][:,0]
-        assert true[i].shape == predicted[i].shape, "Problem with shapes: {}, {}".format(true[i].shape, predicted[i].shape)
+        #assert true[i].shape == predicted[i].shape, "Problem with shapes: {}, {}".format(true[i].shape, predicted[i].shape)
 
     for metric in metrics.split(","):
         if metric == "r2":
@@ -74,12 +74,12 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                 if predicted[i] is None or np.isnan(np.min(predicted[i])):
                     results[metric].append(np.nan)
                 else:
-                    #try:
-                    dimension = predicted[i].shape[1]
-                    snmse = sum([mean_squared_error(true[i][:,dim], predicted[i][:,dim])/np.var(true[i][:,dim]) for dim in range(dimension)])
+                    try:
+                        dimension = predicted[i].shape[1]
+                        snmse = sum([mean_squared_error(true[i][:,dim], predicted[i][:,dim])/(np.var(true[i][:,dim])+1.e-10) for dim in range(dimension)])
+                    except: 
+                        snmse = np.nan
                     results[metric].append(snmse)
-                    #except Exception as e:
-                    #    results[metric].append(np.nan)
                         
         elif metric == "_mse":
             for i in range(len(true)):
@@ -102,6 +102,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                         results[metric].append(NMSE)
                     except Exception as e:
                         results[metric].append(np.nan)
+
         elif metric == "_rmse":
             for i in range(len(true)):
                 if predicted[i] is None or np.isnan(np.min(predicted[i])):

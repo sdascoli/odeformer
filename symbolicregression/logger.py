@@ -57,6 +57,7 @@ def create_logger(filepath, rank):
     if filepath is not None:
         logger.addHandler(file_handler)
     logger.addHandler(console_handler)
+    logger.propagate = False
 
     # reset logger elapsed time
     def reset_time():

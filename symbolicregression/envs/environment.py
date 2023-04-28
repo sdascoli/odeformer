@@ -605,7 +605,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--min_binary_ops_per_dim",
             type=int,
-            default=0,
+            default=1,
             help="Min number of binary operators per input dimension",
         )
         parser.add_argument(
@@ -617,7 +617,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--max_binary_ops_offset",
             type=int,
-            default=3,
+            default=4,
             help="Offset for max number of binary operators",
         )
         parser.add_argument(

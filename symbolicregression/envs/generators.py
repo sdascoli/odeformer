@@ -822,7 +822,10 @@ def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=True):
             return tree([y],[t])[0]
         with stdout_redirected():
             with warnings.catch_warnings(record=True) as caught_warnings:
-                try: trajectory = scipy.integrate.odeint(func, y0, times, rtol=1e-2, atol=1e-6)
+                try: 
+                    trajectory = scipy.integrate.odeint(func, y0, times, rtol=1e-2, atol=1e-6)
+                    if abs(trajectory[-10:].max()) < 1e-100:
+                        return None
                 except: 
                     if debug:
                         print(traceback.format_exc())
