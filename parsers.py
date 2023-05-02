@@ -44,7 +44,7 @@ def get_parser():
         "--use_cross_attention",
         type=bool_flag,
         default=True,
-        help="Whether to average trajectories at inference. In this case decoder takes as input the averaged embedding of encoder.",
+        help="Whether to use cross attention.",
     )
     parser.add_argument(
         "--emb_emb_dim", type=int, default=64, help="Embedder embedding layer size"

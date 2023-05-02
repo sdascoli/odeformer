@@ -39,6 +39,7 @@ from symbolicregression.model.model_wrapper import ModelWrapper
 from symbolicregression.model.embedders import *
 from symbolicregression.trainer import Trainer
 from symbolicregression.envs.generators import integrate_ode
+from symbolicregression.envs.utils import *
 from evaluate import Evaluator
 
 def get_most_free_gpu():

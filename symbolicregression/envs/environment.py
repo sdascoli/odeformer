@@ -35,7 +35,7 @@ from ..utils import bool_flag, timeout, MyTimeoutError
 import math
 import scipy
 
-TIMEOUT = 1
+TIMEOUT = .1
 
 SPECIAL_WORDS = [
     "<EOS>",
@@ -294,17 +294,7 @@ class FunctionEnvironment(object):
 
 
         if n_points is None:
-            n_points = (
-                self.params.max_points
-                if not train
-                else self.rng.randint(
-                    min(
-                        self.params.min_points_per_dim * dimension,
-                        self.params.max_points,
-                    ),
-                    self.params.max_points + 1,
-                )
-            )
+            n_points = self.rng.randint(min(self.params.min_points_per_dim * dimension,self.params.max_points), self.params.max_points + 1)
 
         # generate trajectory
         tree, datapoints = self.generator.generate_datapoints(
@@ -639,7 +629,7 @@ class FunctionEnvironment(object):
             help="Minimum probability of generating an example with given n_op, for our curriculum strategy",
         )
         parser.add_argument(
-            "--max_points", type=int, default=150, help="Max number of terms in the series"
+            "--max_points", type=int, default=300, help="Max number of terms in the series"
         )
         parser.add_argument(
             "--min_points_per_dim", type=int, default=30, help="Min number of terms per dim"

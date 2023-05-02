@@ -795,7 +795,7 @@ class RandomFunctions(Generator):
         return tree, (times, trajectory)
 
 
-def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=True):
+def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=False, allow_warnings=False):
 
     tree = tree_to_numexpr_fn(tree)
 
@@ -810,12 +810,14 @@ def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=True):
             if debug:
                 print(traceback.format_exc())
             return None    
+        
     elif ode_integrator == "nbkode":
         @njit
         def func(y,t):
             return tree([y],[t])[0]
         solver = nbkode.ForwardEuler(func, times[0], y0)
         trajectory = solver.run(times)
+
     elif ode_integrator == "odeint":
         #@njit
         def func(y,t):
@@ -830,22 +832,29 @@ def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=True):
                     if debug:
                         print(traceback.format_exc())
                     return None
+                
     elif ode_integrator == "solve_ivp":
         #@njit
         def func(t,y):
             return tree([y],[t])[0]
         with warnings.catch_warnings(record=True) as caught_warnings:
             try: 
-                trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times, method='RK23', rtol=1e-2, atol=1e-6, vectorized=False)
+                trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times, method='RK23', rtol=1e-2, atol=1e-6)
+                solved_times = trajectory.t
                 trajectory = trajectory.y.T
             except: 
                 if debug:
                     print(traceback.format_exc())
                 return None
+            
     else:
         raise NotImplementedError
     
-    if len(caught_warnings) > 0 or np.any(np.isnan(trajectory)) or len(times)!=len(trajectory):
+    #if debug: print(trajectory, np.any(np.isnan(trajectory)), len(times)!=len(trajectory), len(times), len(trajectory))#, solved_times)
+    
+    if np.any(np.isnan(trajectory)) or len(times)!=len(trajectory):
+        return [np.nan for _ in range(len(times))]
+    if len(caught_warnings) > 0 and not allow_warnings:
         return [np.nan for _ in range(len(times))]
     
     return trajectory
