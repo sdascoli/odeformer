@@ -817,7 +817,7 @@ def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=False, allow
         
     elif ode_integrator == 'jax':
         def func(t,y,args=None):
-            return tree(jnp.array([y]),jnp.array([t]))[0]
+            return tree([y],[t])[0]
         term = ODETerm(func)
         solver = Dopri5()
         t0 = min(times)  # start of integration
@@ -827,7 +827,7 @@ def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=False, allow
 
         # convenience wrapper to only supply y0 as input to solver
         p_diffeqsolve = lambda init : diffeqsolve(term, solver, t0, t1, dt0, init, saveat=saveat)
-        y0 = jnp.array(y0)
+        y0 = np.array(y0)
         sol = p_diffeqsolve(y0)
         trajectory = sol.ys
         
@@ -879,7 +879,7 @@ def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=False, allow
     
     return trajectory
 
-def tree_to_numexpr_fn(tree, max_dim = 10):
+def tree_to_numexpr_fn(tree):
     infix = tree.infix()
     numexpr_equivalence = {
         "add": "+",
@@ -895,17 +895,14 @@ def tree_to_numexpr_fn(tree, max_dim = 10):
 
     #@njit
     def wrapped_numexpr_fn(x, t, extra_local_dict={}):
-        t, x = np.array(t), np.array(x)
+        #t, x = np.array(t), np.array(x)
         local_dict = {}
-        for d in range(max_dim):
-            if "x_{}".format(d) in infix:
-                if d >= x.shape[1]:
-                    local_dict["x_{}".format(d)] = np.zeros(x.shape[0])
-                else:
-                    local_dict["x_{}".format(d)] = x[:, d]
-            if "t" in infix:
-                local_dict["t"] = t[:]
+        dimension = len(x[0])
+        for d in range(dimension): local_dict["x_{}".format(d)] = np.array(x)[:, d]
+        local_dict["t"] = t[:]
         local_dict.update(extra_local_dict)
+        #t, x = jnp.array(t), jnp.array(x)
+
         try:
             if '|' in infix:
                 vals = np.concatenate([ne.evaluate(node, local_dict=local_dict).reshape(-1,1) for node in infix.split('|')], axis=1)
@@ -915,7 +912,7 @@ def tree_to_numexpr_fn(tree, max_dim = 10):
             print(e)
             print("problem with tree", infix)
             traceback.format_exc()
-            vals = get_vals(x.shape[0], np.nan)
+            vals = [np.nan for _ in range(x.shape[0])]
         return vals
 
     return wrapped_numexpr_fn
