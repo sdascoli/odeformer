@@ -397,7 +397,7 @@ class TransformerModel(nn.Module):
         else:
             tensor = x
 
-        if self.use_cross_attention and self.is_decoder and src_enc is not None:
+        if not self.use_cross_attention and self.is_decoder and src_enc is not None:
             src_enc = src_enc.mean(dim=1)  # B,D
             tensor[:,0,:] = src_enc
 
@@ -420,7 +420,7 @@ class TransformerModel(nn.Module):
             tensor = self.layer_norm1[i](tensor)
 
             # encoder attention (for decoder only)
-            if self.is_decoder and src_enc is not None and not self.use_cross_attention: 
+            if self.is_decoder and src_enc is not None and self.use_cross_attention: 
                 self.encoder_attn[i].cache = self.cache
                 attn = self.encoder_attn[i](
                     tensor, src_mask, kv=src_enc, use_cache=use_cache
