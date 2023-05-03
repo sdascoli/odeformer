@@ -35,7 +35,7 @@ from ..utils import bool_flag, timeout, MyTimeoutError
 import math
 import scipy
 
-TIMEOUT = .1
+TIMEOUT = .2
 
 SPECIAL_WORDS = [
     "<EOS>",

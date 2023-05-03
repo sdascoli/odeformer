@@ -26,6 +26,10 @@ from numba import njit
 from numbalsoda import lsoda_sig, lsoda
 import nbkode
 
+import jax
+import jax.numpy as jnp
+from diffrax import diffeqsolve, ODETerm, SaveAt, Dopri5
+
 # from julia.api import Julia
 # jl = Julia(compiled_modules=False)
 # from diffeqpy import ode
@@ -804,18 +808,34 @@ def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=False, allow
             derivs = tree([u],[t])[0]  
         #func = numba.jit(func)
         try: 
-            sol = ode.ODEProblem(func, y0, (times[0],times[1])).solve()
+            sol = ode.ODEProblem(func, y0, (min(times), max(times))).solve()
             trajectory = sol(times)
         except: 
             if debug:
                 print(traceback.format_exc())
             return None    
         
+    elif ode_integrator == 'jax':
+        def func(t,y,args=None):
+            return tree(jnp.array([y]),jnp.array([t]))[0]
+        term = ODETerm(func)
+        solver = Dopri5()
+        t0 = min(times)  # start of integration
+        t1 = max(times)  # end of integration
+        dt0 = 0.1  # Initial stepsize (solver is then adaptive)
+        saveat = SaveAt(ts=times) # want regular output at 256 points
+
+        # convenience wrapper to only supply y0 as input to solver
+        p_diffeqsolve = lambda init : diffeqsolve(term, solver, t0, t1, dt0, init, saveat=saveat)
+        y0 = jnp.array(y0)
+        sol = p_diffeqsolve(y0)
+        trajectory = sol.ys
+        
     elif ode_integrator == "nbkode":
         @njit
         def func(y,t):
             return tree([y],[t])[0]
-        solver = nbkode.ForwardEuler(func, times[0], y0)
+        solver = nbkode.ForwardEuler(func, min(times), y0)
         trajectory = solver.run(times)
 
     elif ode_integrator == "odeint":

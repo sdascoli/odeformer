@@ -61,11 +61,11 @@ class SymbolicTransformerRegressor(BaseEstimator):
             times = [times]
             trajectories = [trajectories]
         n_datasets = len(times)
-    
+        
         if self.params:
-            scaler = utils_wrapper.Scaler(time_range=[1, self.params.time_range], feature_scale=self.params.init_scale) if self.rescale else None
+            scaler = utils_wrapper.Scaler(time_range=[1, self.params.time_range], feature_scale=self.params.init_scale) if self.rescale else None 
         else:
-            scaler = utils_wrapper.Scaler() if self.rescale else None
+            scaler = utils_wrapper.Scaler(time_range=[1, 5], feature_scale=1) if self.rescale else None
         scale_params = {}
         if scaler is not None:
             scaled_times = []
@@ -106,7 +106,6 @@ class SymbolicTransformerRegressor(BaseEstimator):
         for i in range(len(inputs)):
             input_id = inputs_ids[i]
             candidates = outputs[i]
-            all_candidates[input_id] = []
             for candidate in candidates:
                 if scaler is not None:
                     candidate = scaler.rescale_function(self.model.env, candidate, *scale_params[input_id])                    
@@ -146,6 +145,7 @@ class SymbolicTransformerRegressor(BaseEstimator):
             else:
                 tree = self.trees[0][0]
 
+        # integrate the ODE
         trajectory = integrate_ode(y0, times, tree)
         
         return trajectory

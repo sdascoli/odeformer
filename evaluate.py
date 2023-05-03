@@ -111,7 +111,7 @@ class Evaluator(object):
         )
         self.dstr = SymbolicTransformerRegressor(
             model=mw,
-            max_input_points=params.max_points,
+            max_input_points=params.max_points*params.subsample_ratio,
             rescale=params.rescale,
             params=params
         )
@@ -158,6 +158,8 @@ class Evaluator(object):
                     best_candidates.append(None)
                     continue
                 for candidate in candidates:
+                    time, idx = sorted(time), np.argsort(time)
+                    trajectory = trajectory[idx]
                     pred_trajectory = self.dstr.predict(time, y0=trajectory[0], tree=candidate)
                     result = compute_metrics(pred_trajectory, trajectory, predicted_tree=candidate, metrics=self.params.validation_metrics)
                     results.append(result)
@@ -178,20 +180,6 @@ class Evaluator(object):
             for k, v in best_results.items():
                 batch_results[k ].extend(v)
                 
-            # first_write = True
-            # if save_file:
-            #     if ibatch % n_batches_per_write == 0:
-            #         batch_results = pd.DataFrame.from_dict(batch_results)
-            #         if first_write:
-            #             batch_results.to_csv(save_file, index=False)
-            #             first_write = False
-            #             if self.trainer.logger is not None:
-            #                 self.trainer.logger.info("Saving {} equations to {}".format(self.params.batch_size_eval* n_batches_per_write, save_file))
-            #         else:
-            #             batch_results.to_csv(
-            #                 save_file, mode="a", header=False, index=False
-            #             )
-            #         batch_results = defaultdict(list)
             bs = len(times)
             pbar.update(bs)
 
@@ -279,8 +267,47 @@ class Evaluator(object):
         if save:
             save_file = os.path.join(self.save_path, "eval_pmlb.csv")
 
-        scores = self.evaluate_on_iterator(iterator,
-                                           save_file)
+        scores = self.evaluate_on_iterator(iterator,save_file)
+
+        return scores
+    
+    def evaluate_on_oscillators(
+        self,
+        save=True,
+    ):
+        
+        self.dstr.rescale = self.params.rescale
+        self.trainer.logger.info("====== STARTING EVALUATION OSCILLATORS (multi-gpu: {}) =======".format(self.params.multi_gpu))
+
+        iterator = []
+        datasets = {}
+        for file in glob.glob("invar_datasets/*"):
+            with open(file) as f:
+                lines = (line for line in f if not line.startswith('%') and not line.startswith('x'))
+                data = np.loadtxt(lines)
+                data = data[data[:,0]==0]
+            datasets[file.split('/')[-1]] = data
+        
+        for name, data in datasets.items():
+            samples = defaultdict(list)
+            samples['infos'] = {'dimension':2, 'n_unary_ops':0, 'n_input_points':100, 'name':name}
+            for k,v in samples['infos'].items():
+                samples['infos'][k] = np.array([v])
+
+            times = data[:,1]
+            x = data[:,2].reshape(-1,1)
+            y = data[:,3].reshape(-1,1)
+            # shuffle times and trajectories
+            idx = np.random.permutation(len(times))
+            times, x, y = times[idx], x[idx], y[idx]
+            samples['times'].append(times)
+            samples['trajectory'].append(np.concatenate((x,y),axis=1))
+            iterator.append((samples, None))
+
+        if save:
+            save_file = os.path.join(self.save_path, "eval_oscillators.csv")
+
+        scores = self.evaluate_on_iterator(iterator,save_file)
 
         return scores
 
@@ -316,8 +343,10 @@ def main(params):
       logger.info("__log__:%s" % json.dumps(scores))
 
     if params.eval_on_pmlb:
-        pmlb_scores = evaluator.evaluate_on_pmlb(save=save)
-        logger.info("__pmlb__:%s" % json.dumps(pmlb_scores))
+        #pmlb_scores = evaluator.evaluate_on_pmlb(save=save)
+        #logger.info("__pmlb__:%s" % json.dumps(pmlb_scores))
+        osc_scores = evaluator.evaluate_on_oscillators(save=save)
+        logger.info("__oscillators__:%s" % json.dumps(osc_scores))
 
 
 if __name__ == "__main__":
@@ -327,12 +356,13 @@ if __name__ == "__main__":
     pk = pickle.load(open(params.reload_checkpoint + "/params.pkl", "rb"))
     pickled_args = pk.__dict__
     for p in params.__dict__:
-        if p in pickled_args and p not in ["dump_path", "reload_checkpoint", "rescale", "validation_metrics"]:
+        if p in pickled_args and p not in ["dump_path", "reload_checkpoint", "rescale", "validation_metrics", "eval_in_domain", "eval_on_pmlb", "batch_size_eval"]:
             params.__dict__[p] = pickled_args[p]
 
     params.eval_size = 10
     params.is_slurm_job = False
     params.local_rank = -1
     params.master_port = -1
+    params.use_cross_attention = True
 
     main(params)
