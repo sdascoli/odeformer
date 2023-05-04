@@ -214,7 +214,7 @@ class TransformerModel(nn.Module):
         self.is_decoder = not is_encoder
         self.with_output = with_output
 
-        if is_decoder:
+        if self.is_decoder:
             self.use_two_hot = params.use_two_hot
 
         self.apex = params.nvidia_apex
