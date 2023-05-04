@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+from abc import ABC,abstractmethod
 import traceback
 import sympy as sp
 from sympy.parsing.sympy_parser import parse_expr
@@ -68,27 +69,98 @@ def raise_timeout(signum, frame):
     raise TimeoutError
 
 
-class Simplifier:
+class Simplifier(ABC):
+
+    local_dict = {
+        "n": sp.Symbol("n", real=True, nonzero=True, positive=True, integer=True),
+        "e": sp.E,
+        "pi": sp.pi,
+        "euler_gamma": sp.EulerGamma,
+        "arcsin": sp.asin,
+        "arccos": sp.acos,
+        "arctan": sp.atan,
+        "step": sp.Heaviside,
+        "sign": sp.sign,
+    }
+    for d in range(10):
+        k = "x_{}".format(d)
+        local_dict[k] = sp.Symbol(k, real=True, integer=False)
+
     def __init__(self, generator):
 
         self.params = generator.params
         self.encoder = generator.equation_encoder
-        self.operators = generator.operators
-        self.max_int = generator.max_int
-        self.local_dict = {
-            "n": sp.Symbol("n", real=True, nonzero=True, positive=True, integer=True),
-            "e": sp.E,
-            "pi": sp.pi,
-            "euler_gamma": sp.EulerGamma,
-            "arcsin": sp.asin,
-            "arccos": sp.acos,
-            "arctan": sp.atan,
-            "step": sp.Heaviside,
-            "sign": sp.sign,
-        }
+
         for k in generator.variables:
             self.local_dict[k] = sp.Symbol(k, real=True, integer=False)
 
+    @classmethod
+    def tree_to_sympy_expr(cls, tree, round=True):
+        if hasattr(tree, 'nodes'):
+            return [cls.tree_to_sympy_expr(node, round=round) for node in tree.nodes]
+        prefix = tree.prefix().split(",")
+        sympy_compatible_infix = cls.prefix_to_sympy_compatible_infix(prefix)
+        expr = parse_expr(
+            sympy_compatible_infix, evaluate=True, local_dict=cls.local_dict
+        )
+        if round: expr = cls.round_expr(expr)
+        return expr
+    
+    @classmethod
+    def _prefix_to_sympy_compatible_infix(cls, expr):
+        """
+        Parse an expression in prefix mode, and output it in either:
+          - infix mode (returns human readable string)
+          - develop mode (returns a dictionary with the simplified expression)
+        """
+        if len(expr) == 0:
+            raise InvalidPrefixExpression("Empty prefix list.")
+        t = expr[0]
+        if t in all_operators:
+            args = []
+            l1 = expr[1:]
+            for _ in range(all_operators[t]):
+                i1, l1 = cls._prefix_to_sympy_compatible_infix(l1)
+                args.append(i1)
+            return cls.write_infix(t, args), l1
+        else:  # leaf
+            try:
+                float(t)
+                t = str(t)
+            except ValueError:
+                t = t
+            return t, expr[1:]
+
+    @classmethod
+    def prefix_to_sympy_compatible_infix(cls, expr):
+        """
+        Convert prefix expressions to a format that SymPy can parse.
+        """
+        p, r = cls._prefix_to_sympy_compatible_infix(expr)
+        if len(r) > 0:
+            raise InvalidPrefixExpression(
+                f'Incorrect prefix expression "{expr}". "{r}" was not parsed.'
+            )
+        return f"({p})"
+    
+    @classmethod
+    def readable_tree(cls, tree):
+        if tree is None:
+            return None
+        tree_sympy = cls.tree_to_sympy_expr(tree, round=True)
+        readable_tree = '  ,  '.join([str(tree) for tree in tree_sympy])
+        return readable_tree
+    
+    @classmethod
+    def round_expr(cls, expr, decimals=4):
+        with timeout(1):
+            expr = expr.xreplace(
+                Transform(
+                    lambda x: x.round(decimals), lambda x: isinstance(x, sp.Float)
+                )
+            )
+        return expr
+    
     def expand_expr(self, expr):
         with timeout(1):
             expr = sp.expand(expr)
@@ -98,24 +170,6 @@ class Simplifier:
         with timeout(1):
             expr = sp.simplify(expr)
         return expr
-
-    def tree_to_sympy_expr(self, tree, round=True):
-        if hasattr(tree, 'nodes'):
-            return [self.tree_to_sympy_expr(node, round=round) for node in tree.nodes]
-        prefix = tree.prefix().split(",")
-        sympy_compatible_infix = self.prefix_to_sympy_compatible_infix(prefix)
-        expr = parse_expr(
-            sympy_compatible_infix, evaluate=True, local_dict=self.local_dict
-        )
-        if round: expr = self.round_expr(expr)
-        return expr
-
-    def readable_tree(self, tree):
-        if tree is None:
-            return None
-        tree_sympy = self.tree_to_sympy_expr(tree, round=True)
-        readable_tree = '  ,  '.join([str(tree) for tree in tree_sympy])
-        return readable_tree
 
     def tree_to_torch_module(self, tree, dtype=torch.float32):
         expr = self.tree_to_sympy_expr(tree)
@@ -209,15 +263,6 @@ class Simplifier:
         prefix = self.sympy_to_prefix(expr)
         return self.encoder.decode(prefix)
 
-    def round_expr(self, expr, decimals=4):
-        with timeout(1):
-            expr = expr.xreplace(
-                Transform(
-                    lambda x: x.round(decimals), lambda x: isinstance(x, sp.Float)
-                )
-            )
-        return expr
-
     def float_to_int_expr(self, expr):
         floats = expr.atoms(sp.Float)
         ints = [fl for fl in floats if int(fl) == fl]
@@ -245,7 +290,8 @@ class Simplifier:
                 new_tree = tree
             return new_tree
 
-    def write_infix(self, token, args):
+    @classmethod
+    def write_infix(cls, token, args):
         """
         Infix representation.
     
@@ -279,41 +325,6 @@ class Simplifier:
         raise InvalidPrefixExpression(
             f"Unknown token in prefix expression: {token}, with arguments {args}"
         )
-
-    def _prefix_to_sympy_compatible_infix(self, expr):
-        """
-        Parse an expression in prefix mode, and output it in either:
-          - infix mode (returns human readable string)
-          - develop mode (returns a dictionary with the simplified expression)
-        """
-        if len(expr) == 0:
-            raise InvalidPrefixExpression("Empty prefix list.")
-        t = expr[0]
-        if t in all_operators:
-            args = []
-            l1 = expr[1:]
-            for _ in range(all_operators[t]):
-                i1, l1 = self._prefix_to_sympy_compatible_infix(l1)
-                args.append(i1)
-            return self.write_infix(t, args), l1
-        else:  # leaf
-            try:
-                float(t)
-                t = str(t)
-            except ValueError:
-                t = t
-            return t, expr[1:]
-
-    def prefix_to_sympy_compatible_infix(self, expr):
-        """
-        Convert prefix expressions to a format that SymPy can parse.
-        """
-        p, r = self._prefix_to_sympy_compatible_infix(expr)
-        if len(r) > 0:
-            raise InvalidPrefixExpression(
-                f'Incorrect prefix expression "{expr}". "{r}" was not parsed.'
-            )
-        return f"({p})"
 
     def _sympy_to_prefix(self, op, expr):
         """

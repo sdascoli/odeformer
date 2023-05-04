@@ -301,10 +301,10 @@ def get_parser():
     parser.add_argument(
         "--validation_metrics",
         type=str,
-        default="r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_biggio,_complexity",
+        default="r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio,_complexity",
         help="What metrics should we report? accuracy_tolerance/_l1_error/r2/_complexity/_relative_complexity/is_symbolic_solution",
     )
-    parser.add_argument("--beam_selection_metric", type=str, default='r2_zero')
+    parser.add_argument("--beam_selection_metric", type=str, default='snmse', help='Metric to use for beam search selection')
 
     parser.add_argument(
         "--debug_train_statistics",

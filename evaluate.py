@@ -300,6 +300,7 @@ class Evaluator(object):
             # shuffle times and trajectories
             idx = np.random.permutation(len(times))
             times, x, y = times[idx], x[idx], y[idx]
+            
             samples['times'].append(times)
             samples['trajectory'].append(np.concatenate((x,y),axis=1))
             iterator.append((samples, None))

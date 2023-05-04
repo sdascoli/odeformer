@@ -240,12 +240,6 @@ class FunctionEnvironment(object):
                 if self.params.debug:
                     print(traceback.format_exc())
                 continue
-                if self.params.debug:
-                    # print(expr['tree'])
-                    pass
-                    # print(error)
-                # self.errors["gen expr error"]+=1
-                continue
 
     @timeout(TIMEOUT)
     def _gen_expr(

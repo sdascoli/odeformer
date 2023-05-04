@@ -53,6 +53,8 @@ class SymbolicTransformerRegressor(BaseEstimator):
         self,
         times,
         trajectories,
+        sort_candidates=True,
+        sort_metric="snmse",
         verbose=False,
     ):
         self.start_fit = time.time()
@@ -111,6 +113,10 @@ class SymbolicTransformerRegressor(BaseEstimator):
                     candidate = scaler.rescale_function(self.model.env, candidate, *scale_params[input_id])                    
                 all_candidates[input_id].append(candidate)
         assert len(all_candidates.keys())==n_datasets
+
+        if sort_candidates:
+            for input_id in all_candidates.keys():
+                all_candidates[input_id] = self.sort_candidates(times[input_id], trajectories[input_id], all_candidates[input_id], metric=sort_metric)
             
         self.trees = all_candidates
 
@@ -122,19 +128,16 @@ class SymbolicTransformerRegressor(BaseEstimator):
         metrics = compute_metrics(pred_trajectory, trajectory, predicted_tree=tree, metrics=metric)
         return metrics[metric][0]
 
-    def order_candidates(self, times, y, candidates, metric="_mse", verbose=False):
+    def sort_candidates(self, times, trajectory, candidates, metric="snmse", verbose=False):
         scores = []
         for candidate in candidates:
-            if metric not in candidate:
-                score = self.evaluate_tree(candidate["predicted_tree"], times, y, metric)
-                if math.isnan(score): 
-                    score = np.infty if metric.startswith("_") else -np.infty
-            else:
-                score = candidates[metric]
+            score = self.evaluate_tree(candidate, times, trajectory, metric)
+            if math.isnan(score): 
+                score = np.infty if metric.startswith("_") else -np.infty
             scores.append(score)
-        ordered_idx = np.argsort(scores)  
-        if not metric.startswith("_"): ordered_idx=list(reversed(ordered_idx))
-        candidates = [candidates[i] for i in ordered_idx]
+        sorted_idx = np.argsort(scores)  
+        if not metric.startswith("_"): sorted_idx=list(reversed(sorted_idx))
+        candidates = [candidates[i] for i in sorted_idx]
         return candidates
 
     def predict(self, times, y0, tree=None):   
@@ -146,7 +149,11 @@ class SymbolicTransformerRegressor(BaseEstimator):
                 tree = self.trees[0][0]
 
         # integrate the ODE
-        trajectory = integrate_ode(y0, times, tree)
+        if self.params:
+            ode_integrator = self.params.ode_integrator
+        else:
+            ode_integrator = "solve_ivp"
+        trajectory = integrate_ode(y0, times, tree, ode_integrator=ode_integrator)
         
         return trajectory
             

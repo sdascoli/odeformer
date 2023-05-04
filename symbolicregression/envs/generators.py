@@ -15,8 +15,10 @@ import copy
 from logging import getLogger
 from collections import defaultdict
 import warnings
+import symbolicregression
 from symbolicregression.envs import encoders
 from symbolicregression.envs.utils import *
+from symbolicregression.envs.export_jax import *
 from ..utils import bool_flag, timeout, MyTimeoutError
 from functools import partial
 import numexpr as ne
@@ -28,7 +30,8 @@ import nbkode
 
 import jax
 import jax.numpy as jnp
-from diffrax import diffeqsolve, ODETerm, SaveAt, Dopri5
+from diffrax import diffeqsolve, ODETerm, SaveAt
+from diffrax.solver import *
 
 # from julia.api import Julia
 # jl = Julia(compiled_modules=False)
@@ -792,7 +795,7 @@ class RandomFunctions(Generator):
 
         #trajectory = np.concatenate((t.reshape(-1,1),trajectory), axis=-1)
         if self.params.subsample_ratio:
-            indices_to_remove = np.random.choice(trajectory.shape[0], int(trajectory.shape[0] * self.params.subsample_ratio), replace=False)
+            indices_to_remove = rng.choice(trajectory.shape[0], int(trajectory.shape[0] * self.params.subsample_ratio), replace=False)
             trajectory = np.delete(trajectory, indices_to_remove, axis=0)
             times = np.delete(times, indices_to_remove, axis=0)
         
@@ -801,49 +804,61 @@ class RandomFunctions(Generator):
 
 def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=False, allow_warnings=False):
 
-    tree = tree_to_numexpr_fn(tree)
+    with warnings.catch_warnings(record=True) as caught_warnings:
 
-    if ode_integrator == 'numba':
-        def func(u,p,t):
-            derivs = tree([u],[t])[0]  
-        #func = numba.jit(func)
-        try: 
-            sol = ode.ODEProblem(func, y0, (min(times), max(times))).solve()
-            trajectory = sol(times)
-        except: 
-            if debug:
-                print(traceback.format_exc())
-            return None    
-        
-    elif ode_integrator == 'jax':
-        def func(t,y,args=None):
-            return tree([y],[t])[0]
-        term = ODETerm(func)
-        solver = Dopri5()
-        t0 = min(times)  # start of integration
-        t1 = max(times)  # end of integration
-        dt0 = 0.1  # Initial stepsize (solver is then adaptive)
-        saveat = SaveAt(ts=times) # want regular output at 256 points
+        if ode_integrator == 'jax':
 
-        # convenience wrapper to only supply y0 as input to solver
-        p_diffeqsolve = lambda init : diffeqsolve(term, solver, t0, t1, dt0, init, saveat=saveat)
-        y0 = np.array(y0)
-        sol = p_diffeqsolve(y0)
-        trajectory = sol.ys
-        
-    elif ode_integrator == "nbkode":
-        @njit
-        def func(y,t):
-            return tree([y],[t])[0]
-        solver = nbkode.ForwardEuler(func, min(times), y0)
-        trajectory = solver.run(times)
+            sympy_trees = symbolicregression.envs.Simplifier.tree_to_sympy_expr(tree, round=True)
+            jax_trees, jax_params = [], []
+            for tree in sympy_trees:
+                symbols = list(tree.free_symbols)
+                jax_tree, jax_param = sympy2jax(tree, symbols)
+                jax_trees.append(jax_tree); jax_params.append(jax_param)
+        else:
+            tree = tree_to_numexpr_fn(tree)
 
-    elif ode_integrator == "odeint":
-        #@njit
-        def func(y,t):
-            return tree([y],[t])[0]
-        with stdout_redirected():
-            with warnings.catch_warnings(record=True) as caught_warnings:
+        if ode_integrator == 'jax':
+            def func(t,y,args=None):
+                return jnp.concatenate([jax_tree(y, jax_param).reshape(-1,1) for jax_tree, jax_param in zip(jax_trees, jax_params)], axis=1)
+            term = ODETerm(func)
+            solver = Euler()
+            t0 = min(times)  # start of integration
+            t1 = max(times)  # end of integration
+            dt0 = 0.1  # Initial stepsize (solver is then adaptive)
+            saveat = SaveAt(ts=times) # want regular output at 256 points
+
+            # convenience wrapper to only supply y0 as input to solver
+            p_diffeqsolve = lambda init : diffeqsolve(term, solver, t0, t1, dt0, init, saveat=saveat)
+            if len(y0.shape)<2: y0 = y0.reshape(1,-1)
+            y0 = jnp.array(y0)
+            sol = p_diffeqsolve(y0)
+            trajectory = sol.ys
+            trajectory = trajectory.reshape(trajectory.shape[0], trajectory.shape[2])
+
+        elif ode_integrator == 'numba':
+            def func(u,p,t):
+                derivs = tree([u],[t])[0]  
+            #func = numba.jit(func)
+            try: 
+                sol = ode.ODEProblem(func, y0, (min(times), max(times))).solve()
+                trajectory = sol(times)
+            except: 
+                if debug:
+                    print(traceback.format_exc())
+                return None    
+            
+        elif ode_integrator == "nbkode":
+            @njit
+            def func(y,t):
+                return tree([y],[t])[0]
+            solver = nbkode.ForwardEuler(func, min(times), y0)
+            trajectory = solver.run(times)
+
+        elif ode_integrator == "odeint":
+            #@njit
+            def func(y,t):
+                return tree([y],[t])[0]
+            with stdout_redirected():
                 try: 
                     trajectory = scipy.integrate.odeint(func, y0, times, rtol=1e-2, atol=1e-6)
                     if abs(trajectory[-10:].max()) < 1e-100:
@@ -852,12 +867,11 @@ def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=False, allow
                     if debug:
                         print(traceback.format_exc())
                     return None
-                
-    elif ode_integrator == "solve_ivp":
-        #@njit
-        def func(t,y):
-            return tree([y],[t])[0]
-        with warnings.catch_warnings(record=True) as caught_warnings:
+                    
+        elif ode_integrator == "solve_ivp":
+            #@njit
+            def func(t,y):
+                return tree([y],[t])[0]
             try: 
                 trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times, method='RK23', rtol=1e-2, atol=1e-6)
                 solved_times = trajectory.t
@@ -866,9 +880,9 @@ def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=False, allow
                 if debug:
                     print(traceback.format_exc())
                 return None
-            
-    else:
-        raise NotImplementedError
+                
+        else:
+            raise NotImplementedError
     
     #if debug: print(trajectory, np.any(np.isnan(trajectory)), len(times)!=len(trajectory), len(times), len(trajectory))#, solved_times)
     
@@ -916,8 +930,6 @@ def tree_to_numexpr_fn(tree):
         return vals
 
     return wrapped_numexpr_fn
-
-
 
 
 
