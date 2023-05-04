@@ -95,7 +95,7 @@ class FunctionEnvironment(object):
         self.equation_word2id = {s: i for i, s in self.equation_id2word.items()}
         # NOTE: we never want to use these constant ids, we are only interested 
         # in knowing the number of words (=support). 
-        # TODO: refactor so that we only need to save the len instead of a dict
+        # TODO: refactor so that we only need to save the len instead of a dict ?
         if params.use_two_hot:
             _offset = max(self.equation_word2id.values()) + 1
             self.constant_id2word = {
@@ -210,8 +210,52 @@ class FunctionEnvironment(object):
             src=prob_right.unsqueeze(-1)
         ).squeeze(1)
         
-    def two_hot_to_ids(self, two_hot: torch.Tensor):
-        raise NotImplementedError()
+    def topk_decode_two_hot(
+        self,
+        logits: torch.Tensor, 
+        topk_idx: torch.Tensor, 
+        apply_softmax: bool = True
+    ):
+        """
+        logits: (bs, vocab size), batch of logits.
+        topk_idx: (bs,), batch of selected indices for decoding
+        equation_vocab_size: number of non constant tokens in vocabulary (e.g. operators, variables)
+        min_value: smallest support constant
+        
+        CAUTION: topk_idx.dtype changes in place from int64 to torch.float32 or torch.double
+        
+        """    
+        # TODO: when to softmax? include only constants or all ops?
+        id_offset = max(self.equation_word2id.values())
+        min_value = self.equation_encoder.constant_encoder.min
+        constants_mask = topk_idx.squeeze() >= id_offset
+        if apply_softmax:
+            probs = torch.nn.functional.softmax(
+                logits[constants_mask, id_offset:],
+                dim=1
+            )
+        else:
+            probs = logits[constants_mask, id_offset:]
+        neg_infs = torch.ones((probs.shape[0], 1)).fill_(-torch.inf)
+        probs = torch.cat([neg_infs, probs, neg_infs], dim=1)
+        # indices
+        left_neighbor = (topk_idx[constants_mask]-id_offset-1).reshape(-1,1)
+        selected = (topk_idx[constants_mask]-id_offset).reshape(-1,1)
+        right_neighbor = (topk_idx[constants_mask]-id_offset+1).reshape(-1,1)
+        # probs
+        left_prob = torch.gather(input=probs, dim=1, index=left_neighbor+1)
+        selected_prob = torch.gather(input=probs, dim=1, index=selected+1)
+        right_prob = torch.gather(input=probs, dim=1, index=right_neighbor+1)
+        # choice
+        take_left = left_prob > right_prob
+        take_right = ~take_left
+        best_neighbor = left_neighbor * take_left + right_neighbor * take_right
+        best_prob = torch.gather(input=probs, dim=1, index=best_neighbor+1)
+        # value
+        value = torch.squeeze((min_value + selected) * selected_prob + (min_value + best_neighbor) * best_prob).to(torch.double)
+        topk_idx = topk_idx.to(value.dtype)
+        topk_idx[constants_mask] = value
+        return topk_idx
 
     def word_to_infix(self, words, is_float=True, str_array=True):
         if is_float:
@@ -248,6 +292,7 @@ class FunctionEnvironment(object):
         return tree_with_constants
 
     def idx_to_infix(self, lst, is_float=True, str_array=True):
+        # TODO: does it also work with non-two-hot encoding?
         if is_float:
             idx_to_words = [self.float_id2word[int(i)] for i in lst]
         else:
@@ -256,7 +301,7 @@ class FunctionEnvironment(object):
             for term in lst:
                 if term > id_offset:
                     # constants
-                    idx_to_words.append(f"{term.item() - id_offset + self.equation_encoder.constant_encoder.min:+}")
+                    idx_to_words.append(f"{term - id_offset + self.equation_encoder.constant_encoder.min:+}")
                 else:
                     # non-constants, e.g. operators
                     idx_to_words.append(self.equation_id2word[int(term)])
