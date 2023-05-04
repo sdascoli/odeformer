@@ -214,6 +214,9 @@ class TransformerModel(nn.Module):
         self.is_decoder = not is_encoder
         self.with_output = with_output
 
+        if is_decoder:
+            self.use_two_hot = params.use_two_hot
+
         self.apex = params.nvidia_apex
 
         # dictionary
@@ -462,7 +465,7 @@ class TransformerModel(nn.Module):
         return scores, loss
 
     def generate(
-        self, src_enc, src_len, max_len=200, top_p=1.0, sample_temperature=None, seed=0
+        self, src_enc, src_len, max_len=200, top_p=1.0, sample_temperature=None, seed=0, env=None,
     ):
         """
         Decode a sentence given initial start.
@@ -526,6 +529,9 @@ class TransformerModel(nn.Module):
                 ).squeeze(1)
             assert next_words.size() == (bs,)
 
+            if self.use_two_hot
+                next_words = env.topk_decode_two_hot(logits=scores, topk_idx=next_words)
+
             # update generations / lengths / finished sentences / current length
             generated[cur_len] = next_words * unfinished_sents + self.pad_index * (
                 1 - unfinished_sents
@@ -547,7 +553,7 @@ class TransformerModel(nn.Module):
         return generated[:cur_len], gen_len
 
     def generate_beam(
-        self, src_enc, src_len, beam_size, length_penalty, early_stopping, max_len=200,
+        self, src_enc, src_len, beam_size, length_penalty, early_stopping, max_len=200, env=None
     ):
         """
         Decode a sentence given initial start.
@@ -582,6 +588,7 @@ class TransformerModel(nn.Module):
         generated = src_len.new(max_len, bs * beam_size)  # upcoming output
         generated.fill_(self.pad_index)  # fill upcoming ouput with <PAD>
         generated[0].fill_(self.eos_index)  # we use <EOS> for <BOS> everywhere
+        generated = generated.to(torch.double)
 
         # generated hypotheses
         generated_hyps = [
@@ -641,9 +648,14 @@ class TransformerModel(nn.Module):
             _scores = _scores.view(bs, beam_size * n_words)  # (bs, beam_size * n_words)
 
             next_scores, next_words = torch.topk(
-                _scores, 2 * beam_size, dim=1, largest=True, sorted=True
+                input=_scores, k=2 * beam_size, dim=1, largest=True, sorted=True
             )
             assert next_scores.size() == next_words.size() == (bs, 2 * beam_size)
+
+            if self.use_two_hot:
+                raise NotImplementedError()
+                # we cant just decode to float here as, see beam_id and word_id which are obtained by div and modulo
+                # next_words = env.topk_decode_two_hot(logits=scores, topk_idx=next_words)
 
             # next batch beam content
             # list of (bs * beam_size) tuple(next hypothesis score, next word, current position in the batch)
