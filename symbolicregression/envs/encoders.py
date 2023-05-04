@@ -43,8 +43,7 @@ class ConstantEncoder(Encoder):
     def __init__(self, params):
         # TODO: this needs to be consistent with the sign-mantissa-exponent 
         # way of specifying the float range as well as with params.min_int / max_int
-        # TODO: do we want / need to remove int tokens from the vocabulary?
-        # TODO: the decoder output needs to be adapted to cover the range of constants
+        # TODO: do we want / need to remove int tokens from the equation encoder vocabulary?
         self.min = -100
         self.max = 100
         # self.symbols is used to determine the required number of idcs for the embedding layer
