@@ -78,6 +78,7 @@ class ModelWrapper(nn.Module):
                 x_len,
                 sample_temperature=None,
                 max_len=self.max_generated_output_len,
+                env=env,
             )
 
             generations = generations.unsqueeze(-1).view(generations.shape[0], bs, 1)
@@ -103,6 +104,7 @@ class ModelWrapper(nn.Module):
                     length_penalty=self.beam_length_penalty,
                     max_len=self.max_generated_output_len,
                     early_stopping=self.beam_early_stopping,
+                    env=env,
                 )
                 search_generations = [
                     sorted(
