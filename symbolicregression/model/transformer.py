@@ -529,7 +529,7 @@ class TransformerModel(nn.Module):
                 ).squeeze(1)
             assert next_words.size() == (bs,)
 
-            if self.use_two_hot
+            if self.use_two_hot:
                 next_words = env.topk_decode_two_hot(logits=scores, topk_idx=next_words)
 
             # update generations / lengths / finished sentences / current length
