@@ -539,7 +539,7 @@ class TransformerModel(nn.Module):
 
             if self.use_two_hot:
                 next_words, two_hot_constant_mask = env.topk_decode_two_hot(
-                    logits=scores, topk_idx=next_words
+                    logits=scores, topk_idx=next_words, unfinished_sents=unfinished_sents,
                 )
                 two_hot_constant_masks.append(two_hot_constant_mask)
 

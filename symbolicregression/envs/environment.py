@@ -219,6 +219,7 @@ class FunctionEnvironment(object):
         self,
         logits: torch.Tensor, 
         topk_idx: torch.Tensor, 
+        unfinished_sents: Union[None, torch.Tensor],
         apply_softmax: bool = True
     ):
         """
@@ -234,11 +235,14 @@ class FunctionEnvironment(object):
         tokens (e.g. tokens for operators and variables).
         
         `logits`: 
-            Tensor, (bs, vocab size).
-            Batch of logits.
-        `topk_idx`: Tensor, (bs,).
-            Batch of selected indices for decoding.
-        
+            Tensor, (bs, vocab size). Batch of logits.
+        `topk_idx`: 
+            Tensor, (bs,). Batch of selected indices for decoding.
+        `unfinished_sents`:
+            Tensor, (bs, ). Batch of indices that indicate batch elements that are part of a not-yet-finished sequence.
+            If a sequence is already finished, we do not have to do any constant decoding, so this is an opportunity for
+            a short-cut.
+
         Returns:
         `topk_idx`:
             Tensor, (bs,).
@@ -253,6 +257,9 @@ class FunctionEnvironment(object):
         
         id_offset = max(self.equation_word2id.values()) + 1
         constants_mask = topk_idx.squeeze() >= id_offset
+        if constants_mask is not None:
+            constants_mask = constants_mask.to(torch.int) * unfinished_sents
+            constants_mask = constants_mask.to(torch.bool)
         if not constants_mask.any():
             return topk_idx, constants_mask
         
