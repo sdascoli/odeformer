@@ -451,7 +451,7 @@ class Trainer(object):
         self.errors_statistics = defaultdict(int)
         self.infos_statistics = defaultdict(list)
 
-    def save_checkpoint(self, name, include_optimizer=True):
+    def save_checkpoint(self, name, include_optimizer=True, include_stats=False):
         """
         Save the model / checkpoints.
         """
@@ -479,28 +479,37 @@ class Trainer(object):
             if self.scaler is not None:
                 data["scaler"] = self.scaler.state_dict()
 
+        if include_stats:
+            data["stats"] = self.stats
+
         torch.save(data, path)
 
-    def reload_checkpoint(self, path=None, root=None, requires_grad=True):
+    def reload_checkpoint(self, path=None, root=None, requires_grad=True, checkpoint_path=None):
         """
         Reload a checkpoint if we find one.
         """
-        if path is None:
-            path = "checkpoint.pth"
+        if checkpoint_path is None:
+            if path is None:
+                path = "checkpoint.pth"
 
-        if self.params.reload_checkpoint != "":
-            checkpoint_path = os.path.join(self.params.reload_checkpoint, path)
-            assert os.path.isfile(checkpoint_path)
-        else:
-            if root is not None:
-                checkpoint_path = os.path.join(root, path)
+            if self.params.reload_checkpoint != "":
+                checkpoint_path = os.path.join(self.params.reload_checkpoint, path)
+                assert os.path.isfile(checkpoint_path)
             else:
-                checkpoint_path = os.path.join(self.params.dump_path, path)
-            if not os.path.isfile(checkpoint_path):
-                logger.warning(
-                    "Checkpoint path does not exist, {}".format(checkpoint_path)
-                )
-                return
+                if root is not None:
+                    checkpoint_path = os.path.join(root, path)
+                else:
+                    checkpoint_path = os.path.join(self.params.dump_path, path)
+                if not os.path.isfile(checkpoint_path):
+                    logger.warning(
+                        "Checkpoint path does not exist, {}".format(checkpoint_path)
+                    )
+                    return
+        elif not os.path.isfile(checkpoint_path):
+            logger.warning(
+                "Checkpoint path does not exist, {}".format(checkpoint_path)
+            )
+            return
 
         logger.warning(f"Reloading checkpoint from {checkpoint_path} ...")
         data = torch.load(checkpoint_path, map_location="cpu")
@@ -555,6 +564,11 @@ class Trainer(object):
         logger.warning(
             f"Checkpoint reloaded. Resuming at epoch {self.epoch} / iteration {self.n_total_iter} ..."
         )
+        if "stats" in data.keys():
+            self.stats = data["stats"]
+            return data["stats"]
+        else:
+            return None
 
     def save_periodic(self):
         """
