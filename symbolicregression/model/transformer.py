@@ -220,8 +220,13 @@ class TransformerModel(nn.Module):
         self.apex = params.nvidia_apex
 
         # dictionary
-
-        self.id2word = id2word
+        # for encoder: env.float_id2word, this only includes float_words
+        # for decoder: 
+        #    - if two-hot: 
+        #            constant_id2word + equation_id2word, which includes equation_words but not float_words
+        #    - else: 
+        #            equation_id2word, which includes equation_words and float_words
+        self.id2word = id2word 
         self.word2id = {s: i for i, s in self.id2word.items()}
         self.eos_index = self.word2id["<EOS>"]
         self.pad_index = self.word2id["<PAD>"]
@@ -269,7 +274,8 @@ class TransformerModel(nn.Module):
                 self.n_words, 
                 self.dim, 
                 padding_idx=self.pad_index, 
-                use_two_hot=((not is_encoder) and params.use_two_hot), # use in decoder only and only if asked for
+                #  only use two-hot in decoder and only if asked for
+                use_two_hot=((not is_encoder) and params.use_two_hot),
             )
         else:
             self.embeddings = None
@@ -501,6 +507,8 @@ class TransformerModel(nn.Module):
         gen_len = src_len.clone().fill_(1)
         unfinished_sents = src_len.clone().fill_(1)
 
+        two_hot_constant_masks = [torch.zeros_like(generated[0], dtype=bool)]
+
         # cache compute states
         self.cache = {"slen": 0}
         while cur_len < max_len:
@@ -530,7 +538,10 @@ class TransformerModel(nn.Module):
             assert next_words.size() == (bs,)
 
             if self.use_two_hot:
-                next_words = env.topk_decode_two_hot(logits=scores, topk_idx=next_words)
+                next_words, two_hot_constant_mask = env.topk_decode_two_hot(
+                    logits=scores, topk_idx=next_words
+                )
+                two_hot_constant_masks.append(two_hot_constant_mask)
 
             # update generations / lengths / finished sentences / current length
             generated[cur_len] = next_words * unfinished_sents + self.pad_index * (
@@ -550,7 +561,10 @@ class TransformerModel(nn.Module):
         # sanity check
         assert (generated == self.eos_index).sum() == 2 * bs
         generated = generated.unsqueeze(-1).view(generated.shape[0], bs)
-        return generated[:cur_len], gen_len
+        # mask of shape (seq_len, bs) which tells which elements of the generated sequences 
+        # are constants which have been two-hot decoded
+        two_hot_constant_masks = torch.stack(two_hot_constant_masks)
+        return generated[:cur_len], gen_len, two_hot_constant_masks
 
     def generate_beam(
         self, src_enc, src_len, beam_size, length_penalty, early_stopping, max_len=200, env=None
