@@ -73,29 +73,32 @@ class ModelWrapper(nn.Module):
             bs = encoded.shape[0]
 
             ### Greedy solution.
-            generations, _ = decoder.generate(
+            generations, _, two_hot_constant_masks = decoder.generate(
                 encoded,
                 x_len,
                 sample_temperature=None,
                 max_len=self.max_generated_output_len,
                 env=env,
             )
-
+            
             generations = generations.unsqueeze(-1).view(generations.shape[0], bs, 1)
             generations = generations.transpose(0, 1).transpose(1, 2).cpu().tolist()
+            two_hot_constant_masks = two_hot_constant_masks.unsqueeze(-1).view(two_hot_constant_masks.shape[0], bs, 1)
+            two_hot_constant_masks = two_hot_constant_masks.transpose(0, 1).transpose(1, 2).cpu().tolist()
+
             generations = [
                 list(
                     filter(
                         lambda x: x is not None,
                         [
-                            env.idx_to_infix(hyp[1:-1], is_float=False, str_array=False)
-                            for hyp in generations[i]
+                            env.idx_to_infix(hyp[1:-1], is_float=False, str_array=False, is_two_hot=mask[1:])
+                            for hyp, mask in zip(generations[i], two_hot_constant_masks[i])
                         ],
                     )
                 )
                 for i in range(bs)
             ]
-
+            return generations
             if self.beam_type == "search":
                 _, _, search_generations = decoder.generate_beam(
                     encoded,

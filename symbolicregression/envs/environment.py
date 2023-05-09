@@ -161,6 +161,10 @@ class FunctionEnvironment(object):
         return sent, lengths
 
     def word_to_idx(self, words, float_input=True):
+        """
+        Maps from actual words (e.g. 'add' or '1.43') to ids. Ids can be floats if we use two-hot encoding.
+        `words`: List[List[str]], e.g. from samples["tree_encoded"]
+        """
         
         if float_input:
             return [
@@ -193,7 +197,8 @@ class FunctionEnvironment(object):
 
     def ids_to_two_hot(self, ids: torch.Tensor, support_size: int):
         """
-        Take a list of int or float 'ids' and convert them to 2-hot representation.
+        Take a list of int or float 'ids' and convert them to 2-hot representation. 
+        For int ids, this is equivalent to 1-hot representation.
         """
         id_left = ids.floor()
         id_right = id_left + 1
@@ -217,45 +222,78 @@ class FunctionEnvironment(object):
         apply_softmax: bool = True
     ):
         """
-        logits: (bs, vocab size), batch of logits.
-        topk_idx: (bs,), batch of selected indices for decoding
-        equation_vocab_size: number of non constant tokens in vocabulary (e.g. operators, variables)
-        min_value: smallest support constant
+        Take logits and topk indices, whenever a topk index refers to the indices that represent two-hot encoded 
+        constants, decode the selected constant. The decoding process works as follows:
+        1. Apply softmax across all logits that represent constants.
+        2. Among the two top-k neighboring indices, select the one whose corresponding probability is larger.
+        3. Decode as topk * prob_{topk} + neighbor * prob_{neighbor}.
+        This function is necessary as topk returns a single index but we need two indices to represent two-hot encoded
+        constants. This problem is solved by allowing for "float" ids, e.g. we combine the two indices that represent a
+        constant into a single float. The float is still in "id-space", i.e., the returned float ids do not directly 
+        correspond to the encoded float but to the float plus an offset that accounts for the remaining non-two-hot 
+        tokens (e.g. tokens for operators and variables).
         
-        CAUTION: topk_idx.dtype changes in place from int64 to torch.float32 or torch.double
+        `logits`: 
+            Tensor, (bs, vocab size).
+            Batch of logits.
+        `topk_idx`: Tensor, (bs,).
+            Batch of selected indices for decoding.
         
+        Returns:
+        `topk_idx`:
+            Tensor, (bs,).
+            The original tensor with topk indices that correspond to two-hot constants converted to float indices.
+        `constants_mask`:
+            Tensor, (bs,).
+            A boolean tensor of same shape as `top_idx` that indicates if the corresponding element in `top_idx` is a 
+            decoded constant.
+        
+        Caution: topk_idx.dtype changes in place from int64 to torch.float32 or torch.double.
         """    
-        # TODO: when to softmax? include only constants or all ops?
-        id_offset = max(self.equation_word2id.values())
-        min_value = self.equation_encoder.constant_encoder.min
+        
+        id_offset = max(self.equation_word2id.values()) + 1
         constants_mask = topk_idx.squeeze() >= id_offset
+        if not constants_mask.any():
+            return topk_idx, constants_mask
+        
         if apply_softmax:
             probs = torch.nn.functional.softmax(
                 logits[constants_mask, id_offset:],
                 dim=1
             )
         else:
-            probs = logits[constants_mask, id_offset:]
-        neg_infs = torch.ones((probs.shape[0], 1)).fill_(-torch.inf)
+            probs = logits[constants_mask, :]
+        
+        neg_infs = torch.ones((probs.shape[0], 1), device=logits.device).fill_(-torch.inf)
         probs = torch.cat([neg_infs, probs, neg_infs], dim=1)
+        topk_idx += 1 # compensate for the prepended -inf
         # indices
-        left_neighbor = (topk_idx[constants_mask]-id_offset-1).reshape(-1,1)
-        selected = (topk_idx[constants_mask]-id_offset).reshape(-1,1)
-        right_neighbor = (topk_idx[constants_mask]-id_offset+1).reshape(-1,1)
+        left_neighbor = (topk_idx[constants_mask]-1).reshape(-1,1)-id_offset
+        selected = (topk_idx[constants_mask]).reshape(-1,1)-id_offset
+        right_neighbor = (topk_idx[constants_mask]+1).reshape(-1,1)-id_offset
         # probs
-        left_prob = torch.gather(input=probs, dim=1, index=left_neighbor+1)
-        selected_prob = torch.gather(input=probs, dim=1, index=selected+1)
-        right_prob = torch.gather(input=probs, dim=1, index=right_neighbor+1)
+        left_prob = torch.gather(input=probs, dim=1, index=left_neighbor)
+        selected_prob = torch.gather(input=probs, dim=1, index=selected)
+        right_prob = torch.gather(input=probs, dim=1, index=right_neighbor)
         # choice
         take_left = left_prob > right_prob
         take_right = ~take_left
         best_neighbor = left_neighbor * take_left + right_neighbor * take_right
-        best_prob = torch.gather(input=probs, dim=1, index=best_neighbor+1)
+        best_prob = torch.gather(input=probs, dim=1, index=best_neighbor)
         # value
-        value = torch.squeeze((min_value + selected) * selected_prob + (min_value + best_neighbor) * best_prob).to(torch.double)
+        value = torch.squeeze(selected * selected_prob + best_neighbor * best_prob).to(torch.double) + id_offset
+        
+        # import matplotlib.pyplot as plt
+        # try:
+        #     plt.plot(probs.T, ".")
+        # except TypeError:
+        #     plt.plot(probs.cpu().numpy().T, ".")
+        # plt.title(value.detach().cpu().numpy().round(3))
+        # plt.show()
+        
         topk_idx = topk_idx.to(value.dtype)
         topk_idx[constants_mask] = value
-        return topk_idx
+        return topk_idx, constants_mask
 
     def word_to_infix(self, words, is_float=True, str_array=True):
         if is_float:
@@ -291,19 +329,23 @@ class FunctionEnvironment(object):
         )
         return tree_with_constants
 
-    def idx_to_infix(self, lst, is_float=True, str_array=True):
-        # TODO: does it also work with non-two-hot encoding?
+    def idx_to_infix(
+        self, 
+        lst, 
+        is_float=True, 
+        str_array=True, 
+        is_two_hot: Union[None, torch.BoolTensor]=None,
+    ):
         if is_float:
             idx_to_words = [self.float_id2word[int(i)] for i in lst]
         else:
             id_offset = max(self.equation_word2id.values())
             idx_to_words = []
-            for term in lst:
-                if term > id_offset:
-                    # constants
+            for term_i, term in enumerate(lst):
+                if is_two_hot is not None and is_two_hot[term_i]:
+                    # two-hot constants: we need to undo the offset introduced in word_to_idx()
                     idx_to_words.append(f"{term - id_offset + self.equation_encoder.constant_encoder.min:+}")
                 else:
-                    # non-constants, e.g. operators
                     idx_to_words.append(self.equation_id2word[int(term)])
                     
         return self.word_to_infix(idx_to_words, is_float, str_array)
