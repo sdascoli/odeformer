@@ -461,7 +461,7 @@ class TransformerModel(nn.Module):
         return scores, loss
 
     def generate(
-        self, src_enc, src_len, max_len=200, top_p=1.0, sample_temperature=None, seed=0
+        self, src_enc, src_len, max_len=200, top_p=1.0, sample_temperature=None, seed=0, average_across_batch=False
     ):
         """
         Decode a sentence given initial start.
@@ -514,6 +514,8 @@ class TransformerModel(nn.Module):
             assert tensor.size() == (1, bs, self.dim)
             tensor = tensor.data[-1, :, :].to(self.dtype)  # (bs, dim)  ##BE CAREFUL
             scores = self.proj(tensor)  # (bs, n_words)
+            if average_across_batch:
+                scores = scores.mean(dim=0, keepdim=True).expand(bs, scores.size(1))
 
             # select next words: sample or greedy
             if sample_temperature is None:
@@ -545,7 +547,7 @@ class TransformerModel(nn.Module):
         return generated[:cur_len], gen_len
 
     def generate_beam(
-        self, src_enc, src_len, beam_size, length_penalty, early_stopping, max_len=200,
+        self, src_enc, src_len, beam_size, length_penalty, early_stopping, max_len=200, average_across_batch=False
     ):
         """
         Decode a sentence given initial start.
@@ -629,6 +631,8 @@ class TransformerModel(nn.Module):
                     -1, :, :
                 ]  # .to(soui elf.dtype)  # (bs * beam_size, dim)
             scores = self.proj(tensor)  # (bs * beam_size, n_words)
+            if average_across_batch:
+                scores = scores.mean(dim=0, keepdim=True).expand_as(scores)
             scores = F.log_softmax(scores.float(), dim=-1)  # (bs * beam_size, n_words)
             assert scores.size() == (bs * beam_size, n_words)
 

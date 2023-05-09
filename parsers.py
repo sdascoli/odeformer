@@ -261,7 +261,7 @@ def get_parser():
     parser.add_argument(
         "--beam_size",
         type=int,
-        default=1,
+        default=10,
         help="Beam size, default = 1 (greedy decoding)",
     )
     parser.add_argument(
@@ -301,8 +301,8 @@ def get_parser():
     parser.add_argument(
         "--validation_metrics",
         type=str,
-        default="r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio,_complexity",
-        help="What metrics should we report? accuracy_tolerance/_l1_error/r2/_complexity/_relative_complexity/is_symbolic_solution",
+        default="r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio,complexity",
+        help="What metrics should we report? accuracy_tolerance/l1_error/r2/_complexity/_relative_complexity/is_symbolic_solution",
     )
     parser.add_argument("--beam_selection_metric", type=str, default='snmse', help='Metric to use for beam search selection')
 

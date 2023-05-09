@@ -111,7 +111,7 @@ class Evaluator(object):
         )
         self.dstr = SymbolicTransformerRegressor(
             model=mw,
-            max_input_points=params.max_points*params.subsample_ratio,
+            max_input_points=int(params.max_points*params.subsample_ratio),
             rescale=params.rescale,
             params=params
         )
@@ -127,17 +127,11 @@ class Evaluator(object):
 
         self.ablation_to_keep = list(map(lambda x: "info_" + x, params.ablation_to_keep.split(",")))
 
-    def evaluate_on_iterator(self,
-                             iterator,
-                             save_file,
-                             n_batches_per_write=1
-                             ):
+    def evaluate_on_iterator(self,iterator,save_file,):
         
         scores = OrderedDict({"epoch": self.trainer.epoch})
-        pbar = tqdm(total=self.params.eval_size)
         batch_results = defaultdict(list)
-
-        for ibatch, (samples, _) in enumerate(iterator):
+        for samples, _ in tqdm(iterator):
 
             times = samples["times"]
             trajectories = samples["trajectory"]
@@ -179,10 +173,7 @@ class Evaluator(object):
                 batch_results["info_" + k].extend(v)        
             for k, v in best_results.items():
                 batch_results[k ].extend(v)
-                
-            bs = len(times)
-            pbar.update(bs)
-
+            
         batch_results = pd.DataFrame.from_dict(batch_results)
         batch_results.to_csv(save_file, index=False)
         self.trainer.logger.info("Saved {} equations to {}".format(len(batch_results), save_file))
@@ -190,7 +181,7 @@ class Evaluator(object):
         try:
             df = pd.read_csv(save_file, na_filter=True)
         except:
-            logger.info("WARNING: no results")
+            self.trainer.logger.info("WARNING: no results")
             return
 
         info_columns = filter(lambda x: x.startswith("info_"), df.columns)
@@ -247,7 +238,7 @@ class Evaluator(object):
 
         iterator = []
         from pmlb import fetch_data, dataset_names
-        strogatz_names = [name for name in dataset_names if "strogatz" in name]
+        strogatz_names = [name for name in dataset_names if "strogatz" in name and "2" not in name]
         times = np.linspace(0, 10, 100)
         for name in strogatz_names:
             data = fetch_data(name)
@@ -344,8 +335,8 @@ def main(params):
       logger.info("__log__:%s" % json.dumps(scores))
 
     if params.eval_on_pmlb:
-        #pmlb_scores = evaluator.evaluate_on_pmlb(save=save)
-        #logger.info("__pmlb__:%s" % json.dumps(pmlb_scores))
+        pmlb_scores = evaluator.evaluate_on_pmlb(save=save)
+        logger.info("__pmlb__:%s" % json.dumps(pmlb_scores))
         osc_scores = evaluator.evaluate_on_oscillators(save=save)
         logger.info("__oscillators__:%s" % json.dumps(osc_scores))
 
@@ -357,7 +348,7 @@ if __name__ == "__main__":
     pk = pickle.load(open(params.reload_checkpoint + "/params.pkl", "rb"))
     pickled_args = pk.__dict__
     for p in params.__dict__:
-        if p in pickled_args and p not in ["dump_path", "reload_checkpoint", "rescale", "validation_metrics", "eval_in_domain", "eval_on_pmlb", "batch_size_eval"]:
+        if p in pickled_args and p not in ["dump_path", "reload_checkpoint", "rescale", "validation_metrics", "eval_in_domain", "eval_on_pmlb", "batch_size_eval", "beam_size", "beam_selection_metric", "subsample_prob", "eval_noise_gamma", "eval_noise_type"]:
             params.__dict__[p] = pickled_args[p]
 
     params.eval_size = 10

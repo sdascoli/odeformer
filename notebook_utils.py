@@ -24,6 +24,7 @@ import pandas as pd
 from IPython.display import display
 from scipy import integrate
 import argparse
+import traceback
 pi = np.pi
 e = np.e
 
@@ -189,11 +190,28 @@ def load_run(run, extra_args = {}):
 
     dstr = SymbolicTransformerRegressor(
         model=mw,
-        max_input_points=params.max_points,
+        max_input_points=int(params.max_points*params.subsample_ratio),
         rescale=params.rescale,
     )
 
     return dstr
+
+def plot_predictions(times,trajectory,dstr):
+    plt.figure(figsize=(3,3))
+    for dim in range(len(trajectory[0])):
+        plt.plot(times, trajectory[:,dim], color=f'C{dim}', label='True')
+
+    candidates = dstr.fit(times, trajectory)
+    for tree in candidates[0]:
+        pred_trajectory = integrate_ode(trajectory[0], times, tree, "solve_ivp", debug=False)
+        try:
+            for dim in range(len(trajectory[0])):
+                plt.plot(times, pred_trajectory[:,dim], color=f'C{dim}', ls='--', label='Pred')
+        except: 
+            print(traceback.format_exc())
+    plt.legend()
+    plt.show()
+    return tree
 
 ############################ ATTENTION MAPS ############################
 

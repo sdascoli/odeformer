@@ -216,49 +216,6 @@ class Simplifier(ABC):
         expr = self.tree_to_sympy_expr(tree)
         return self.expr_to_numpy_fn(expr)
 
-    def tree_to_numexpr_fn(self, tree):
-        infix = tree.infix()
-        numexpr_equivalence = {
-            "add": "+",
-            "sub": "-",
-            "mul": "*",
-            "pow": "**",
-            "inv": "1/",
-        }
-
-        for old, new in numexpr_equivalence.items():
-            infix = infix.replace(old, new)
-
-        def get_vals(dim, val):
-            vals_ar = np.empty((dim,))
-            vals_ar[:] = val
-            return vals_ar
-
-        def wrapped_numexpr_fn(_infix, t, x, extra_local_dict={}):
-            assert isinstance(x, np.ndarray) and len(x.shape) == 2
-            local_dict = {}
-            for d in range(self.params.max_dimension):
-                if "x_{}".format(d) in _infix:
-                    if d >= x.shape[1]:
-                        local_dict["x_{}".format(d)] = np.zeros(x.shape[0])
-                    else:
-                        local_dict["x_{}".format(d)] = x[:, d]
-                if "t" in _infix:
-                    local_dict["t"] = t[:]
-            local_dict.update(extra_local_dict)
-            try:
-                vals = ne.evaluate(_infix, local_dict=local_dict)
-                if len(vals.shape) == 0:
-                    vals = get_vals(x.shape[0], vals)
-            except Exception as e:
-                print(e)
-                print("problem with tree", _infix)
-                traceback.format_exc()
-                vals = get_vals(x.shape[0], np.nan)
-            return vals[:, None]
-
-        return partial(wrapped_numexpr_fn, infix)
-
     def sympy_expr_to_tree(self, expr):
         prefix = self.sympy_to_prefix(expr)
         return self.encoder.decode(prefix)

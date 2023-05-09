@@ -461,7 +461,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--operators_to_downsample",
             type=str,
-            default="sin_1,cos_1,tan_0,arcsin_0,arccos_0,arctan_0,sqrt_1,pow2_5,pow3_1,inv_5,div_0,abs_0,exp_0,log_0",
+            default="sin_1,cos_1,tan_0,arcsin_0,arccos_0,arctan_0,sqrt_3,pow2_3,pow3_0,inv_3,abs_0,exp_0,log_0,add_3,mul_1,sub_0,div_0",
             help="Which operator to remove",
         )
         parser.add_argument(
@@ -535,9 +535,6 @@ class FunctionEnvironment(object):
             default="additive",
             choices=["additive", "multiplicative"],
             help="Type of noise added at test time",
-        )
-        parser.add_argument(
-            "--eval_noise", type=float, default=0, help="Size of valid and test samples"
         )
         parser.add_argument(
             "--float_precision",
@@ -692,7 +689,12 @@ class FunctionEnvironment(object):
             default = 1.0,
             help="Scale for initial conditions",
         )
-
+        parser.add_argument(
+            "--fixed_init_scale",
+            type=bool_flag,
+            default = False,
+            help="Fix the init scale",
+        )
 
 class EnvDataset(Dataset):
     def __init__(

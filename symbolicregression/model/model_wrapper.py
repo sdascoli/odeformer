@@ -31,7 +31,7 @@ class ModelWrapper(nn.Module):
         beam_early_stopping=True,
         max_generated_output_len=200,
         beam_temperature=1.0,
-        average_embeddings=False,
+        average_trajectories=False,
     ):
         super().__init__()
 
@@ -46,7 +46,7 @@ class ModelWrapper(nn.Module):
         self.beam_length_penalty = beam_length_penalty
         self.beam_temperature = beam_temperature
         self.device = next(self.embedder.parameters()).device
-        self.average_embeddings = False
+        self.average_trajectories = average_trajectories
 
     @torch.no_grad()
     def forward(self, input):
@@ -96,6 +96,7 @@ class ModelWrapper(nn.Module):
                     length_penalty=self.beam_length_penalty,
                     max_len=self.max_generated_output_len,
                     early_stopping=self.beam_early_stopping,
+                    average_across_batch=self.average_trajectories,
                 )
                 search_generations = [
                     sorted(
@@ -127,9 +128,10 @@ class ModelWrapper(nn.Module):
 
             elif self.beam_type == "sampling":
                 num_samples = self.beam_size
-                if self.average_embeddings:
-                    encoded = encoded.mean(dim=0, keepdims=True)
-                    bs = 1
+                # if self.average_trajectories:
+                #     encoded = encoded.mean(dim=0, keepdims=True)
+                #     x_len = x_len[0].unsqueeze(0)
+                #     bs = 1
                 encoded = (
                     encoded.unsqueeze(1)
                     .expand((bs, num_samples) + encoded.shape[1:])
@@ -142,6 +144,7 @@ class ModelWrapper(nn.Module):
                     x_len,
                     sample_temperature=self.beam_temperature,
                     max_len=self.max_generated_output_len,
+                    average_across_batch=self.average_trajectories,
                 )
                 sampling_generations = sampling_generations.unsqueeze(-1).view(
                     sampling_generations.shape[0], bs, num_samples

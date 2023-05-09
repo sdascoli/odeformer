@@ -28,14 +28,15 @@ from numba import njit
 from numbalsoda import lsoda_sig, lsoda
 import nbkode
 
-import jax
-import jax.numpy as jnp
-from diffrax import diffeqsolve, ODETerm, SaveAt
-from diffrax.solver import *
+# import jax
+# import jax.numpy as jnp
+# from diffrax import diffeqsolve, ODETerm, SaveAt
+# from diffrax.solver import *
 
 # from julia.api import Julia
 # jl = Julia(compiled_modules=False)
 # from diffeqpy import ode
+
 warnings.filterwarnings("ignore")
 import traceback
 
@@ -781,7 +782,10 @@ class RandomFunctions(Generator):
         n_init_conditions=1
         ):
 
-        y0 = self.params.init_scale * rng.randn(dimension)
+        if self.params.fixed_init_scale:
+            y0 = np.ones(dimension)
+        else:
+            y0 = self.params.init_scale * rng.randn(dimension)
         times = np.linspace(1, self.params.time_range, n_points)
         #times = times.repeat(n_init_conditions, axis=0)
         trajectory = integrate_ode(y0, times, tree, self.params.ode_integrator, debug=self.params.debug)
@@ -801,8 +805,8 @@ class RandomFunctions(Generator):
         
         return tree, (times, trajectory)
 
-
-def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=False, allow_warnings=False):
+@timeout(10)
+def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', debug=False, allow_warnings=False):
 
     with warnings.catch_warnings(record=True) as caught_warnings:
 
@@ -870,6 +874,7 @@ def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=False, allow
                     
         elif ode_integrator == "solve_ivp":
             #@njit
+            times = np.array(times)+1
             def func(t,y):
                 return tree([y],[t])[0]
             try: 
@@ -893,6 +898,12 @@ def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=False, allow
     
     return trajectory
 
+def integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', debug=False, allow_warnings=False):
+    try: 
+        return _integrate_ode(y0, times, tree, ode_integrator, debug, allow_warnings)
+    except MyTimeoutError:
+        return [np.nan for _ in range(len(times))]
+
 def tree_to_numexpr_fn(tree):
     infix = tree.infix()
     numexpr_equivalence = {
@@ -915,7 +926,6 @@ def tree_to_numexpr_fn(tree):
         for d in range(dimension): local_dict["x_{}".format(d)] = np.array(x)[:, d]
         local_dict["t"] = t[:]
         local_dict.update(extra_local_dict)
-        #t, x = jnp.array(t), jnp.array(x)
 
         try:
             if '|' in infix:
@@ -923,9 +933,9 @@ def tree_to_numexpr_fn(tree):
             else:
                 vals = ne.evaluate(infix, local_dict=local_dict).reshape(-1,1)
         except Exception as e:
-            print(e)
-            print("problem with tree", infix)
-            traceback.format_exc()
+            #print(e)
+            #print("problem with tree", infix)
+            #print(traceback.format_exc())
             vals = [np.nan for _ in range(x.shape[0])]
         return vals
 

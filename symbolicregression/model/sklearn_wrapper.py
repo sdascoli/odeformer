@@ -33,6 +33,7 @@ class SymbolicTransformerRegressor(BaseEstimator):
                 stop_refinement_after=1,
                 n_trees_to_refine=1,
                 rescale=False,
+                average_trajectories=False,
                 params=None
                 ):
 
@@ -43,6 +44,8 @@ class SymbolicTransformerRegressor(BaseEstimator):
         self.n_trees_to_refine = n_trees_to_refine
         self.rescale = rescale
         self.params = params
+        self.average_trajectories = average_trajectories
+        self.model.average_trajectories = average_trajectories
 
     def set_args(self, args={}):
         for arg, val in args.items():
@@ -55,9 +58,18 @@ class SymbolicTransformerRegressor(BaseEstimator):
         trajectories,
         sort_candidates=True,
         sort_metric="snmse",
+        average_trajectories=None,
+        rescale=None,
         verbose=False,
     ):
         self.start_fit = time.time()
+
+        if not average_trajectories: average_trajectories = self.average_trajectories
+        self.model.average_trajectories = average_trajectories
+        if not rescale: rescale = self.rescale
+        self.rescale = rescale
+
+        assert not (self.average_trajectories and self.rescale), "Cannot average trajectories and rescale at the same time"
 
         if not isinstance(times, list):
             times = [times]
@@ -108,15 +120,16 @@ class SymbolicTransformerRegressor(BaseEstimator):
         for i in range(len(inputs)):
             input_id = inputs_ids[i]
             candidates = outputs[i]
+            if not candidates: all_candidates[input_id].append(None)
             for candidate in candidates:
                 if scaler is not None:
                     candidate = scaler.rescale_function(self.model.env, candidate, *scale_params[input_id])                    
                 all_candidates[input_id].append(candidate)
-        assert len(all_candidates.keys())==n_datasets
+        #assert len(all_candidates.keys())==n_datasets
 
         if sort_candidates:
             for input_id in all_candidates.keys():
-                all_candidates[input_id] = self.sort_candidates(times[input_id], trajectories[input_id], all_candidates[input_id], metric=sort_metric)
+                all_candidates[input_id] = self.sort_candidates(scaled_times[input_id], scaled_trajectories[input_id], all_candidates[input_id], metric=sort_metric)
             
         self.trees = all_candidates
 
@@ -124,29 +137,33 @@ class SymbolicTransformerRegressor(BaseEstimator):
 
     @torch.no_grad()
     def evaluate_tree(self, tree, times, trajectory, metric):
-        pred_trajectory = self.predict(times, trajectory[0], tree=tree)
+        earliest = np.argmin(times)
+        pred_trajectory = self.predict(times, trajectory[earliest], tree=tree)
         metrics = compute_metrics(pred_trajectory, trajectory, predicted_tree=tree, metrics=metric)
         return metrics[metric][0]
 
-    def sort_candidates(self, times, trajectory, candidates, metric="snmse", verbose=False):
+    @torch.no_grad()
+    def sort_candidates(self, times, trajectory, candidates, metric="snmse"):
+        if "r2" in metric: 
+            descending = True
+        else: 
+            descending = False
         scores = []
         for candidate in candidates:
             score = self.evaluate_tree(candidate, times, trajectory, metric)
             if math.isnan(score): 
-                score = np.infty if metric.startswith("_") else -np.infty
+                score = -np.infty if descending else np.infty
             scores.append(score)
         sorted_idx = np.argsort(scores)  
-        if not metric.startswith("_"): sorted_idx=list(reversed(sorted_idx))
+        if descending: sorted_idx=list(reversed(sorted_idx))
         candidates = [candidates[i] for i in sorted_idx]
         return candidates
 
+    @torch.no_grad()
     def predict(self, times, y0, tree=None):   
 
         if tree is None:
-            if self.trees[0] is None:
-                return None
-            else:
-                tree = self.trees[0][0]
+            return None
 
         # integrate the ODE
         if self.params:
@@ -156,10 +173,3 @@ class SymbolicTransformerRegressor(BaseEstimator):
         trajectory = integrate_ode(y0, times, tree, ode_integrator=ode_integrator)
         
         return trajectory
-            
-    def __str__(self):
-        if hasattr(self, "tree"):
-            for tree_idx in range(len(self.trees)):
-                for gen in self.trees[tree_idx]:
-                    print(gen)
-        return "Transformer"

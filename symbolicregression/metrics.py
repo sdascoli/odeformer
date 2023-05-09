@@ -81,7 +81,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                         snmse = np.nan
                     results[metric].append(snmse)
                         
-        elif metric == "_mse":
+        elif metric == "mse":
             for i in range(len(true)):
                 if predicted[i] is None or np.isnan(np.min(predicted[i])):
                     results[metric].append(np.nan)
@@ -91,7 +91,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     except Exception as e:
                         results[metric].append(np.nan)
 
-        elif metric == "_nmse":
+        elif metric == "nmse":
             for i in range(len(true)):
                 if predicted[i] is None or np.isnan(np.min(predicted[i])):
                     results[metric].append(np.nan)
@@ -103,7 +103,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     except Exception as e:
                         results[metric].append(np.nan)
 
-        elif metric == "_rmse":
+        elif metric == "rmse":
             for i in range(len(true)):
                 if predicted[i] is None or np.isnan(np.min(predicted[i])):
                     results[metric].append(np.nan)
@@ -132,7 +132,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     except Exception as e:
                         results[metric].append(np.nan)
 
-        elif metric == "_l1_error":
+        elif metric == "l1_error":
             
             for i in range(len(true)):
                 if predicted[i] is None or np.isnan(np.min(predicted[i])):
@@ -145,7 +145,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     except Exception as e:
                         results[metric].append(np.nan)
 
-        elif metric == "_complexity":
+        elif metric == "complexity":
             if not predicted_tree: 
                 results[metric].extend([np.nan for _ in range(len(true))])
                 continue
@@ -155,7 +155,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                 else:
                     results[metric].append(len(predicted_tree[i].prefix().split(",")))
                     
-        elif metric == "_relative_complexity":
+        elif metric == "relative_complexity":
             if not predicted_tree: 
                 results[metric].extend([np.nan for _ in range(len(true))])
                 continue
