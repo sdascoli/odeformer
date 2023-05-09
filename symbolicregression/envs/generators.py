@@ -32,7 +32,6 @@ from diffrax import diffeqsolve, ODETerm, SaveAt, Dopri5
 
 import torch
 import torchode
-
 # from julia.api import Julia
 # jl = Julia(compiled_modules=False)
 # from diffeqpy import ode
@@ -787,13 +786,10 @@ class RandomFunctions(Generator):
         trajectory = integrate_ode(y0, times, tree, self.params.ode_integrator, debug=self.params.debug)
 
         if trajectory is None:
-            print("trajectory is None")
             return None, None
         if np.any(np.isnan(trajectory)):
-            print("Some trajectory is NaN")
             return None, None
         if np.any(np.abs(trajectory)>10**self.params.max_exponent):
-            print("Too large")
             return None, None
 
         #trajectory = np.concatenate((t.reshape(-1,1),trajectory), axis=-1)
@@ -901,13 +897,11 @@ def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=False, allow
     else:
         raise NotImplementedError
     
-    if debug: print(trajectory, np.any(np.isnan(trajectory)), len(times)!=len(trajectory), len(times), len(trajectory))#, solved_times)
+    #if debug: print(trajectory, np.any(np.isnan(trajectory)), len(times)!=len(trajectory), len(times), len(trajectory))#, solved_times)
     
     if np.any(np.isnan(trajectory)) or len(times)!=len(trajectory):
-        
         return [np.nan for _ in range(len(times))]
     if len(caught_warnings) > 0 and not allow_warnings:
-        
         return [np.nan for _ in range(len(times))]
     
     return trajectory
@@ -927,14 +921,14 @@ def tree_to_numexpr_fn(tree, return_torch=False):
         infix = infix.replace(old, new)
 
     #@njit
-    
     def wrapped_numexpr_fn(x, t, extra_local_dict={}, return_torch=return_torch):
-        
+        #t, x = np.array(t), np.array(x)
         local_dict = {}
         dimension = len(x[0])
         for d in range(dimension): local_dict["x_{}".format(d)] = np.array(x)[:, d]
         local_dict["t"] = t[:]
         local_dict.update(extra_local_dict)
+        #t, x = jnp.array(t), jnp.array(x)
 
         try:
             if '|' in infix:
