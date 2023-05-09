@@ -30,6 +30,9 @@ import jax
 import jax.numpy as jnp
 from diffrax import diffeqsolve, ODETerm, SaveAt, Dopri5
 
+import torch
+import torchode
+
 # from julia.api import Julia
 # jl = Julia(compiled_modules=False)
 # from diffeqpy import ode
@@ -784,10 +787,13 @@ class RandomFunctions(Generator):
         trajectory = integrate_ode(y0, times, tree, self.params.ode_integrator, debug=self.params.debug)
 
         if trajectory is None:
+            print("trajectory is None")
             return None, None
         if np.any(np.isnan(trajectory)):
+            print("Some trajectory is NaN")
             return None, None
         if np.any(np.abs(trajectory)>10**self.params.max_exponent):
+            print("Too large")
             return None, None
 
         #trajectory = np.concatenate((t.reshape(-1,1),trajectory), axis=-1)
@@ -801,7 +807,8 @@ class RandomFunctions(Generator):
 
 def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=False, allow_warnings=False):
 
-    tree = tree_to_numexpr_fn(tree)
+    caught_warnings = []
+    tree = tree_to_numexpr_fn(tree, return_torch=(True if ode_integrator == "torchode" else False))
 
     if ode_integrator == 'numba':
         def func(u,p,t):
@@ -814,6 +821,30 @@ def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=False, allow
             if debug:
                 print(traceback.format_exc())
             return None    
+        
+    elif ode_integrator == "torchode":
+        def func(t,y):
+            return tree(y,t)
+        try:
+            with torch.no_grad():
+                # TODO: currently hardcoded to 30 y0s
+                y0 = torch.tensor(y0.reshape(-1,1).repeat(30, 1).T)
+                t_eval = torch.Tensor(times).reshape(-1,1).repeat(1, 30).T
+                # y0 = torch.tensor(np.random.uniform(low=-5, high=5, size=30).reshape(-1,1))
+                term = torchode.ODETerm(func)
+                step_method = torchode.Dopri5(term=term)
+                step_size_controller = torchode.IntegralController(atol=1e-6, rtol=1e-3, term=term)
+                solver = torchode.AutoDiffAdjoint(step_method, step_size_controller)
+                jit_solver = torch.compile(solver)
+                # For pytorch versions < 2.0, use the older TorchScript compiler
+                # jit_solver = torch.jit.script(solver)
+                sol = jit_solver.solve(torchode.InitialValueProblem(y0=y0, t_eval=t_eval))
+                # TODO: currently returning only the first solution
+                trajectory = sol.ys[0].numpy()
+        except Exception as exc: 
+            if debug:
+                print("torchode", traceback.format_exc())
+            return None
         
     elif ode_integrator == 'jax':
         def func(t,y,args=None):
@@ -870,16 +901,18 @@ def integrate_ode(y0, times, tree, ode_integrator = 'odeint', debug=False, allow
     else:
         raise NotImplementedError
     
-    #if debug: print(trajectory, np.any(np.isnan(trajectory)), len(times)!=len(trajectory), len(times), len(trajectory))#, solved_times)
+    if debug: print(trajectory, np.any(np.isnan(trajectory)), len(times)!=len(trajectory), len(times), len(trajectory))#, solved_times)
     
     if np.any(np.isnan(trajectory)) or len(times)!=len(trajectory):
+        
         return [np.nan for _ in range(len(times))]
     if len(caught_warnings) > 0 and not allow_warnings:
+        
         return [np.nan for _ in range(len(times))]
     
     return trajectory
 
-def tree_to_numexpr_fn(tree):
+def tree_to_numexpr_fn(tree, return_torch=False):
     infix = tree.infix()
     numexpr_equivalence = {
         "add": "+",
@@ -894,20 +927,25 @@ def tree_to_numexpr_fn(tree):
         infix = infix.replace(old, new)
 
     #@njit
-    def wrapped_numexpr_fn(x, t, extra_local_dict={}):
-        #t, x = np.array(t), np.array(x)
+    
+    def wrapped_numexpr_fn(x, t, extra_local_dict={}, return_torch=return_torch):
+        
         local_dict = {}
         dimension = len(x[0])
         for d in range(dimension): local_dict["x_{}".format(d)] = np.array(x)[:, d]
         local_dict["t"] = t[:]
         local_dict.update(extra_local_dict)
-        #t, x = jnp.array(t), jnp.array(x)
 
         try:
             if '|' in infix:
-                vals = np.concatenate([ne.evaluate(node, local_dict=local_dict).reshape(-1,1) for node in infix.split('|')], axis=1)
+                vals = np.concatenate(
+                    [ne.evaluate(node, local_dict=local_dict).reshape(-1,1) for node in infix.split('|')], 
+                    axis=1,
+                )
             else:
                 vals = ne.evaluate(infix, local_dict=local_dict).reshape(-1,1)
+            if return_torch:
+                vals = torch.Tensor(vals).to(torch.double)
         except Exception as e:
             print(e)
             print("problem with tree", infix)
