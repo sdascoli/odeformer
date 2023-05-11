@@ -18,7 +18,7 @@ import warnings
 import symbolicregression
 from symbolicregression.envs import encoders
 from symbolicregression.envs.utils import *
-from symbolicregression.envs.export_jax import *
+#from symbolicregression.envs.export_jax import *
 from ..utils import bool_flag, timeout, MyTimeoutError
 from functools import partial
 import numexpr as ne
