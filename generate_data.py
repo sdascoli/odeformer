@@ -16,15 +16,14 @@ Path(dump_path).mkdir(exist_ok=True)
 extra_args = {
     'n_steps_per_epoch':1000,
     'max_epoch':100,
-    'print_freq': 10,
     'ode_integrator':'solve_ivp',
     'num_workers':30,
     'use_queue':False,
-    'batch_size':100,
+    'batch_size':10,
     'min_dimension':1,
     'max_dimension':2,
     'print_freq':100,
-    }
+     }
 
 grid = {
     "export_data":[True],

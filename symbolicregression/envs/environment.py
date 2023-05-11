@@ -806,11 +806,10 @@ class EnvDataset(Dataset):
                     endfile = True
                     break
                 if i % self.params.n_gpu_per_node == self.local_rank:
-                    lines.append(line.rstrip().split("|"))
+                    lines.append(json.loads(line.rstrip()))
             self.seekpos = 0 if endfile else f.tell()
 
-        self.data = [xy.split("\t") for _, xy in lines]
-        self.data = [xy for xy in self.data if len(xy) == 2]
+        self.data = lines
         self.nextpos = self.basepos + len(self.data)
         logger.info(
             f"Loaded {len(self.data)} equations from the disk. seekpos {self.seekpos}, "
@@ -1019,17 +1018,17 @@ class EnvDataset(Dataset):
         """
         Read a sample.
         """
-        if self.train:
+        if not self.train:
+            idx = self.read_index
+        else:
             if self.batch_load:
-                if index >= self.nextpos:
+                if self.read_index >= len(self.data):
                     self.load_chunk()
-                idx = index - self.basepos
+                    self.read_index = 0
+                idx = self.read_index
             else:
                 idx = self.env.rng.randint(len(self.data))
-        else:
-            index = self.read_index
-            self.read_index += 1
-
+        self.read_index += 1
 
         def str_list_to_float_array(lst):
             for i in range(len(lst)):

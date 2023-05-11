@@ -220,13 +220,13 @@ def get_parser():
     parser.add_argument(
         "--reload_size",
         type=int,
-        default=-1,
+        default=100000,
         help="Reloaded training set size (-1 for everything)",
     )
     parser.add_argument(
         "--batch_load",
         type=bool_flag,
-        default=False,
+        default=True,
         help="Load training set by batches (of size reload_size).",
     )
 
@@ -304,7 +304,7 @@ def get_parser():
         default="r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio,complexity",
         help="What metrics should we report? accuracy_tolerance/l1_error/r2/_complexity/_relative_complexity/is_symbolic_solution",
     )
-    parser.add_argument("--beam_selection_metric", type=str, default='snmse', help='Metric to use for beam search selection')
+    parser.add_argument("--beam_selection_metric", type=str, default='r2_zero', help='Metric to use for beam search selection')
 
     parser.add_argument(
         "--debug_train_statistics",

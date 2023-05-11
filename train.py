@@ -67,7 +67,7 @@ def main(params):
             pmlb_scores = evaluator.evaluate_on_pmlb()
             logger.info("__pmlb__:%s" % json.dumps(pmlb_scores))
 
-            osc_scores = evaluator.evaluate_on_oscillators(save=save)
+            osc_scores = evaluator.evaluate_on_oscillators()
             logger.info("__oscillators__:%s" % json.dumps(osc_scores))
         exit()
 
@@ -106,7 +106,7 @@ def main(params):
         if params.eval_on_pmlb:
             pmlb_scores = evaluator.evaluate_on_pmlb()
             logger.info("__pmlb__:%s" % json.dumps(pmlb_scores))
-            osc_scores = evaluator.evaluate_on_oscillators(save=save)
+            osc_scores = evaluator.evaluate_on_oscillators()
             logger.info("__oscillators__:%s" % json.dumps(osc_scores))
 
         trainer.save_best_model(scores, prefix="functions", suffix="fit")

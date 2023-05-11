@@ -203,7 +203,7 @@ class Trainer(object):
         # reload exported data
         if params.reload_data != "":
             logger.info(f"Reloading data from {params.reload_data}")
-            # assert params.num_workers in [0, 1] ##TODO: why have that?
+            assert params.num_workers in [0, 1] 
             assert params.export_data is False
             s = [x.split(",") for x in params.reload_data.split(";") if len(x) > 0]
             assert (
@@ -213,8 +213,7 @@ class Trainer(object):
                 # and len(s) == len(set([x[0] for x in s]))
             )
             self.data_path = {
-                "functions": (os.path.join(params.reload_data,'data.prefix.train'), 
-                              os.path.join(params.reload_data,'data.prefix.valid'), 
+                "functions": (os.path.join(params.reload_data,'data.prefix'), 
                               os.path.join(params.reload_data,'data.prefix.test' ),
                 )
             }

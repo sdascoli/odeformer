@@ -18,13 +18,14 @@ extra_args = {
     'n_steps_per_epoch':1000,
     'print_freq': 10,
     'ode_integrator':'solve_ivp',
-    'num_workers':30,
+    'num_workers':1,
     #'fixed_init_scale':True,
     'use_queue':False,
     'batch_size':100,
     'tokens_per_batch':10000,
-    'min_dimension':2,
+    'min_dimension':1,
     'max_dimension':2,
+    'reload_data':"/home/dascoli/odeformer/experiments/datagen_dim_2/exp_export_data_True/"
     }
 
 grid = {
@@ -97,6 +98,7 @@ for params in dict_product(grid):
         if f.endswith('.py'):
             shutil.copy2(f, job_dir)
     dir_util.copy_tree('symbolicregression', os.path.join(job_dir,'symbolicregression'))
+    dir_util.copy_tree('invar_datasets', os.path.join(job_dir,'invar_datasets'))
     os.chdir(job_dir)
 
     logfile = os.path.join(job_dir,'train.log')
