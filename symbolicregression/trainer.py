@@ -202,7 +202,7 @@ class Trainer(object):
 
         # reload exported data
         if params.reload_data != "":
-            logger.info(params.reload_data)
+            logger.info(f"Reloading data from {params.reload_data}")
             # assert params.num_workers in [0, 1] ##TODO: why have that?
             assert params.export_data is False
             s = [x.split(",") for x in params.reload_data.split(";") if len(x) > 0]
@@ -213,12 +213,10 @@ class Trainer(object):
                 # and len(s) == len(set([x[0] for x in s]))
             )
             self.data_path = {
-                task: (
-                    train_path if train_path != "" else None,
-                    valid_path if valid_path != "" else None,
-                    test_path if test_path != "" else None,
+                "functions": (os.path.join(params.reload_data,'data.prefix.train'), 
+                              os.path.join(params.reload_data,'data.prefix.valid'), 
+                              os.path.join(params.reload_data,'data.prefix.test' ),
                 )
-                for task, train_path, valid_path, test_path in s
             }
 
             logger.info(self.data_path)
@@ -668,9 +666,11 @@ class Trainer(object):
 
         def float_list_to_str_lst(lst, float_precision):
             for i in range(len(lst)):
-                for j in range(len(lst[i])):
-                    str_float = f"%.{float_precision}e" % lst[i][j]
-                    lst[i][j] = str_float
+                if isinstance(lst[i], list):
+                    lst[i] = float_list_to_str_lst(lst[i], float_precision)
+                else:
+                    str_float = f"%.{float_precision}e" % lst[i]
+                    lst[i] = str_float
             return lst
 
         processed_e = len(samples)

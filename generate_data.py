@@ -8,32 +8,26 @@ from pathlib import Path
 import shutil
 from distutils import dir_util
 
-exp_folder = 'fixed_init_scale'
+exp_folder = 'datagen_dim_2'
 
 dump_path = '/home/dascoli/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
 
 extra_args = {
-    'collate_queue_size': 1000,
     'n_steps_per_epoch':1000,
+    'max_epoch':100,
     'print_freq': 10,
     'ode_integrator':'solve_ivp',
     'num_workers':30,
-    #'fixed_init_scale':True,
     'use_queue':False,
     'batch_size':100,
-    'tokens_per_batch':10000,
-    'min_dimension':2,
+    'min_dimension':1,
     'max_dimension':2,
+    'print_freq':100,
     }
 
 grid = {
-    "fixed_init_scale":[True,False],
-    # "ode_integrator": ["odeint","solve_ivp"],
-    # "max_dimension":[2,4]
-    #"use_cross_attention":[True,False],
-    #"enc_positional_embeddings": ["none","learnable"],
-    #"optimizer": ['adam_cosine,warmup_updates=5000,init_period=50000,period_mult=1.5,lr_shrink=0.5'],
+    "export_data":[True],
 }
 
 def get_free_gpus():
@@ -92,6 +86,8 @@ for params in dict_product(grid):
     for arg, value in extra_args.items():
         if arg not in params:
             params[arg] = value
+
+    
 
     for f in os.listdir():
         if f.endswith('.py'):

@@ -358,21 +358,18 @@ class FunctionEnvironment(object):
             self,
             task,
             train=True,
-            skip=self.params.queue_strategy is not None,
+            skip=self.params.use_queue,
             params=params,
             path=(None if data_path is None else data_path[task][0]),
             **args,
         )
 
-        if self.params.queue_strategy is None:
+        if not self.params.use_queue:
             collate_fn = dataset.collate_fn
         else:
             collate_fn = dataset.collate_reduce_padding(
                 dataset.collate_fn,
-                key_fn=lambda x: x["infos"]["input_sequence_length"]
-                + len(
-                    x["tree_encoded"]
-                ),  # (x["infos"]["input_sequence_length"], len(x["tree_encoded"])),
+                key_fn=lambda x: x["infos"]["input_sequence_length"],# + len(x["tree_encoded"]),  
                 max_size=self.max_size,
             )
         return DataLoader(
@@ -390,7 +387,6 @@ class FunctionEnvironment(object):
 
     def create_test_iterator(
         self,
-        data_type,
         task,
         data_path,
         batch_size,
@@ -401,7 +397,7 @@ class FunctionEnvironment(object):
         """
         Create a dataset for this environment.
         """
-        logger.info(f"Creating {data_type} iterator for {task} ...")
+        logger.info(f"Creating test iterator for {task} ...")
 
         dataset = EnvDataset(
             self,
@@ -409,9 +405,8 @@ class FunctionEnvironment(object):
             train=False,
             skip=False,
             params=params,
-            path=(None if data_path is None else data_path[task][int(data_type[5:])]),
+            path=(None if data_path is None else data_path[task][1]),
             size=size,
-            type=data_type,
             **args,
         )
 
@@ -430,10 +425,10 @@ class FunctionEnvironment(object):
         Register environment parameters.
         """
         parser.add_argument(
-            "--queue_strategy",
-            type=str,
-            default="uniform_sampling",
-            help="in [precompute_batches, uniform_sampling, uniform_sampling_replacement]",
+            "--use_queue",
+            type=bool_flag,
+            default=True,
+            help="whether to use queue",
         )
 
         parser.add_argument("--collate_queue_size", type=int, default=2000)
@@ -706,7 +701,6 @@ class EnvDataset(Dataset):
         path,
         skip=False,
         size=None,
-        type=None,
         **args,
     ):
         super(EnvDataset).__init__()
@@ -719,9 +713,10 @@ class EnvDataset(Dataset):
         self.path = path
         self.count = 0
         self.remaining_data = 0
-        self.type = type
         self.params = params
         self.errors = defaultdict(int)
+
+        self.read_index = 0
 
         if "test_env_seed" in args:
             self.test_env_seed = args["test_env_seed"]
@@ -825,7 +820,7 @@ class EnvDataset(Dataset):
             self.load_chunk()
 
     def collate_reduce_padding(self, collate_fn, key_fn, max_size=None):
-        if self.params.queue_strategy == None:
+        if not self.params.use_queue:
             return collate_fn
 
         f = self.collate_reduce_padding_uniform
@@ -857,11 +852,7 @@ class EnvDataset(Dataset):
             if self.path is None:
                 sample = self.generate_sample()
             else:
-                # TODO
-                assert (
-                    False
-                ), "need to finish implementing load dataset, but do not know how to handle read index"
-                sample = self.read_sample(index)
+                sample = self.read_sample()
             self.collate_queue.append(sample)
 
         # sort sequences
@@ -980,12 +971,12 @@ class EnvDataset(Dataset):
             seed = [
                 worker_id,
                 self.params.global_rank,
-                self.test_env_seed if "valid" in self.type else 0,
+                self.test_env_seed if not self.train else 0,
             ]
             self.env.rng = np.random.RandomState(seed)
             logger.info(
-                "Initialized {} generator, with seed {} (random state: {})".format(
-                    self.type, seed, self.env.rng
+                "Initialized test generator, with seed {} (random state: {})".format(
+                    seed, self.env.rng
                 )
             )
 
@@ -1005,7 +996,7 @@ class EnvDataset(Dataset):
         """
         return self.size
 
-    def __getitem__(self, index):
+    def __getitem__(self, index=None):
         """
         Return a training sample.
         Either generate it, or read it from file.
@@ -1016,31 +1007,36 @@ class EnvDataset(Dataset):
                 return SKIP_ITEM
             else:
                 sample = self.generate_sample()
-                return sample
         else:
             if self.train and self.skip:
                 return SKIP_ITEM
             else:
-                return self.read_sample(index)
+                sample = self.read_sample()
 
-    def read_sample(self, index):
+        return sample
+
+    def read_sample(self):
         """
         Read a sample.
         """
-        idx = index
         if self.train:
             if self.batch_load:
                 if index >= self.nextpos:
                     self.load_chunk()
                 idx = index - self.basepos
             else:
-                index = self.env.rng.randint(len(self.data))
-                idx = index
+                idx = self.env.rng.randint(len(self.data))
+        else:
+            index = self.read_index
+            self.read_index += 1
+
 
         def str_list_to_float_array(lst):
             for i in range(len(lst)):
-                for j in range(len(lst[i])):
-                    lst[i][j] = float(lst[i][j])
+                if isinstance(lst[i], list):
+                    lst[i] = str_list_to_float_array(lst[i])
+                else:
+                    lst[i] = float(lst[i])
             return np.array(lst)
 
         x = copy.deepcopy(self.data[idx])
@@ -1061,6 +1057,11 @@ class EnvDataset(Dataset):
         x["infos"] = infos
         for k in infos.keys():
             del x[k]
+
+        x["infos"]["input_sequence_length"] = self.env.get_length_after_batching([x['times'], x['trajectory']])[0].item()
+        if x["infos"]["input_sequence_length"] > self.params.tokens_per_batch:
+            return self.generate_sample()
+
         return x
 
     def generate_sample(self):
@@ -1071,39 +1072,13 @@ class EnvDataset(Dataset):
         sample, errors = self.env.gen_expr(self.train)
         for error, count in errors.items():
             self.errors[error] += count
+
+
         sample["infos"]["input_sequence_length"] = self.env.get_length_after_batching([sample['times'], sample['trajectory']])[0].item()
         if sample["infos"]["input_sequence_length"] > self.params.tokens_per_batch:
             return self.generate_sample()
-        return sample
         
-
-        # if self.remaining_data == 0:
-        #     self.expr, errors = self.env.gen_expr(self.train)
-        #     for error, count in errors.items():
-        #         self.errors[error] += count
-
-        #     self.remaining_data = len(self.expr["times"])
-
-        # self.remaining_data -= 1
-        # times = self.expr["times"][-self.remaining_data]
-        # trajectory = self.expr["trajectory"][-self.remaining_data]
-        # sample = copy.deepcopy(self.expr)
-        # sample["times"] = times
-        # sample["trajectory"] = trajectory
-        # del sample["times"]
-        # del sample["trajectory"]
-        # sample["infos"] = select_dico_index(sample["infos"], -self.remaining_data)
-        # sequence = []
-        # for n in range(sample["infos"]["n_points"]):
-        #     sequence.append([sample["times"][n], sample["trajectory"][n]])
-        # sample["infos"]["input_sequence_length"] = self.env.get_length_after_batching(
-        #     [sequence]
-        # )[0].item()
-        # if sample["infos"]["input_sequence_length"] > self.params.tokens_per_batch:
-        #     # print(sample["infos"]["input_sequence_length"],  self.params.tokens_per_batch)
-        #     return self.generate_sample()
-        # self.count += 1
-        # return sample
+        return sample
 
 
 def select_dico_index(dico, idx):

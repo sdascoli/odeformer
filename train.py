@@ -57,23 +57,18 @@ def main(params):
     trainer = Trainer(modules, env, params)
     evaluator = Evaluator(trainer)
 
-    # training
-    if params.reload_data != "":
-        data_types = [
-            "valid{}".format(i) for i in range(1, len(trainer.data_path["functions"]))
-        ]
-    else:
-        data_types = ["valid1"]
-
     # evaluation
     if params.eval_only:
         if params.eval_in_domain:
-            scores = evaluator.evaluate_in_domain("valid1","functions",save=save,)
+            scores = evaluator.evaluate_in_domain("functions",save=save,)
             logger.info("__log__:%s" % json.dumps(scores))
 
         if params.eval_on_pmlb:
             pmlb_scores = evaluator.evaluate_on_pmlb()
             logger.info("__pmlb__:%s" % json.dumps(pmlb_scores))
+
+            osc_scores = evaluator.evaluate_on_oscillators(save=save)
+            logger.info("__oscillators__:%s" % json.dumps(osc_scores))
         exit()
 
     trainer.n_equations = 0
@@ -93,6 +88,9 @@ def main(params):
                     trainer.enc_dec_step(task)
                 trainer.iter()
 
+        if params.export_data: 
+            continue
+
         logger.info("============ End of epoch %i ============" % trainer.epoch)
         if params.debug_train_statistics:
             for task in params.tasks:
@@ -102,12 +100,14 @@ def main(params):
         if _: trainer.save_periodic()
 
         if params.eval_in_domain:
-            scores = evaluator.evaluate_in_domain("valid1","functions")
+            scores = evaluator.evaluate_in_domain("functions")
             logger.info("__log__:%s" % json.dumps(scores))
 
         if params.eval_on_pmlb:
             pmlb_scores = evaluator.evaluate_on_pmlb()
             logger.info("__pmlb__:%s" % json.dumps(pmlb_scores))
+            osc_scores = evaluator.evaluate_on_oscillators(save=save)
+            logger.info("__oscillators__:%s" % json.dumps(osc_scores))
 
         trainer.save_best_model(scores, prefix="functions", suffix="fit")
         # end of epoch

@@ -202,7 +202,6 @@ class Evaluator(object):
         
     def evaluate_in_domain(
         self,
-        data_type,
         task,
         save=True,
     ):
@@ -211,7 +210,6 @@ class Evaluator(object):
         self.trainer.logger.info("====== STARTING EVALUATION IN DOMAIN (multi-gpu: {}) =======".format(self.params.multi_gpu))
 
         iterator = self.env.create_test_iterator(
-            data_type,
             task,
             data_path=self.trainer.data_path,
             batch_size=self.params.batch_size_eval,
@@ -272,7 +270,7 @@ class Evaluator(object):
 
         iterator = []
         datasets = {}
-        for file in glob.glob("invar_datasets/*"):
+        for file in glob.glob("~/odeformer/invar_datasets/*"):
             with open(file) as f:
                 lines = (line for line in f if not line.startswith('%') and not line.startswith('x'))
                 data = np.loadtxt(lines)
@@ -331,7 +329,7 @@ def main(params):
     save = params.save_results
 
     if params.eval_in_domain:
-      scores = evaluator.evaluate_in_domain("valid1","functions",save=save,)
+      scores = evaluator.evaluate_in_domain("functions",save=save,)
       logger.info("__log__:%s" % json.dumps(scores))
 
     if params.eval_on_pmlb:
