@@ -286,9 +286,23 @@ class FunctionEnvironment(object):
         take_left = left_prob > right_prob
         take_right = ~take_left
         best_neighbor = left_neighbor * take_left + right_neighbor * take_right
-        best_prob = torch.gather(input=probs, dim=1, index=best_neighbor)
+        neighbor_prob = torch.gather(input=probs, dim=1, index=best_neighbor)
         # value
-        value = torch.squeeze(selected * selected_prob + best_neighbor * best_prob).to(torch.double) + id_offset
+        selected_value = selected + self.equation_encoder.constant_encoder.min
+        neighbor_value = best_neighbor + self.equation_encoder.constant_encoder.min
+        value = torch.squeeze(selected_value * selected_prob + neighbor_value * neighbor_prob).to(torch.double)
+        id_value = value + id_offset - self.equation_encoder.constant_encoder.min
+        
+        #print("selected", selected)
+        #print("selected_value", selected_value)
+        #print("selected_prob", selected_prob)
+        
+        #print("best_neighbor", best_neighbor)
+        #print("neighbor_value", neighbor_value)
+        #print("neighbor_prob", neighbor_prob)
+        
+        #print("id_offset", id_offset)
+        #print("self.equation_encoder.constant_encoder.min", self.equation_encoder.constant_encoder.min)
         
         # import matplotlib.pyplot as plt
         # try:
@@ -298,8 +312,8 @@ class FunctionEnvironment(object):
         # plt.title(value.detach().cpu().numpy().round(3))
         # plt.show()
         
-        topk_idx = topk_idx.to(value.dtype)
-        topk_idx[constants_mask] = value
+        topk_idx = topk_idx.to(id_value.dtype)
+        topk_idx[constants_mask] = id_value
         return topk_idx, constants_mask
 
     def word_to_infix(self, words, is_float=True, str_array=True):
@@ -314,6 +328,7 @@ class FunctionEnvironment(object):
         else:
             m = self.equation_encoder.decode(words)
             if m is None:
+                # print("word_to_infix() is None", words, "\n")
                 return None
             if str_array:
                 return m.infix()
@@ -343,6 +358,8 @@ class FunctionEnvironment(object):
         str_array=True, 
         is_two_hot: Union[None, torch.BoolTensor]=None,
     ):
+        
+        # print("idx_to_infix", lst)
         if is_float:
             idx_to_words = [self.float_id2word[int(i)] for i in lst]
         else:
