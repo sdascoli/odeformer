@@ -776,6 +776,8 @@ class Trainer(object):
 
             if self.params.masked_input:
                 targets = predict_input_tokens # len, bs, 3 * max_dim
+                targets = targets[mask]
+                encoded = encoded[mask]
                 targets = targets.flatten()
                 scores = encoder.proj(encoded) # len, bs, 3 * max_dim * n_words
                 scores = scores.view(-1, len(encoder.word2id))

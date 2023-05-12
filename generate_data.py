@@ -7,17 +7,19 @@ import itertools
 from pathlib import Path
 import shutil
 from distutils import dir_util
+user = os.getlogin()
+
 
 exp_folder = 'datagen_dim_2'
 
-dump_path = '/home/dascoli/odeformer/experiments'
+dump_path = f'/home/{user}/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
 
 extra_args = {
     'n_steps_per_epoch':1000,
     'max_epoch':100,
     'ode_integrator':'solve_ivp',
-    'num_workers':30,
+    'num_workers':40,
     'use_queue':False,
     'batch_size':10,
     'min_dimension':1,

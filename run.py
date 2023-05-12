@@ -7,10 +7,11 @@ import itertools
 from pathlib import Path
 import shutil
 from distutils import dir_util
+user = os.getlogin()
 
-exp_folder = 'fixed_init_scale'
+exp_folder = 'masked_input'
 
-dump_path = '/home/dascoli/odeformer/experiments'
+dump_path = f'/home/{user}/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
 
 extra_args = {
@@ -25,12 +26,12 @@ extra_args = {
     'tokens_per_batch':10000,
     'min_dimension':1,
     'max_dimension':2,
-    'reload_data':"/home/dascoli/odeformer/experiments/datagen_dim_2/exp_export_data_True/"
+    'reload_data':f"/home/{user}/odeformer/experiments/datagen_dim_2/exp_export_data_True/"
     }
 
 grid = {
     #"fixed_init_scale":[True,False],
-    "masked_input":[0.3]
+    "masked_input":[0,0.1,0.3]
     # "ode_integrator": ["odeint","solve_ivp"],
     # "max_dimension":[2,4]
     #"use_cross_attention":[True,False],

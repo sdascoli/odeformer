@@ -56,10 +56,10 @@ def get_parser():
         "--emb_emb_dim", type=int, default=64, help="Embedder embedding layer size"
     )
     parser.add_argument(
-        "--enc_emb_dim", type=int, default=512, help="Encoder embedding layer size"
+        "--enc_emb_dim", type=int, default=256, help="Encoder embedding layer size"
     )
     parser.add_argument(
-        "--dec_emb_dim", type=int, default=512, help="Decoder embedding layer size"
+        "--dec_emb_dim", type=int, default=256, help="Decoder embedding layer size"
     )
     parser.add_argument(
         "--n_emb_layers", type=int, default=1, help="Number of layers in the embedder",
@@ -67,13 +67,13 @@ def get_parser():
     parser.add_argument(
         "--n_enc_layers",
         type=int,
-        default=2,
+        default=4,
         help="Number of Transformer layers in the encoder",
     )
     parser.add_argument(
         "--n_dec_layers",
         type=int,
-        default=16,
+        default=12,
         help="Number of Transformer layers in the decoder",
     )
     parser.add_argument(
