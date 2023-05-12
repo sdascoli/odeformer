@@ -12,6 +12,7 @@ from .embedders import LinearPointEmbedder
 from .transformer import TransformerModel
 from .sklearn_wrapper import SymbolicTransformerRegressor
 from .model_wrapper import ModelWrapper
+import torch.nn as nn
 
 logger = getLogger()
 
@@ -46,6 +47,9 @@ def build_modules(env, params):
         use_prior_embeddings=True,
         positional_embeddings=params.enc_positional_embeddings,
     )
+    if params.masked_input:
+        modules["encoder"].proj = nn.Linear(params.enc_emb_dim, 3*params.max_dimension*len(env.float_id2word), bias=True) 
+
     modules["decoder"] = TransformerModel(
         params,
         env.equation_id2word,

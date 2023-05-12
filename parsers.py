@@ -41,6 +41,12 @@ def get_parser():
         help="[TNet, LinearPoint, Flat, AttentionPoint] How to pre-process sequences before passing to a transformer.",
     )
     parser.add_argument(
+        "--masked_input",
+        type=float,
+        default=0,
+        help="Fraction of inputs to mask.",
+    )
+    parser.add_argument(
         "--use_cross_attention",
         type=bool_flag,
         default=True,
@@ -154,7 +160,7 @@ def get_parser():
     parser.add_argument(
         "--optimizer",
         type=str,
-        default='adam_cosine,warmup_updates=5000,init_period=50000,period_mult=1.5,lr_shrink=0.5',
+        default='adam_cosine,warmup_updates=10000,init_period=100000,period_mult=1.5,lr_shrink=0.5',
         help="Optimizer (SGD / RMSprop / Adam, etc.)",
     )
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")

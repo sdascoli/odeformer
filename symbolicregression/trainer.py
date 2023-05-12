@@ -23,6 +23,7 @@ import torch.nn.functional as F
 import seaborn as sns
 import matplotlib.pyplot as plt
 import copy
+import contextlib
 
 # if torch.cuda.is_available():
 has_apex = True
@@ -725,8 +726,16 @@ class Trainer(object):
             x1.append([])
             for seq_l in range(len(times[seq_id])):
                 x1[seq_id].append([times[seq_id][seq_l], trajectory[seq_id][seq_l]])
-
-        x1, len1 = embedder(x1)
+                
+        if self.params.masked_input: #randomly mask some inputs
+            input_tokens, len1 = embedder.forward(x1, return_before_embed=True)
+            # randomly mask a fraction x of the input tokens along seq dimension
+            mask = np.random.rand(*input_tokens.shape[:2]) < self.params.masked_input
+            input_tokens[mask][3:] = encoder.word2id['<MASK>']
+            x1 = embedder.compress(embedder.embed(input_tokens))
+            predict_input_tokens = input_tokens[:,:,3:]
+        else:
+            x1, len1 = embedder(x1)
 
         if self.params.use_skeleton:
             x2, len2 = self.env.batch_equations(
@@ -751,7 +760,7 @@ class Trainer(object):
         x2, len2, y = to_cuda(x2, len2, y)
         # forward / loss
 
-        if params.amp == -1 or params.nvidia_apex:
+        with autocast_wrapper(params):
             encoded = encoder("fwd", x=x1, lengths=len1, causal=False)
             decoded = decoder(
                 "fwd",
@@ -764,24 +773,15 @@ class Trainer(object):
             _, loss = decoder(
                 "predict", tensor=decoded, pred_mask=pred_mask, y=y, get_scores=False
             )
-        else:
-            with torch.cuda.amp.autocast():
-                encoded = encoder("fwd", x=x1, lengths=len1, causal=False)
-                decoded = decoder(
-                    "fwd",
-                    x=x2,
-                    lengths=len2,
-                    causal=True,
-                    src_enc=encoded.transpose(0, 1),
-                    src_len=len1,
-                )
-                _, loss = decoder(
-                    "predict",
-                    tensor=decoded,
-                    pred_mask=pred_mask,
-                    y=y,
-                    get_scores=False,
-                )
+
+            if self.params.masked_input:
+                targets = predict_input_tokens # len, bs, 3 * max_dim
+                targets = targets.flatten()
+                scores = encoder.proj(encoded) # len, bs, 3 * max_dim * n_words
+                scores = scores.view(-1, len(encoder.word2id))
+                loss_numeric = F.cross_entropy(scores, targets)
+                loss = loss + loss_numeric
+
         self.stats[task].append(loss.item())
 
         # optimize
@@ -792,3 +792,11 @@ class Trainer(object):
         self.n_equations += len1.size(0)
         self.stats["processed_e"] += len1.size(0)
         self.stats["processed_w"] += (len1 + len2 - 2).sum().item()
+
+@contextlib.contextmanager
+def autocast_wrapper(params):
+    if params.amp == -1 or params.nvidia_apex:
+        yield
+    else:
+        with torch.cuda.amp.autocast():
+            yield

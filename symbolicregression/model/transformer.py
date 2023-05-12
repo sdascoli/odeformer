@@ -113,6 +113,7 @@ class MultiHeadAttention(nn.Module):
         def unshape(x):
             """compute context"""
             return (
+
                 x.transpose(1, 2).contiguous().view(bs, -1, self.n_heads * dim_per_head)
             )
 
@@ -166,11 +167,12 @@ class MultiHeadAttention(nn.Module):
 
 
 class TransformerFFN(nn.Module):
-    def __init__(self, in_dim, dim_hidden, out_dim, hidden_layers, dropout):
+    def __init__(self, in_dim, dim_hidden, out_dim, hidden_layers, dropout, activation):
         super().__init__()
         self.dropout = dropout
         self.hidden_layers = hidden_layers
         self.midlin = nn.ModuleList()
+        self.activation = getattr(F, activation)
         self.lin1 = nn.Linear(in_dim, dim_hidden)
         for i in range(1, self.hidden_layers):
             self.midlin.append(nn.Linear(dim_hidden, dim_hidden))
@@ -178,10 +180,10 @@ class TransformerFFN(nn.Module):
 
     def forward(self, input):
         x = self.lin1(input)
-        x = F.relu(x)
+        x = self.activation(x)
         for mlin in self.midlin:
             x = mlin(x)
-            x = F.relu(x)
+            x = self.activation(x)
         x = self.lin2(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
         return x
@@ -199,6 +201,7 @@ class TransformerModel(nn.Module):
         with_output,
         use_prior_embeddings,
         positional_embeddings,
+        activation="silu",
     ):
         """
         Transformer model (encoder or decoder).
@@ -211,6 +214,7 @@ class TransformerModel(nn.Module):
         self.is_decoder = not is_encoder
         self.with_output = with_output
         self.use_cross_attention = params.use_cross_attention
+        self.activation = activation
 
         self.apex = params.nvidia_apex
 
@@ -305,6 +309,7 @@ class TransformerModel(nn.Module):
                     self.dim,
                     self.n_hidden_layers,
                     dropout=self.dropout,
+                    activation = self.activation,
                 )
             )
             self.layer_norm2.append(nn.LayerNorm(self.dim, eps=1e-12))

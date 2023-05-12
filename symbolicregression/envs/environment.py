@@ -46,6 +46,7 @@ SPECIAL_WORDS = [
     "</POINTS>",
     "<INPUT_PAD>",
     "<OUTPUT_PAD>",
+    "<MASK>",
     "<PAD>",
     "(",
     ")",

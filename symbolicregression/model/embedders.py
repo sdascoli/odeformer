@@ -71,6 +71,16 @@ class LinearPointEmbedder(Embedder):
         self.fc = nn.Linear(hidden_size, self.output_dim)
         self.max_seq_len = self.params.max_points
 
+    def forward(self, sequences: List[Sequence], return_before_embed=False) -> Tuple[torch.Tensor, torch.Tensor]:
+        sequences = self.encode(sequences)
+        sequences, sequences_len = self.batch(sequences)
+        sequences, sequences_len = to_cuda(sequences, sequences_len, use_cpu=self.fc.weight.device.type=="cpu")
+        if return_before_embed:
+            return sequences, sequences_len
+        sequences_embeddings = self.embed(sequences)
+        sequences_embeddings = self.compress(sequences_embeddings)
+        return sequences_embeddings, sequences_len
+
     def compress(
         self, sequences_embeddings: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -83,16 +93,8 @@ class LinearPointEmbedder(Embedder):
         for layer in self.hidden_layers: sequences_embeddings = self.activation_fn(layer(sequences_embeddings))
         sequences_embeddings = self.fc(sequences_embeddings)
         return sequences_embeddings
-
-    def forward(self, sequences: List[Sequence]) -> Tuple[torch.Tensor, torch.Tensor]:
-        sequences = self.encode(sequences)
-        sequences, sequences_len = self.batch(sequences)
-        sequences, sequences_len = to_cuda(sequences, sequences_len, use_cpu=self.fc.weight.device.type=="cpu")
-        sequences_embeddings = self.embed(sequences)
-        sequences_embeddings = self.compress(sequences_embeddings)
-        return sequences_embeddings, sequences_len
-
-    def encode(self, sequences: List[Sequence]) -> List[torch.Tensor]:
+    
+    def encode(self, sequences: List[Sequence], pairs=True) -> List[torch.Tensor]:
         res = []
         for seq in sequences:
             seq_toks = []
@@ -103,13 +105,6 @@ class LinearPointEmbedder(Embedder):
                 output_dim = int(len(y_toks) / (2 + self.params.mantissa_len))
                 x_toks = [
                     *x_toks,
-                    # *[
-                    #     "<INPUT_PAD>"
-                    #     for _ in range(
-                    #         (self.params.max_dimension - input_dim)
-                    #         * self.float_scalar_descriptor_len
-                    #     )
-                    # ],
                 ]
                 y_toks = [
                     *y_toks,

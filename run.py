@@ -29,7 +29,8 @@ extra_args = {
     }
 
 grid = {
-    "fixed_init_scale":[True,False],
+    #"fixed_init_scale":[True,False],
+    "masked_input":[0.3]
     # "ode_integrator": ["odeint","solve_ivp"],
     # "max_dimension":[2,4]
     #"use_cross_attention":[True,False],

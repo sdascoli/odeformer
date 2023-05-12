@@ -60,7 +60,7 @@ def main(params):
     # evaluation
     if params.eval_only:
         if params.eval_in_domain:
-            scores = evaluator.evaluate_in_domain("functions",save=save,)
+            scores = evaluator.evaluate_in_domain("functions")
             logger.info("__log__:%s" % json.dumps(scores))
 
         if params.eval_on_pmlb:
