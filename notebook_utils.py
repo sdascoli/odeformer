@@ -43,6 +43,8 @@ from symbolicregression.envs.generators import integrate_ode
 from symbolicregression.envs.utils import *
 from evaluate import Evaluator
 
+user = os.getlogin()
+
 def get_most_free_gpu():
     output = subprocess.check_output("nvidia-smi --query-gpu=memory.free --format=csv,nounits,noheader", shell=True)
     free_memory = [int(x) for x in output.decode().strip().split('\n')]
