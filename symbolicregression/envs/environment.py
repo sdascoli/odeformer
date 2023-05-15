@@ -261,8 +261,9 @@ class FunctionEnvironment(object):
             constants_mask = constants_mask.to(torch.int) * unfinished_sents
             constants_mask = constants_mask.to(torch.bool)
         if not constants_mask.any():
+            #print(f"NO : topk_decode_two_hot: topk_ids = {topk_idx}")
             return topk_idx, constants_mask
-        
+        #print(f"YES: topk_decode_two_hot: topk_ids = {topk_idx}")
         if apply_softmax:
             probs = torch.nn.functional.softmax(
                 logits[constants_mask, id_offset:],
@@ -273,7 +274,7 @@ class FunctionEnvironment(object):
         
         neg_infs = torch.ones((probs.shape[0], 1), device=logits.device).fill_(-torch.inf)
         probs = torch.cat([neg_infs, probs, neg_infs], dim=1)
-        topk_idx += 1 # compensate for the prepended -inf
+        topk_idx[constants_mask] += 1 # compensate for the prepended -inf
         # indices
         left_neighbor = (topk_idx[constants_mask]-1).reshape(-1,1)-id_offset
         selected = (topk_idx[constants_mask]).reshape(-1,1)-id_offset
@@ -290,6 +291,9 @@ class FunctionEnvironment(object):
         # value
         selected_value = selected + self.equation_encoder.constant_encoder.min
         neighbor_value = best_neighbor + self.equation_encoder.constant_encoder.min
+        # un-compensate for the prepended -inf
+        selected_value -= 1
+        neighbor_value -= 1
         value = torch.squeeze(selected_value * selected_prob + neighbor_value * neighbor_prob).to(torch.double)
         id_value = value + id_offset - self.equation_encoder.constant_encoder.min
         
@@ -314,6 +318,8 @@ class FunctionEnvironment(object):
         
         topk_idx = topk_idx.to(id_value.dtype)
         topk_idx[constants_mask] = id_value
+        
+        #print(f"topk_decode_two_hot: topk_ids = {topk_idx}")
         return topk_idx, constants_mask
 
     def word_to_infix(self, words, is_float=True, str_array=True):
