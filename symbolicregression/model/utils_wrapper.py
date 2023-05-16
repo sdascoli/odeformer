@@ -52,6 +52,8 @@ class Scaler(ABC):
 
     def rescale_function(self, env, tree, a_t, b_t, scale):
         nodes = tree.prefix().split("|")
+        if len(nodes)>len(scale): 
+            return tree
         for dim, node in enumerate(nodes):
             nodes[dim] = f"mul,{1/scale[dim]},"+nodes[dim].lstrip(',').rstrip(',')
         prefix = ",|,".join(nodes).split(",")

@@ -167,7 +167,7 @@ class Trainer(object):
         self.metrics = []
         metrics = [m for m in params.validation_metrics.split(",") if m != ""]
         for m in metrics:
-            m = (m, False) if m[0] == "_" else (m, True)
+            m = (m, True) if 'r2' in m else (m, False)
             self.metrics.append(m)
         self.best_metrics = {
             metric: (-np.infty if biggest else np.infty)
@@ -580,31 +580,24 @@ class Trainer(object):
         ):
             self.save_checkpoint("periodic-%i" % self.epoch)
 
-    def save_best_model(self, scores, prefix=None, suffix=None):
+    def save_best_model(self, scores, metric="r2_zero", prefix=None, suffix=None):
         """
         Save best models according to given validation metrics.
         """
         if not self.params.is_master:
             return
-        for metric, biggest in self.metrics:
-            _metric = metric
-            if prefix is not None:
-                _metric = prefix + "_" + _metric
-            if suffix is not None:
-                _metric = _metric + "_" + suffix
-            if _metric not in scores:
-                logger.warning('Metric "%s" not found in scores!' % _metric)
-                continue
-            factor = 1 if biggest else -1
+        
+        if "r2" in metric: 
+            factor = 1
+        else:
+            factor = -1
 
-            if metric in self.best_metrics:
-                best_so_far = factor * self.best_metrics[metric]
-            else:
-                best_so_far = -np.inf
-            if factor * scores[_metric] > best_so_far:
-                self.best_metrics[metric] = scores[_metric]
-                logger.info("New best score for %s: %.6f" % (metric, scores[_metric]))
-                self.save_checkpoint("best-%s" % metric)
+        best_so_far = factor * self.best_metrics[metric]
+
+        if factor * scores[metric] > best_so_far:
+            self.best_metrics[metric] = scores[metric]
+            logger.info("New best score for %s: %.6f" % (metric, scores[metric]))
+            self.save_checkpoint("best" % metric)
 
     def end_epoch(self, scores):
         """

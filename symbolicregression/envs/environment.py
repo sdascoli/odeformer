@@ -376,9 +376,10 @@ class FunctionEnvironment(object):
             id_offset = max(self.equation_word2id.values())
             idx_to_words = []
             for term_i, term in enumerate(lst):
-                if is_two_hot is not None and is_two_hot[term_i]:
-                    # two-hot constants: we need to undo the offset introduced in word_to_idx()
-                    idx_to_words.append(f"{term - id_offset + self.equation_encoder.constant_encoder.min:+}")
+                if self.params.use_two_hot:
+                    if is_two_hot[term_i]:
+                        # two-hot constants: we need to undo the offset introduced in word_to_idx()
+                        idx_to_words.append(f"{term - id_offset + self.equation_encoder.constant_encoder.min:+}")
                 else:
                     idx_to_words.append(self.equation_id2word[int(term)])
                     

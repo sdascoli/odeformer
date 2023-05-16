@@ -498,8 +498,10 @@ class TransformerModel(nn.Module):
         assert src_enc.size(0) == bs
 
         # generated sentences
-        generated = src_len.new(max_len, bs)  # upcoming output
-        generated = src_len.new(max_len, bs).to(torch.double)  # upcoming output
+        if self.use_two_hot:
+            generated = src_len.new(max_len, bs).to(self.dtype)  # upcoming output
+        else:
+            generated = src_len.new(max_len, bs)  # upcoming output
         generated.fill_(self.pad_index)  # fill upcoming ouput with <PAD>
         generated[0].fill_(self.eos_index)  # we use <EOS> for <BOS> everywhere
 
@@ -611,7 +613,7 @@ class TransformerModel(nn.Module):
         generated = src_len.new(max_len, bs * beam_size)  # upcoming output
         generated.fill_(self.pad_index)  # fill upcoming ouput with <PAD>
         generated[0].fill_(self.eos_index)  # we use <EOS> for <BOS> everywhere
-        generated = generated.to(torch.double)
+        generated = generated.to(self.dtype)
 
         # generated hypotheses
         generated_hyps = [

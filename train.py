@@ -109,7 +109,7 @@ def main(params):
             osc_scores = evaluator.evaluate_on_oscillators()
             logger.info("__oscillators__:%s" % json.dumps(osc_scores))
 
-        trainer.save_best_model(scores, prefix="functions", suffix="fit")
+        #trainer.save_best_model(scores, prefix="functions")
         # end of epoch
         trainer.end_epoch(scores)
 
