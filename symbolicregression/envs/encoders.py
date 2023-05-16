@@ -59,7 +59,7 @@ class ConstantEncoder(Encoder):
             constant = sign * (mantissa * 10 ** exponent)
             self.min = -constant
             self.max = constant
-            assert params.min_int >= self.min, \
+            assert (-params.max_int) >= self.min, \
                 f"params.min_int (= {params.min_int}) is smaller than supported constant range (self.min = {self.min})."
             assert params.max_int <= self.max, \
                 f"params.max_int (= {params.max_int}) is larger than supported constant range (self.max = {self.max})."
