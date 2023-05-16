@@ -93,9 +93,6 @@ class FunctionEnvironment(object):
         self.equation_id2word = {i: s for i, s in enumerate(self.equation_words)}
         self.float_word2id = {s: i for i, s in self.float_id2word.items()}
         self.equation_word2id = {s: i for i, s in self.equation_id2word.items()}
-        # NOTE: we never want to use these constant ids, we are only interested 
-        # in knowing the number of words (=support). 
-        # TODO: refactor so that we only need to save the len instead of a dict ?
         if params.use_two_hot:
             _offset = max(self.equation_word2id.values()) + 1
             self.constant_id2word = {
@@ -154,7 +151,7 @@ class FunctionEnvironment(object):
             sent = torch.LongTensor(lengths.max().item(), lengths.size(0)).fill_(
                 self.float_word2id["<PAD>"]
             )
-        sent[0] = self.equation_word2id["<EOS>"] # TODO: shouldnt this be a beginning-of-seq token?
+        sent[0] = self.equation_word2id["<EOS>"]
         for i, eq in enumerate(equations):
             sent[1 : lengths[i] - 1, i].copy_(eq)
             sent[lengths[i] - 1, i] = self.equation_word2id["<EOS>"]
@@ -523,7 +520,6 @@ class FunctionEnvironment(object):
 
         if self.equation_encoder.constant_encoder is not None:
             def is_number(s):
-                # TODO: move to some utils file?
                 try:
                     float(s)
                     return True
