@@ -6,6 +6,7 @@
 
 from abc import ABC, abstractmethod
 from typing import List
+from argparse import Namespace
 import numpy as np
 import math
 from .generators import Node, NodeList
@@ -40,23 +41,41 @@ class GeneralEncoder:
 
 class ConstantEncoder(Encoder):
     
-    def __init__(self, params):
-        # TODO: this needs to be consistent with the sign-mantissa-exponent 
-        # way of specifying the float range as well as with params.min_int / max_int
-        # TODO: do we want / need to remove int tokens from the equation encoder vocabulary?
-        self.min = -100
-        self.max = 100
-        # self.symbols is used to determine the required number of idcs for the embedding layer
+    # TODO: do we want / need to remove int tokens from the equation encoder vocabulary?
+    
+    def __init__(self, params: Namespace, force_min_max: List[int]=None):
+        
+        if force_min_max is not None:
+            assert force_min_max[0] < force_min_max[1], \
+                f"`force_min_max[0]` should be smaller than `force_min_max[1]` but `force_min_max` is {force_min_max}"
+            self.min = force_min_max[0]
+            self.max = force_min_max[1]
+        else:
+            # See RandomFunctions.generate_float(...) in generators.py
+            sign = 1
+            mantissa = float(10 ** self.params.float_precision)
+            max_power = (
+                self.params.max_exponent_prefactor - (self.params.float_precision + 1) // 2
+            )
+            exponent = max_power
+            constant = sign * (mantissa * 10 ** exponent)
+            self.min = -constant
+            self.max = constant
+            assert params.min_int >= self.min, \
+                f"params.min_int (= {params.min_int}) is smaller than supported constant range (self.min = {self.min})."
+            assert params.max_int <= self.max, \
+                f"params.max_int (= {params.max_int}) is larger than supported constant range (self.max = {self.max})."
+        # required for compatibility
         self.symbols = [f"c{i}" for i in range(self.min, self.max+1)]
 
-    def encode(self, values):
+    def encode(self, values: Union[List, np.ndarray, int, float]) -> List[str]:
         if isinstance(values, (int, float)): # TODO: Are there other valid numeric types?
             values = [values]
-        assert isinstance(values, np.ndarray) or isinstance(values, List), type(values)
+        assert isinstance(values, List) or isinstance(values, np.ndarray), type(values)
         assert len(values) == 1, len(values)
         return [f"{values[0]:+}"]
     
-    def decode(self, lst):
+    def decode(self, lst: Union[List, np.ndarray, str, float, int]) -> Union[List, np.ndarray]:
         if isinstance(lst, str) or isinstance(lst, float) or isinstance(int):
             lst = [lst]
         assert isinstance(lst, List) or isinstance(lst, np.ndarray), type(lst)
