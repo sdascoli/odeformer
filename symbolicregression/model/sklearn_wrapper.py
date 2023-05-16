@@ -155,8 +155,9 @@ class SymbolicTransformerRegressor(BaseEstimator):
                 score = -np.infty if descending else np.infty
             scores.append(score)
         sorted_idx = np.argsort(scores)  
-        if descending: sorted_idx=list(reversed(sorted_idx))
+        if descending: sorted_idx= reversed(sorted_idx)
         candidates = [candidates[i] for i in sorted_idx]
+
         return candidates
 
     @torch.no_grad()

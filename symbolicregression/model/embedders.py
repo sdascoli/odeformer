@@ -61,7 +61,7 @@ class LinearPointEmbedder(Embedder):
         self.total_dimension = 1 + self.params.max_dimension
         self.float_vector_descriptor_len = self.float_scalar_descriptor_len * self.total_dimension
 
-        self.activation_fn = F.relu
+        self.activation_fn = getattr(F, params.activation)
         size = self.float_vector_descriptor_len*self.input_dim
         hidden_size = size * self.params.emb_expansion_factor
         self.hidden_layers = nn.ModuleList()

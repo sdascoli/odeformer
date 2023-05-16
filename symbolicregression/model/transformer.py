@@ -201,7 +201,6 @@ class TransformerModel(nn.Module):
         with_output,
         use_prior_embeddings,
         positional_embeddings,
-        activation="silu",
     ):
         """
         Transformer model (encoder or decoder).
@@ -214,7 +213,7 @@ class TransformerModel(nn.Module):
         self.is_decoder = not is_encoder
         self.with_output = with_output
         self.use_cross_attention = params.use_cross_attention
-        self.activation = activation
+        self.activation = params.activation
 
         self.apex = params.nvidia_apex
 

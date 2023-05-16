@@ -41,6 +41,12 @@ def get_parser():
         help="[TNet, LinearPoint, Flat, AttentionPoint] How to pre-process sequences before passing to a transformer.",
     )
     parser.add_argument(
+        "--activation",
+        type=str,
+        default="silu",
+        help="Activation function [silu,relu,gelu]",
+    )
+    parser.add_argument(
         "--masked_input",
         type=float,
         default=0,
