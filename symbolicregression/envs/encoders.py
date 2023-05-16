@@ -56,7 +56,7 @@ class ConstantEncoder(Encoder):
             mantissa = float(10 ** params.float_precision)
             max_power = (params.max_exponent_prefactor - (params.float_precision + 1) // 2)
             exponent = max_power
-            constant = sign * (mantissa * 10 ** exponent)
+            constant = int(np.ceil(sign * (mantissa * 10 ** exponent)))
             self.min = -constant
             self.max = constant
             assert (-params.max_int) >= self.min, \
