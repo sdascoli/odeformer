@@ -5,11 +5,12 @@
 # LICENSE file in the root directory of this source tree.
 
 from abc import ABC, abstractmethod
+from typing import List, Union
+from argparse import Namespace
 import numpy as np
 import math
 from .generators import Node, NodeList
 from .utils import *
-
 
 class Encoder(ABC):
     """
@@ -31,11 +32,52 @@ class Encoder(ABC):
 
 class GeneralEncoder:
     def __init__(self, params, symbols, all_operators):
+        self.constant_encoder = ConstantEncoder(params) if params.use_two_hot else None
         self.float_encoder = FloatSequences(params)
         self.equation_encoder = Equation(
-            params, symbols, self.float_encoder, all_operators
+            params, symbols, self.float_encoder, all_operators, self.constant_encoder
         )
 
+class ConstantEncoder(Encoder):
+    
+    def __init__(self, params: Namespace, force_min_max: List[int]=None):
+            
+        # TODO: do we want / need to remove int tokens from the equation encoder vocabulary?
+        
+        if force_min_max is not None:
+            assert force_min_max[0] < force_min_max[1], \
+                f"`force_min_max[0]` should be smaller than `force_min_max[1]` but `force_min_max` is {force_min_max}"
+            self.min = force_min_max[0]
+            self.max = force_min_max[1]
+        else:
+            # See RandomFunctions.generate_float(...) in generators.py
+            sign = 1
+            mantissa = float(10 ** params.float_precision)
+            max_power = (params.max_exponent_prefactor - (params.float_precision + 1) // 2)
+            exponent = max_power
+            constant = int(np.ceil(sign * (mantissa * 10 ** exponent)))
+            self.min = -constant
+            self.max = constant
+            assert (-params.max_int) >= self.min, \
+                f"params.min_int (= {params.min_int}) is smaller than supported constant range (self.min = {self.min})."
+            assert params.max_int <= self.max, \
+                f"params.max_int (= {params.max_int}) is larger than supported constant range (self.max = {self.max})."
+        # required for compatibility
+        self.symbols = [f"c{i}" for i in range(self.min, self.max+1)]
+
+    def encode(self, values: Union[List, np.ndarray, int, float]) -> List[str]:
+        if isinstance(values, (int, float)): # TODO: Are there other valid numeric types?
+            values = [values]
+        assert isinstance(values, List) or isinstance(values, np.ndarray), type(values)
+        assert len(values) == 1, len(values)
+        return [f"{values[0]:+}"]
+    
+    def decode(self, lst: Union[List, np.ndarray, str, float, int]) -> Union[List, np.ndarray]:
+        if isinstance(lst, str) or isinstance(lst, float) or isinstance(int):
+            lst = [lst]
+        assert isinstance(lst, List) or isinstance(lst, np.ndarray), type(lst)
+        assert len(lst) == 1, lst
+        return lst
 
 class FloatSequences(Encoder):
     def __init__(self, params):
@@ -86,6 +128,7 @@ class FloatSequences(Encoder):
         Parse a list that starts with a float.
         Return the float value, and the position it ends in the list.
         """
+        # TODO: does it really return the position it ends in the list?
         if len(lst) == 0:
             return None
         seq = []
@@ -109,7 +152,7 @@ class FloatSequences(Encoder):
 
 
 class Equation(Encoder):
-    def __init__(self, params, symbols, float_encoder, all_operators):
+    def __init__(self, params, symbols, float_encoder, all_operators, constant_encoder=None):
         super().__init__(params)
         self.params = params
         self.max_int = self.params.max_int
@@ -124,16 +167,20 @@ class Equation(Encoder):
             self.extra_binary_operators = []
         self.float_encoder = float_encoder
         self.all_operators = all_operators
+        self.constant_encoder = constant_encoder
 
     def encode(self, tree):
         res = []
         for elem in tree.prefix().split(","):
             try:
                 val = float(elem)
-                if elem.lstrip("-").isdigit():
-                    res.extend(self.write_int(int(elem)))
+                if self.constant_encoder is not None:
+                    res.extend(self.constant_encoder.encode(val))
                 else:
-                    res.extend(self.float_encoder.encode(np.array([val])))
+                    if elem.lstrip("-").isdigit():
+                        res.extend(self.write_int(int(elem)))
+                    else:
+                        res.extend(self.float_encoder.encode(np.array([val])))
             except ValueError:
                 res.append(elem)
         return res
@@ -160,12 +207,14 @@ class Equation(Encoder):
             val, length = self.parse_int(lst)
             return Node(str(val), self.params), length
         elif lst[0] == "+" or lst[0] == "-":
-            try:
-                val = self.float_encoder.decode(lst[:3])[0]
-            except Exception as e:
-                # print(e, "error in encoding, lst: {}".format(lst))
-                return None, 0
-            return Node(str(val), self.params), 3
+            if self.params.use_two_hot:
+                return Node(str(lst[0]), self.params), 1
+            else:
+                try:
+                    val = self.float_encoder.decode(lst[:3])[0]
+                except Exception as e:
+                    return None, 0
+                return Node(str(val), self.params), 3
         elif (
             lst[0].startswith("CONSTANT") or lst[0] == "y"
         ):  ##added this manually CAREFUL!!

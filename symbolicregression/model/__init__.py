@@ -6,9 +6,10 @@
 #
 
 from logging import getLogger
+from copy import copy
 import os
 import torch
-from .embedders import LinearPointEmbedder
+from .embedders import LinearPointEmbedder, TwoHotEmbedder
 from .transformer import TransformerModel
 from .sklearn_wrapper import SymbolicTransformerRegressor
 from .model_wrapper import ModelWrapper
@@ -47,12 +48,17 @@ def build_modules(env, params):
         use_prior_embeddings=True,
         positional_embeddings=params.enc_positional_embeddings,
     )
+    if params.use_two_hot:
+        dec_id2word = copy(env.equation_id2word)
+        dec_id2word.update(env.constant_id2word)
+    else:
+        dec_id2word = env.equation_id2word
     if params.masked_input:
         modules["encoder"].proj = nn.Linear(params.enc_emb_dim, 3*params.max_dimension*len(env.float_id2word), bias=True) 
 
     modules["decoder"] = TransformerModel(
         params,
-        env.equation_id2word,
+        dec_id2word,
         is_encoder=False,
         with_output=True,
         use_prior_embeddings=False,

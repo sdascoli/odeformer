@@ -4,7 +4,6 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 #
-
 from logging import getLogger
 import math
 import itertools
@@ -13,6 +12,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from symbolicregression.model.embedders import TwoHotEmbedder
 
 N_MAX_POSITIONS = 4096  # maximum input sequence length
 
@@ -20,8 +20,11 @@ N_MAX_POSITIONS = 4096  # maximum input sequence length
 logger = getLogger()
 
 
-def Embedding(num_embeddings, embedding_dim, padding_idx=None):
-    m = nn.Embedding(num_embeddings, embedding_dim, padding_idx=padding_idx)
+def Embedding(num_embeddings, embedding_dim, padding_idx=None, use_two_hot=False):
+    if use_two_hot:
+        m = TwoHotEmbedder(num_embeddings, embedding_dim, padding_idx=padding_idx)
+    else:
+        m = nn.Embedding(num_embeddings, embedding_dim, padding_idx=padding_idx)
     nn.init.normal_(m.weight, mean=0, std=embedding_dim ** -0.5)
     if padding_idx is not None:
         nn.init.constant_(m.weight[padding_idx], 0)
@@ -214,12 +217,18 @@ class TransformerModel(nn.Module):
         self.with_output = with_output
         self.use_cross_attention = params.use_cross_attention
         self.activation = params.activation
-
+        if self.is_decoder:
+            self.use_two_hot = params.use_two_hot
         self.apex = params.nvidia_apex
 
         # dictionary
-
-        self.id2word = id2word
+        # for encoder: env.float_id2word, this only includes float_words
+        # for decoder: 
+        #    - if two-hot: 
+        #            constant_id2word + equation_id2word, which includes equation_words but not float_words
+        #    - else: 
+        #            equation_id2word, which includes equation_words and float_words
+        self.id2word = id2word 
         self.word2id = {s: i for i, s in self.id2word.items()}
         self.eos_index = self.word2id["<EOS>"]
         self.pad_index = self.word2id["<PAD>"]
@@ -264,7 +273,11 @@ class TransformerModel(nn.Module):
         self.use_prior_embeddings = use_prior_embeddings
         if not use_prior_embeddings:
             self.embeddings = Embedding(
-                self.n_words, self.dim, padding_idx=self.pad_index
+                self.n_words, 
+                self.dim, 
+                padding_idx=self.pad_index, 
+                #  only use two-hot in decoder and only if asked for
+                use_two_hot=((not is_encoder) and params.use_two_hot),
             )
         else:
             self.embeddings = None
@@ -465,7 +478,7 @@ class TransformerModel(nn.Module):
         return scores, loss
 
     def generate(
-        self, src_enc, src_len, max_len=200, top_p=1.0, sample_temperature=None, seed=0, average_across_batch=False
+        self, src_enc, src_len, max_len=200, top_p=1.0, sample_temperature=None, seed=0, average_across_batch=False, env=None
     ):
         """
         Decode a sentence given initial start.
@@ -486,6 +499,7 @@ class TransformerModel(nn.Module):
 
         # generated sentences
         generated = src_len.new(max_len, bs)  # upcoming output
+        generated = src_len.new(max_len, bs).to(torch.double)  # upcoming output
         generated.fill_(self.pad_index)  # fill upcoming ouput with <PAD>
         generated[0].fill_(self.eos_index)  # we use <EOS> for <BOS> everywhere
 
@@ -499,6 +513,8 @@ class TransformerModel(nn.Module):
         cur_len = 1
         gen_len = src_len.clone().fill_(1)
         unfinished_sents = src_len.clone().fill_(1)
+
+        two_hot_constant_masks = [torch.zeros_like(generated[0], dtype=bool)]
 
         # cache compute states
         self.cache = {"slen": 0}
@@ -530,6 +546,12 @@ class TransformerModel(nn.Module):
                 ).squeeze(1)
             assert next_words.size() == (bs,)
 
+            if self.use_two_hot:
+                next_words, two_hot_constant_mask = env.topk_decode_two_hot(
+                    logits=scores, topk_idx=next_words, unfinished_sents=unfinished_sents,
+                )
+                two_hot_constant_masks.append(two_hot_constant_mask)
+
             # update generations / lengths / finished sentences / current length
             generated[cur_len] = next_words * unfinished_sents + self.pad_index * (
                 1 - unfinished_sents
@@ -548,10 +570,13 @@ class TransformerModel(nn.Module):
         # sanity check
         assert (generated == self.eos_index).sum() == 2 * bs
         generated = generated.unsqueeze(-1).view(generated.shape[0], bs)
-        return generated[:cur_len], gen_len
+        # mask of shape (seq_len, bs) which tells which elements of the generated sequences 
+        # are constants which have been two-hot decoded
+        two_hot_constant_masks = torch.stack(two_hot_constant_masks)
+        return generated[:cur_len], gen_len, two_hot_constant_masks
 
     def generate_beam(
-        self, src_enc, src_len, beam_size, length_penalty, early_stopping, max_len=200, average_across_batch=False
+        self, src_enc, src_len, beam_size, length_penalty, early_stopping, max_len=200, average_across_batch=False, env=None
     ):
         """
         Decode a sentence given initial start.
@@ -586,6 +611,7 @@ class TransformerModel(nn.Module):
         generated = src_len.new(max_len, bs * beam_size)  # upcoming output
         generated.fill_(self.pad_index)  # fill upcoming ouput with <PAD>
         generated[0].fill_(self.eos_index)  # we use <EOS> for <BOS> everywhere
+        generated = generated.to(torch.double)
 
         # generated hypotheses
         generated_hyps = [
@@ -647,9 +673,14 @@ class TransformerModel(nn.Module):
             _scores = _scores.view(bs, beam_size * n_words)  # (bs, beam_size * n_words)
 
             next_scores, next_words = torch.topk(
-                _scores, 2 * beam_size, dim=1, largest=True, sorted=True
+                input=_scores, k=2 * beam_size, dim=1, largest=True, sorted=True
             )
             assert next_scores.size() == next_words.size() == (bs, 2 * beam_size)
+
+            if self.use_two_hot:
+                raise NotImplementedError()
+                # we cant just decode to float here as, see beam_id and word_id which are obtained by div and modulo
+                # next_words = env.topk_decode_two_hot(logits=scores, topk_idx=next_words)
 
             # next batch beam content
             # list of (bs * beam_size) tuple(next hypothesis score, next word, current position in the batch)

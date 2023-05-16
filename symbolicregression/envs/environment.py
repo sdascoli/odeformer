@@ -13,7 +13,8 @@ import sys
 import copy
 import json
 import operator
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
+from typing_extensions import Literal
 from collections import deque, defaultdict
 import time
 import traceback
@@ -83,8 +84,11 @@ class FunctionEnvironment(object):
         self.float_words = self.generator.float_words
         self.equation_encoder = self.generator.equation_encoder
         self.equation_words = self.generator.equation_words
-        self.equation_words += self.float_words
-
+        if params.use_two_hot:
+            self.constant_words = self.equation_encoder.constant_encoder.symbols
+        else:
+            self.equation_words += self.float_words
+            self.constant_words = None
         self.simplifier = simplifiers.Simplifier(self.generator)
 
         # number of words / indices
@@ -92,6 +96,12 @@ class FunctionEnvironment(object):
         self.equation_id2word = {i: s for i, s in enumerate(self.equation_words)}
         self.float_word2id = {s: i for i, s in self.float_id2word.items()}
         self.equation_word2id = {s: i for i, s in self.equation_id2word.items()}
+        if params.use_two_hot:
+            _offset = max(self.equation_word2id.values()) + 1
+            self.constant_id2word = {
+                i + _offset: s for i, s in enumerate(self.constant_words)
+            }
+            self.constant_word2id = {s: i for i, s in self.constant_id2word.items()}
 
         for ood_unary_op in self.generator.extra_unary_operators:
             self.equation_word2id[ood_unary_op] = self.equation_word2id["OOD_unary_op"]
@@ -138,10 +148,16 @@ class FunctionEnvironment(object):
         a tensor of size (slen, n) where slen is the length of the longest
         sentence, and a vector lengths containing the length of each sentence.
         """
+        
         lengths = torch.LongTensor([2 + len(eq) for eq in equations])
-        sent = torch.LongTensor(lengths.max().item(), lengths.size(0)).fill_(
-            self.float_word2id["<PAD>"]
-        )
+        if self.equation_encoder.constant_encoder is not None:
+            sent = torch.DoubleTensor(lengths.max().item(), lengths.size(0)).fill_(
+                self.float_word2id["<PAD>"]
+            )
+        else:
+            sent = torch.LongTensor(lengths.max().item(), lengths.size(0)).fill_(
+                self.float_word2id["<PAD>"]
+            )
         sent[0] = self.equation_word2id["<EOS>"]
         for i, eq in enumerate(equations):
             sent[1 : lengths[i] - 1, i].copy_(eq)
@@ -149,6 +165,11 @@ class FunctionEnvironment(object):
         return sent, lengths
 
     def word_to_idx(self, words, float_input=True):
+        """
+        Maps from actual words (e.g. 'add' or '1.43') to ids. Ids can be floats if we use two-hot encoding.
+        `words`: List[List[str]], e.g. from samples["tree_encoded"]
+        """
+        
         if float_input:
             return [
                 [
@@ -157,10 +178,153 @@ class FunctionEnvironment(object):
                 ]
                 for seq in words
             ]
+        elif self.equation_encoder.constant_encoder is not None:
+            id_offset = max(self.equation_word2id.values())
+            output = []
+            for eq in words:
+                lst = []
+                for w in eq:
+                    try:
+                        # NOTE: Assuming that encoder embedding layer and decoder embedding are NOT shared
+                        # otherwise, we need to ensure that indices of float encoder and constant encoder do not overlap
+                        lst.append(float(w) + id_offset - self.equation_encoder.constant_encoder.min)
+                        # in the line above, float(w) raises an error for non-constant words
+                    except ValueError:
+                        lst.append(self.equation_word2id[w])
+                        
+                output.append(torch.DoubleTensor(lst))
+            return output
         else:
             return [
                 torch.LongTensor([self.equation_word2id[w] for w in eq]) for eq in words
             ]
+
+    def ids_to_two_hot(self, ids: torch.Tensor, support_size: int):
+        """
+        Take a list of int or float 'ids' and convert them to 2-hot representation. 
+        For int ids, this is equivalent to 1-hot representation.
+        """
+        id_left = ids.floor()
+        id_right = id_left + 1
+        prob_left = 1 - (ids - id_left)
+        prob_right = 1 - prob_left    
+        logits = torch.zeros(ids.shape[0], ids.shape[1], support_size).type_as(ids)
+        return logits.scatter_(
+            dim=2, 
+            index=id_left.long().unsqueeze(-1), 
+            src=prob_left.unsqueeze(-1)
+        ).scatter_(
+            dim=2, 
+            index=id_right.long().unsqueeze(-1), 
+            src=prob_right.unsqueeze(-1)
+        ).squeeze(1)
+        
+    def topk_decode_two_hot(
+        self,
+        logits: torch.Tensor, 
+        topk_idx: torch.Tensor, 
+        unfinished_sents: Union[None, torch.Tensor],
+        apply_softmax: bool = True
+    ):
+        """
+        Take logits and topk indices, whenever a topk index refers to the indices that represent two-hot encoded 
+        constants, decode the selected constant. The decoding process works as follows:
+        1. Apply softmax across all logits that represent constants.
+        2. Among the two top-k neighboring indices, select the one whose corresponding probability is larger.
+        3. Decode as topk * prob_{topk} + neighbor * prob_{neighbor}.
+        This function is necessary as topk returns a single index but we need two indices to represent two-hot encoded
+        constants. This problem is solved by allowing for "float" ids, e.g. we combine the two indices that represent a
+        constant into a single float. The float is still in "id-space", i.e., the returned float ids do not directly 
+        correspond to the encoded float but to the float plus an offset that accounts for the remaining non-two-hot 
+        tokens (e.g. tokens for operators and variables).
+        
+        `logits`: 
+            Tensor, (bs, vocab size). Batch of logits.
+        `topk_idx`: 
+            Tensor, (bs,). Batch of selected indices for decoding.
+        `unfinished_sents`:
+            Tensor, (bs, ). Batch of indices that indicate batch elements that are part of a not-yet-finished sequence.
+            If a sequence is already finished, we do not have to do any constant decoding, so this is an opportunity for
+            a short-cut.
+
+        Returns:
+        `topk_idx`:
+            Tensor, (bs,).
+            The original tensor with topk indices that correspond to two-hot constants converted to float indices.
+        `constants_mask`:
+            Tensor, (bs,).
+            A boolean tensor of same shape as `top_idx` that indicates if the corresponding element in `top_idx` is a 
+            decoded constant.
+        
+        Caution: topk_idx.dtype changes in place from int64 to torch.float32 or torch.double.
+        """    
+        
+        id_offset = max(self.equation_word2id.values()) + 1
+        constants_mask = topk_idx.squeeze() >= id_offset
+        if constants_mask is not None:
+            constants_mask = constants_mask.to(torch.int) * unfinished_sents
+            constants_mask = constants_mask.to(torch.bool)
+        if not constants_mask.any():
+            #print(f"NO : topk_decode_two_hot: topk_ids = {topk_idx}")
+            return topk_idx, constants_mask
+        #print(f"YES: topk_decode_two_hot: topk_ids = {topk_idx}")
+        if apply_softmax:
+            probs = torch.nn.functional.softmax(
+                logits[constants_mask, id_offset:],
+                dim=1
+            )
+        else:
+            probs = logits[constants_mask, :]
+        
+        neg_infs = torch.ones((probs.shape[0], 1), device=logits.device).fill_(-torch.inf)
+        probs = torch.cat([neg_infs, probs, neg_infs], dim=1)
+        topk_idx[constants_mask] += 1 # compensate for the prepended -inf
+        # indices
+        left_neighbor = (topk_idx[constants_mask]-1).reshape(-1,1)-id_offset
+        selected = (topk_idx[constants_mask]).reshape(-1,1)-id_offset
+        right_neighbor = (topk_idx[constants_mask]+1).reshape(-1,1)-id_offset
+        # probs
+        left_prob = torch.gather(input=probs, dim=1, index=left_neighbor)
+        selected_prob = torch.gather(input=probs, dim=1, index=selected)
+        right_prob = torch.gather(input=probs, dim=1, index=right_neighbor)
+        # choice
+        take_left = left_prob > right_prob
+        take_right = ~take_left
+        best_neighbor = left_neighbor * take_left + right_neighbor * take_right
+        neighbor_prob = torch.gather(input=probs, dim=1, index=best_neighbor)
+        # value
+        selected_value = selected + self.equation_encoder.constant_encoder.min
+        neighbor_value = best_neighbor + self.equation_encoder.constant_encoder.min
+        # un-compensate for the prepended -inf
+        selected_value -= 1
+        neighbor_value -= 1
+        value = torch.squeeze(selected_value * selected_prob + neighbor_value * neighbor_prob).to(torch.double)
+        id_value = value + id_offset - self.equation_encoder.constant_encoder.min
+        
+        #print("selected", selected)
+        #print("selected_value", selected_value)
+        #print("selected_prob", selected_prob)
+        
+        #print("best_neighbor", best_neighbor)
+        #print("neighbor_value", neighbor_value)
+        #print("neighbor_prob", neighbor_prob)
+        
+        #print("id_offset", id_offset)
+        #print("self.equation_encoder.constant_encoder.min", self.equation_encoder.constant_encoder.min)
+        
+        # import matplotlib.pyplot as plt
+        # try:
+        #     plt.plot(probs.T, ".")
+        # except TypeError:
+        #     plt.plot(probs.cpu().numpy().T, ".")
+        # plt.title(value.detach().cpu().numpy().round(3))
+        # plt.show()
+        
+        topk_idx = topk_idx.to(id_value.dtype)
+        topk_idx[constants_mask] = id_value
+        
+        #print(f"topk_decode_two_hot: topk_ids = {topk_idx}")
+        return topk_idx, constants_mask
 
     def word_to_infix(self, words, is_float=True, str_array=True):
         if is_float:
@@ -174,6 +338,7 @@ class FunctionEnvironment(object):
         else:
             m = self.equation_encoder.decode(words)
             if m is None:
+                # print("word_to_infix() is None", words, "\n")
                 return None
             if str_array:
                 return m.infix()
@@ -196,11 +361,27 @@ class FunctionEnvironment(object):
         )
         return tree_with_constants
 
-    def idx_to_infix(self, lst, is_float=True, str_array=True):
+    def idx_to_infix(
+        self, 
+        lst, 
+        is_float=True, 
+        str_array=True, 
+        is_two_hot: Union[None, torch.BoolTensor]=None,
+    ):
+        
+        # print("idx_to_infix", lst)
         if is_float:
             idx_to_words = [self.float_id2word[int(i)] for i in lst]
         else:
-            idx_to_words = [self.equation_id2word[int(term)] for term in lst]
+            id_offset = max(self.equation_word2id.values())
+            idx_to_words = []
+            for term_i, term in enumerate(lst):
+                if is_two_hot is not None and is_two_hot[term_i]:
+                    # two-hot constants: we need to undo the offset introduced in word_to_idx()
+                    idx_to_words.append(f"{term - id_offset + self.equation_encoder.constant_encoder.min:+}")
+                else:
+                    idx_to_words.append(self.equation_id2word[int(term)])
+                    
         return self.word_to_infix(idx_to_words, is_float, str_array)
 
     def gen_expr(
@@ -298,7 +479,6 @@ class FunctionEnvironment(object):
             dimension=dimension,
             n_points=n_points,
         )
-
         if datapoints is None:
             return {"tree": tree}, ["datapoint generation error"]
 
@@ -327,9 +507,21 @@ class FunctionEnvironment(object):
         skeleton_tree, _ = self.generator.function_to_skeleton(tree)
         skeleton_tree_encoded = self.equation_encoder.encode(skeleton_tree)
 
-        assert all(
-            [x in self.equation_word2id for x in tree_encoded]
-        ), "tree: {}\n encoded: {}".format(tree, tree_encoded)
+        if self.equation_encoder.constant_encoder is not None:
+            def is_number(s):
+                try:
+                    float(s)
+                    return True
+                except ValueError:
+                    return False
+                
+            assert all(
+                [is_number(x) or x in self.equation_word2id for x in tree_encoded]
+            ), "tree: {}\n encoded: {}".format(tree, tree_encoded)
+        else:
+            assert all(
+                [x in self.equation_word2id for x in tree_encoded]
+            ), "tree: {}\n encoded: {}".format(tree, tree_encoded)
 
         info = {
             "n_points":       n_points,

@@ -47,6 +47,12 @@ def get_parser():
         help="Activation function [silu,relu,gelu]",
     )
     parser.add_argument(
+        "--use_two_hot",
+        type=bool_flag,
+        default=True,
+        help="Whether to use two hot embeddings",
+    )
+    parser.add_argument(
         "--masked_input",
         type=float,
         default=0,

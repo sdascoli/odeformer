@@ -76,7 +76,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                 else:
                     try:
                         dimension = predicted[i].shape[1]
-                        snmse = sum([mean_squared_error(true[i][:,dim], predicted[i][:,dim])/(np.var(true[i][:,dim])+1.e-10) for dim in range(dimension)])
+                        snmse = sum([np.sqrt(mean_squared_error(true[i][:,dim], predicted[i][:,dim])/(np.var(true[i][:,dim])+1.e-10)) for dim in range(dimension)])
                     except: 
                         snmse = np.nan
                     results[metric].append(snmse)

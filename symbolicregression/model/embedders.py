@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 #
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 from abc import ABC, abstractmethod
 import torch
 import torch.nn as nn
@@ -139,3 +139,30 @@ class LinearPointEmbedder(Embedder):
             lengths[i] = len(seq)
         assert lengths.max() <= self.max_seq_len, "issue with lengths after batching"
         return lengths
+    
+class TwoHotEmbedder(nn.EmbeddingBag):
+    
+    def __init__(self, num_embeddings: int, embedding_dim: int, padding_idx: Optional[int] = None):
+        super().__init__(
+            num_embeddings=num_embeddings, 
+            embedding_dim=embedding_dim,
+            padding_idx=padding_idx,
+            mode="sum"
+        )
+    
+    def forward(self, idx: torch.Tensor) -> torch.Tensor:
+        # inp has shape = (seq_len, batch size)
+        shape_output = list(idx.shape)
+        shape_output.append(self.embedding_dim)
+        # for the two-hot representation we need to specify:
+        # - the neighboring bins that support the distribution (=support_idcs)
+        # - the probability mass that is assigned to each of the bins (=support_weights)
+        support_idcs = torch.stack((idx.reshape(-1), idx.reshape(-1))).T # shape=(seq_len * batch size, 2)
+        # the right bins contains the decimal value, the left bin contains 1-decimal value
+        support_weights = support_idcs % 1
+        support_weights[:, 0] = 1 - support_weights[:, 1]
+        support_weights = support_weights.to(torch.float32) # TODO: which dtype to use? needs to be consistent with self.weight
+        support_idcs[:, 0] = torch.floor(support_idcs[:, 0])
+        support_idcs[:, 1] = torch.ceil(support_idcs[:, 1])
+        support_idcs= support_idcs.to(torch.int64)
+        return super().forward(input=support_idcs, per_sample_weights=support_weights).reshape(shape_output)

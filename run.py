@@ -9,7 +9,7 @@ import shutil
 from distutils import dir_util
 user = os.getlogin()
 
-exp_folder = 'masked_input'
+exp_folder = 'two_hot'
 
 dump_path = f'/home/{user}/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
@@ -20,18 +20,15 @@ extra_args = {
     'print_freq': 10,
     'ode_integrator':'solve_ivp',
     'num_workers':1,
-    #'fixed_init_scale':True,
-    'use_queue':False,
-    'batch_size':100,
     'tokens_per_batch':10000,
     'min_dimension':1,
     'max_dimension':2,
-    'reload_data':f"/home/{user}/odeformer/experiments/datagen_dim_2/exp_export_data_True/"
+    'reload_data':f"/home/{user}/odeformer/experiments/datagen_dim_2_only/exp_export_data_True/"
     }
 
 grid = {
+    "use_two_hot":[False]
     #"fixed_init_scale":[True,False],
-    "masked_input":[0,0.1,0.3]
     # "ode_integrator": ["odeint","solve_ivp"],
     # "max_dimension":[2,4]
     #"use_cross_attention":[True,False],

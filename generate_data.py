@@ -10,7 +10,7 @@ from distutils import dir_util
 user = os.getlogin()
 
 
-exp_folder = 'datagen_dim_2'
+exp_folder = 'datagen_dim_2_only'
 
 dump_path = f'/home/{user}/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
@@ -22,7 +22,7 @@ extra_args = {
     'num_workers':40,
     'use_queue':False,
     'batch_size':10,
-    'min_dimension':1,
+    'min_dimension':2,
     'max_dimension':2,
     'print_freq':100,
      }
