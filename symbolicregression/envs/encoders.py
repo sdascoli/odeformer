@@ -5,7 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Union
 from argparse import Namespace
 import numpy as np
 import math
@@ -53,10 +53,8 @@ class ConstantEncoder(Encoder):
         else:
             # See RandomFunctions.generate_float(...) in generators.py
             sign = 1
-            mantissa = float(10 ** self.params.float_precision)
-            max_power = (
-                self.params.max_exponent_prefactor - (self.params.float_precision + 1) // 2
-            )
+            mantissa = float(10 ** params.float_precision)
+            max_power = (params.max_exponent_prefactor - (params.float_precision + 1) // 2)
             exponent = max_power
             constant = sign * (mantissa * 10 ** exponent)
             self.min = -constant
