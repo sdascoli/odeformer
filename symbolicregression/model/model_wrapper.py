@@ -98,7 +98,7 @@ class ModelWrapper(nn.Module):
                 )
                 for i in range(bs)
             ]
-            return generations
+
             if self.beam_type == "search":
                 _, _, search_generations = decoder.generate_beam(
                     encoded,
