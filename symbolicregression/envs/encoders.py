@@ -12,7 +12,6 @@ import math
 from .generators import Node, NodeList
 from .utils import *
 
-
 class Encoder(ABC):
     """
     Base class for encoders, encodes and decodes matrices
@@ -41,9 +40,9 @@ class GeneralEncoder:
 
 class ConstantEncoder(Encoder):
     
-    # TODO: do we want / need to remove int tokens from the equation encoder vocabulary?
-    
     def __init__(self, params: Namespace, force_min_max: List[int]=None):
+            
+        # TODO: do we want / need to remove int tokens from the equation encoder vocabulary?
         
         if force_min_max is not None:
             assert force_min_max[0] < force_min_max[1], \
