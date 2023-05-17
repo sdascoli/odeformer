@@ -463,7 +463,6 @@ class FunctionEnvironment(object):
 
         if self.params.use_sympy:
             len_before = len(tree.prefix().split(","))
-            print(tree)
             tree = (self.simplifier.apply_fn(tree, []) if self.params.use_sympy else tree)
             len_after = len(tree.prefix().split(","))
             if tree is None or len_after > 2 * len_before:
@@ -650,7 +649,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--operators_to_downsample",
             type=str,
-            default="sin_1,cos_1,tan_0,arcsin_0,arccos_0,arctan_0,sqrt_3,pow2_3,pow3_0,inv_3,abs_0,exp_0,log_0,add_3,mul_1,sub_0,div_0",
+            default="sin_1,tan_0,arcsin_0,arccos_0,arctan_0,sqrt_0,pow2_1,pow3_0,inv_1,abs_0,exp_0,log_0,add_3,mul_1,sub_0,div_0",
             help="Which operator to remove",
         )
         parser.add_argument(
@@ -767,6 +766,12 @@ class FunctionEnvironment(object):
 
         # generator
         parser.add_argument(
+            "--use_two_hot",
+            type=bool_flag,
+            default=False,
+            help="Whether to use two hot embeddings",
+        )
+        parser.add_argument(
             "--max_int",
             type=int,
             default=10,
@@ -781,14 +786,8 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--max_binary_ops_per_dim",
             type=int,
-            default=1,
+            default=6,
             help="Max number of binary operators per input dimension",
-        )
-        parser.add_argument(
-            "--max_binary_ops_offset",
-            type=int,
-            default=4,
-            help="Offset for max number of binary operators",
         )
         parser.add_argument(
             "--min_unary_ops_per_dim", 

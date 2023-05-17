@@ -47,12 +47,6 @@ def get_parser():
         help="Activation function [silu,relu,gelu]",
     )
     parser.add_argument(
-        "--use_two_hot",
-        type=bool_flag,
-        default=True,
-        help="Whether to use two hot embeddings",
-    )
-    parser.add_argument(
         "--masked_input",
         type=float,
         default=0,
@@ -91,13 +85,13 @@ def get_parser():
     parser.add_argument(
         "--n_enc_heads",
         type=int,
-        default=16,
+        default=8,
         help="Number of Transformer encoder heads",
     )
     parser.add_argument(
         "--n_dec_heads",
         type=int,
-        default=16,
+        default=8,
         help="Number of Transformer decoder heads",
     )
     parser.add_argument(

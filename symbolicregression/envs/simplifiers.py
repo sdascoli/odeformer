@@ -242,7 +242,7 @@ class Simplifier(ABC):
             expr = self.tree_to_sympy_expr(tree)
             for (fn, arg) in fn_stack:
                 expr = getattr(self, fn)(expr=expr, **arg)
-            new_tree = self.sympy_expr_to_tree(expr)
+            new_tree = self.sympy_expr_to_tree(expr).nodes[0]
             if new_tree is None:
                 new_tree = tree
             return new_tree

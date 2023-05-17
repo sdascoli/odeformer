@@ -272,17 +272,6 @@ class Node:
                 return fn(self.children[0].val(x,t))
             assert False, "Could not find function"
 
-    def get_recurrence_degree(self):
-        recurrence_degree = 0
-        if len(self.children) == 0:
-            if str(self.value).startswith("x_"):
-                _, _, offset = self.value.split("_")
-                offset = int(offset)
-                if offset > recurrence_degree:
-                    recurrence_degree = offset
-            return recurrence_degree
-        return max([child.get_recurrence_degree() for child in self.children])
-
     def replace_node_value(self, old_value, new_value):
         if self.value == old_value:
             self.value = new_value
@@ -559,11 +548,9 @@ class RandomFunctions(Generator):
             )
 
         if nb_binary_ops is None:
-            min_binary_ops = self.min_binary_ops_per_dim * dimension
-            max_binary_ops = self.max_binary_ops_per_dim * dimension
             nb_binary_ops_to_use = [
                 rng.randint(
-                    min_binary_ops, self.params.max_binary_ops_offset + max_binary_ops
+                    self.min_binary_ops_per_dim, self.max_binary_ops_per_dim+1
                 )
                 for dim in range(dimension)
             ]
