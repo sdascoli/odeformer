@@ -106,7 +106,11 @@ class Trainer(object):
 def main():
 
     args = parse_args()
-    shared_folder = get_shared_folder()
+    if args.job_dir is "":
+        shared_folder = get_shared_folder()
+    else:
+        shared_folder = Path(args.job_dir)
+        shared_folder.mkdir(exist_ok=True, parents=True)        
 
     grid = {
         'use_skeleton':[False],
