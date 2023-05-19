@@ -40,6 +40,45 @@ import time
 np.seterr(all="raise")
 
 
+def setup_odeformer(trainer) -> SymbolicTransformerRegressor:
+    embedder = (
+        trainer.modules["embedder"].module
+        if trainer.params.multi_gpu
+        else trainer.modules["embedder"]
+    )
+    encoder = (
+        trainer.modules["encoder"].module
+        if trainer.params.multi_gpu
+        else trainer.modules["encoder"]
+    )
+    decoder = (
+        trainer.modules["decoder"].module
+        if trainer.params.multi_gpu
+        else trainer.modules["decoder"]
+    )
+    embedder.eval()
+    encoder.eval()
+    decoder.eval()
+    mw = ModelWrapper(
+        env=trainer.env,
+        embedder=embedder,
+        encoder=encoder,
+        decoder=decoder,
+        beam_length_penalty=trainer.params.beam_length_penalty,
+        beam_size=trainer.params.beam_size,
+        max_generated_output_len=trainer.params.max_generated_output_len,
+        beam_early_stopping=trainer.params.beam_early_stopping,
+        beam_temperature=trainer.params.beam_temperature,
+        beam_type=trainer.params.beam_type,
+    )
+    return SymbolicTransformerRegressor(
+        model=mw,
+        max_input_points=int(trainer.params.max_points*trainer.params.subsample_ratio),
+        rescale=trainer.params.rescale,
+        params=trainer.params
+    )
+
+
 def read_file(filename, label="target", sep=None):
 
     if filename.endswith("gz"):
@@ -69,79 +108,45 @@ class Evaluator(object):
 
     ENV = None
 
-    def __init__(self, trainer):
+    def __init__(self, trainer, model):
         """
         Initialize evaluator.
         """
         self.trainer = trainer
-        self.modules = trainer.modules
+        self.model = model
+        # self.modules = trainer.modules
         self.params = trainer.params
         self.env = trainer.env
-        params = self.params
-        Evaluator.ENV = trainer.env
-        embedder = (
-            self.modules["embedder"].module
-            if params.multi_gpu
-            else self.modules["embedder"]
-        )
-        encoder = (
-            self.modules["encoder"].module
-            if params.multi_gpu
-            else self.modules["encoder"]
-        )
-        decoder = (
-            self.modules["decoder"].module
-            if params.multi_gpu
-            else self.modules["decoder"]
-        )
-        embedder.eval()
-        encoder.eval()
-        decoder.eval()
-        mw = ModelWrapper(
-            env=self.env,
-            embedder=embedder,
-            encoder=encoder,
-            decoder=decoder,
-            beam_length_penalty=params.beam_length_penalty,
-            beam_size=params.beam_size,
-            max_generated_output_len=params.max_generated_output_len,
-            beam_early_stopping=params.beam_early_stopping,
-            beam_temperature=params.beam_temperature,
-            beam_type=params.beam_type,
-        )
-        self.dstr = SymbolicTransformerRegressor(
-            model=mw,
-            max_input_points=int(params.max_points*params.subsample_ratio),
-            rescale=params.rescale,
-            params=params
-        )
-
+        # params = self.params
+        # Evaluator.ENV = trainer.env
         self.save_path = (
-                    self.params.eval_dump_path
-                    if self.params.eval_dump_path
-                    else self.params.dump_path
-                    if self.params.dump_path
-                    else self.params.reload_checkpoint
-                )
+            self.params.eval_dump_path
+            if self.params.eval_dump_path
+            else self.params.dump_path
+            if self.params.dump_path
+            else self.params.reload_checkpoint
+        )
         if not os.path.exists(self.save_path): os.makedirs(self.save_path)
 
-        self.ablation_to_keep = list(map(lambda x: "info_" + x, params.ablation_to_keep.split(",")))
+        self.ablation_to_keep = list(map(lambda x: "info_" + x, self.params.ablation_to_keep.split(",")))
 
     def evaluate_on_iterator(self,iterator,save_file,):
-        
+        self.trainer.logger.info("evaluate_on_iterator")
         scores = OrderedDict({"epoch": self.trainer.epoch})
         batch_results = defaultdict(list)
         for samples, _ in tqdm(iterator):
-
+            self.trainer.logger.info(samples.keys())
             times = samples["times"]
             trajectories = samples["trajectory"]
             infos = samples["infos"]
             if "tree" in samples.keys():
                 trees = samples["tree"]
                 batch_results["trees"].extend([self.env.simplifier.readable_tree(tree) for tree in trees])
-
-            all_candidates = self.dstr.fit(times, trajectories, verbose=False, sort_candidates=True)
-
+            
+            # all_candidates = self.model.fit(times, trajectories, verbose=False, sort_candidates=True)
+            # self.trainer.logger.info("all_candidates", all_candidates)
+            all_candidates = {0: ["x_0"], 1: ["x_0+1"], 2: ["2*x_0"], 3: ["2*x_0+1"]}
+            print("all_candidates", all_candidates)
             best_results = {metric:[] for metric in self.params.validation_metrics.split(',')}
             best_candidates = []
             for time, trajectory, candidates in zip(times, trajectories, all_candidates.values()):
@@ -153,7 +158,10 @@ class Evaluator(object):
                 time, idx = sorted(time), np.argsort(time)
                 trajectory = trajectory[idx]
                 best_candidate = candidates[0] # candidates are sorted
-                pred_trajectory = self.dstr.predict(time, y0=trajectory[0], tree=best_candidate) 
+                print(best_candidate)
+                print("evaluate.py trajectory.shape", trajectory[0].shape, trajectory.shape, trajectory[0])
+                pred_trajectory = self.model.predict(time, y0=trajectory[0]+1, tree=best_candidate) 
+                print("evaluate.py pred_trajectory", pred_trajectory.shape)
                 best_result = compute_metrics(pred_trajectory, trajectory, predicted_tree=best_candidate, metrics=self.params.validation_metrics)
                 for k, v in best_result.items():
                     best_results[k].append(v[0])
@@ -162,8 +170,12 @@ class Evaluator(object):
             for k, v in infos.items():
                 infos[k] = v.tolist()
 
-            batch_results["predicted_trees"].extend([self.env.simplifier.readable_tree(tree) for tree in best_candidates])
+            batch_results["predicted_trees"].extend(
+                [tree if isinstance(tree[0], str) else self.env.simplifier.readable_tree(tree) for tree in best_candidates]
+            )
 
+            # print(batch_results)
+            
             for k, v in infos.items():
                 batch_results["info_" + k].extend(v)        
             for k, v in best_results.items():
@@ -201,7 +213,7 @@ class Evaluator(object):
         save=True,
     ):
 
-        self.dstr.rescale = False
+        self.model.rescale = False
         self.trainer.logger.info("====== STARTING EVALUATION IN DOMAIN (multi-gpu: {}) =======".format(self.params.multi_gpu))
 
         iterator = self.env.create_test_iterator(
@@ -226,7 +238,7 @@ class Evaluator(object):
         save=True,
     ):
         
-        self.dstr.rescale = self.params.rescale
+        self.model.rescale = self.params.rescale
         self.trainer.logger.info("====== STARTING EVALUATION PMLB (multi-gpu: {}) =======".format(self.params.multi_gpu))
 
         iterator = []
@@ -260,7 +272,7 @@ class Evaluator(object):
         save=True,
     ):
         
-        self.dstr.rescale = self.params.rescale
+        self.model.rescale = self.params.rescale
         self.trainer.logger.info("====== STARTING EVALUATION OSCILLATORS (multi-gpu: {}) =======".format(self.params.multi_gpu))
 
         iterator = []
@@ -320,7 +332,8 @@ def main(params):
     env.rng = np.random.RandomState(0)
     modules = build_modules(env, params)
     trainer = Trainer(modules, env, params)
-    evaluator = Evaluator(trainer)
+    model = setup_odeformer(trainer)
+    evaluator = Evaluator(trainer, model)
     save = params.save_results
 
     # if params.eval_in_domain:

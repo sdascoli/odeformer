@@ -806,7 +806,7 @@ class RandomFunctions(Generator):
         return tree, (times, trajectory)
 
 @timeout(10)
-def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', debug=False, allow_warnings=False):
+def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', debug=False, allow_warnings=False,):
 
     with warnings.catch_warnings(record=True) as caught_warnings:
 
@@ -876,7 +876,8 @@ def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', debug=False, a
             #@njit
             times = np.array(times)+1
             def func(t,y):
-                return tree([y],[t])[0]
+                ret = tree([y],[t])
+                return ret[0]
             try: 
                 trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times, method='RK23', rtol=1e-2, atol=1e-6)
                 solved_times = trajectory.t
@@ -905,7 +906,11 @@ def integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', debug=False, al
         return [np.nan for _ in range(len(times))]
 
 def tree_to_numexpr_fn(tree):
-    infix = tree.infix()
+    if not isinstance(tree, str):
+        infix = tree.infix()
+    else:
+        infix = tree
+        
     numexpr_equivalence = {
         "add": "+",
         "sub": "-",
@@ -923,23 +928,29 @@ def tree_to_numexpr_fn(tree):
         #t, x = np.array(t), np.array(x)
         local_dict = {}
         dimension = len(x[0])
-        for d in range(dimension): local_dict["x_{}".format(d)] = np.array(x)[:, d]
-        local_dict["t"] = t[:]
-        local_dict.update(extra_local_dict)
+        for d in range(dimension): 
+            local_dict["x_{}".format(d)] = np.array(x)[:, d]
 
+        local_dict["t"] = t[:]
+
+        local_dict.update(extra_local_dict)
         try:
-            if '|' in infix:
+            if '|' in infix:    
                 vals = np.concatenate([ne.evaluate(node, local_dict=local_dict).reshape(-1,1) for node in infix.split('|')], axis=1)
             else:
                 vals = ne.evaluate(infix, local_dict=local_dict).reshape(-1,1)
+            
         except Exception as e:
             #print(e)
             #print("problem with tree", infix)
             #print(traceback.format_exc())
             vals = [np.nan for _ in range(x.shape[0])]
+        # assert False
         return vals
 
     return wrapped_numexpr_fn
+    #import sympy
+    #return sympy.lambdify("x_0, t", sympy.parse_expr(infix), modules=[np])
 
 
 
