@@ -9,7 +9,7 @@ import shutil
 from distutils import dir_util
 user = os.getlogin()
 
-exp_folder = 'two_hot'
+exp_folder = 'sympy'
 
 dump_path = f'/home/{user}/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
@@ -27,7 +27,8 @@ extra_args = {
     }
 
 grid = {
-    "use_two_hot":[False]
+    "use_sympy":[True]
+    #"use_two_hot":[False]
     #"fixed_init_scale":[True,False],
     # "ode_integrator": ["odeint","solve_ivp"],
     # "max_dimension":[2,4]

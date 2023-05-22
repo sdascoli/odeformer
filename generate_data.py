@@ -10,7 +10,7 @@ from distutils import dir_util
 user = os.getlogin()
 
 
-exp_folder = 'datagen_dim_2_only'
+exp_folder = 'datagen'
 
 dump_path = f'/home/{user}/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
@@ -25,10 +25,11 @@ extra_args = {
     'min_dimension':2,
     'max_dimension':2,
     'print_freq':100,
+    "export_data":True,
      }
 
 grid = {
-    "export_data":[True],
+    'use_sympy':[True, False],
 }
 
 def get_free_gpus():

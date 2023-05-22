@@ -692,7 +692,7 @@ class FunctionEnvironment(object):
         )
 
         parser.add_argument("--min_dimension", type=int, default=1)
-        parser.add_argument("--max_dimension", type=int, default=4)
+        parser.add_argument("--max_dimension", type=int, default=2)
         parser.add_argument(
             "--enforce_dim",
             type=bool_flag,
