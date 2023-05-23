@@ -135,7 +135,6 @@ class Evaluator(object):
         scores = OrderedDict({"epoch": self.trainer.epoch})
         batch_results = defaultdict(list)
         for samples, _ in tqdm(iterator):
-            self.trainer.logger.info(samples.keys())
             times = samples["times"]
             trajectories = samples["trajectory"]
             infos = samples["infos"]
@@ -143,10 +142,7 @@ class Evaluator(object):
                 trees = samples["tree"]
                 batch_results["trees"].extend([self.env.simplifier.readable_tree(tree) for tree in trees])
             
-            # all_candidates = self.model.fit(times, trajectories, verbose=False, sort_candidates=True)
-            # self.trainer.logger.info("all_candidates", all_candidates)
-            all_candidates = {0: ["x_0"], 1: ["x_0+1"], 2: ["2*x_0"], 3: ["2*x_0+1"]}
-            print("all_candidates", all_candidates)
+            all_candidates = self.model.fit(times, trajectories, verbose=False, sort_candidates=True)
             best_results = {metric:[] for metric in self.params.validation_metrics.split(',')}
             best_candidates = []
             for time, trajectory, candidates in zip(times, trajectories, all_candidates.values()):
@@ -158,10 +154,8 @@ class Evaluator(object):
                 time, idx = sorted(time), np.argsort(time)
                 trajectory = trajectory[idx]
                 best_candidate = candidates[0] # candidates are sorted
-                print(best_candidate)
-                print("evaluate.py trajectory.shape", trajectory[0].shape, trajectory.shape, trajectory[0])
-                pred_trajectory = self.model.predict(time, y0=trajectory[0]+1, tree=best_candidate) 
-                print("evaluate.py pred_trajectory", pred_trajectory.shape)
+                # TODO: check dim
+                pred_trajectory = self.model.integrate_prediction(time, y0=trajectory[0], prediction=best_candidate)
                 best_result = compute_metrics(pred_trajectory, trajectory, predicted_tree=best_candidate, metrics=self.params.validation_metrics)
                 for k, v in best_result.items():
                     best_results[k].append(v[0])
@@ -174,13 +168,11 @@ class Evaluator(object):
                 [tree if isinstance(tree[0], str) else self.env.simplifier.readable_tree(tree) for tree in best_candidates]
             )
 
-            # print(batch_results)
-            
             for k, v in infos.items():
-                batch_results["info_" + k].extend(v)        
+                batch_results["info_" + k].extend(v)
             for k, v in best_results.items():
                 batch_results[k ].extend(v)
-            
+
         batch_results = pd.DataFrame.from_dict(batch_results)
         batch_results.to_csv(save_file, index=False)
         self.trainer.logger.info("Saved {} equations to {}".format(len(batch_results), save_file))
@@ -205,7 +197,7 @@ class Evaluator(object):
                 for k, v in avg_scores_ablation.items():
                     scores[k + "_{}_{}".format(ablation, val)] = v
                     
-        return scores
+        return scores, batch_results
         
     def evaluate_in_domain(
         self,
