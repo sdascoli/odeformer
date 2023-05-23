@@ -83,9 +83,8 @@ class FloatSequences(Encoder):
     def __init__(self, params):
         super().__init__(params)
         self.float_precision = params.float_precision
-        self.mantissa_len = params.mantissa_len
         self.max_exponent = params.max_exponent
-        self.base = (self.float_precision + 1) // self.mantissa_len
+        self.base = (self.float_precision + 1)
         self.max_token = 10 ** self.base
         self.symbols = ["+", "-"]
         self.sign_as_token = params.sign_as_token
@@ -97,7 +96,7 @@ class FloatSequences(Encoder):
         self.symbols.extend(
             ["E" + str(i) for i in range(-self.max_exponent, self.max_exponent + 1)]
         )
-        self.float_descriptor_length = 2+self.mantissa_len if self.sign_as_token else 1+self.mantissa_len
+        self.float_descriptor_length = 3 if self.sign_as_token else 2
 
     def encode(self, values):
         """
@@ -109,22 +108,21 @@ class FloatSequences(Encoder):
         values = np.array(values)
         if len(values.shape) == 1:
             seq = []
-            value = values
-            for val in value:
-                assert val not in [-np.inf, np.inf]
+            for val in values:
+                assert val not in [-np.inf, np.inf], "cannot encode infinity"
                 sign = "+" if val >= 0 else "-"
                 m, e = (f"%.{precision}e" % val).split("e")
                 i, f = m.lstrip("-").split(".")
-                i = i + f
-                tokens = chunks(i, self.base)
+                mantissa = i + f
                 expon = int(e) - precision
-                if expon < -self.max_exponent:
-                    tokens = ["0" * self.base] * self.mantissa_len
+                if expon < -100:
+                    mantissa = ["0" * base]
                     expon = int(0)
                 if self.sign_as_token:
-                    seq.extend([sign, *["N" + token for token in tokens], "E" + str(expon)])
+                    token_sequence = [sign, f"N{mantissa}", f"E{expon}"]
                 else:
-                    seq.extend([*[sign + "N" + token for token in tokens], "E" + str(expon)])
+                    token_sequence = [f"{sign}N{mantissa}",f"E{expon}"]
+                seq += token_sequence
             return seq
         else:
             seqs = [self.encode(val) for val in values]
@@ -182,7 +180,7 @@ class Equation(Encoder):
         self.float_encoder = float_encoder
         self.all_operators = all_operators
         self.constant_encoder = constant_encoder
-        self.float_descriptor_length = 2+self.params.mantissa_len if self.params.sign_as_token else 1+self.params.mantissa_len
+        self.float_descriptor_length = 3 if self.params.sign_as_token else 2
 
     def encode(self, tree):
         res = []

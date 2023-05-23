@@ -57,7 +57,7 @@ class LinearPointEmbedder(Embedder):
             self.input_dim,
             padding_idx=self.env.float_word2id["<PAD>"],
         )
-        self.float_scalar_descriptor_len = (2 + self.params.mantissa_len) if self.params.sign_as_token else (1 + self.params.mantissa_len)
+        self.float_scalar_descriptor_len = 3 if self.params.sign_as_token else 2
         self.total_dimension = 1 + self.params.max_dimension
         self.float_vector_descriptor_len = self.float_scalar_descriptor_len * self.total_dimension
 
@@ -85,7 +85,7 @@ class LinearPointEmbedder(Embedder):
         self, sequences_embeddings: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Takes: (N_max * (d_in+d_out)*(2+mantissa_len), B, d) tensors
+        Takes: (N_max * (d_in+d_out)*(float_descriptor_len, B, d) tensors
         Returns: (N_max, B, d)
         """
         max_len, bs, float_descriptor_length, dim = sequences_embeddings.size()

@@ -69,15 +69,11 @@ class FunctionEnvironment(object):
         self.params = params
         self.rng = None
         self.float_precision = params.float_precision
-        self.mantissa_len = params.mantissa_len
         self.max_size = None
         self.float_tolerance = 10 ** (-params.float_precision)
         self.additional_tolerance = [
             10 ** (-i) for i in range(params.float_precision + 1)
         ]
-        assert (
-            params.float_precision + 1
-        ) % params.mantissa_len == 0, "Bad precision/mantissa len ratio"
 
         self.generator = generators.RandomFunctions(params, SPECIAL_WORDS)
         self.float_encoder = self.generator.float_encoder
@@ -735,12 +731,6 @@ class FunctionEnvironment(object):
             type=bool_flag,
             default=False,
             help="Whether to use a sign token",
-        )
-        parser.add_argument(
-            "--mantissa_len",
-            type=int,
-            default=1,
-            help="Number of tokens for the mantissa (must be a divisor or float_precision+1)",
         )
         parser.add_argument(
             "--max_exponent", type=int, default=100, help="Maximal order of magnitude"
