@@ -731,6 +731,12 @@ class FunctionEnvironment(object):
             help="Number of digits in the mantissa",
         )
         parser.add_argument(
+            "--sign_as_token",
+            type=bool_flag,
+            default=False,
+            help="Whether to use a sign token",
+        )
+        parser.add_argument(
             "--mantissa_len",
             type=int,
             default=1,

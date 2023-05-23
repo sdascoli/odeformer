@@ -88,12 +88,16 @@ class FloatSequences(Encoder):
         self.base = (self.float_precision + 1) // self.mantissa_len
         self.max_token = 10 ** self.base
         self.symbols = ["+", "-"]
-        self.symbols.extend(
-            ["N" + f"%0{self.base}d" % i for i in range(self.max_token)]
-        )
+        self.sign_as_token = params.sign_as_token
+        if self.sign_as_token:
+            self.symbols.extend(["N" + f"%0{self.base}d" % i for i in range(self.max_token)])
+        else:
+            self.symbols.extend(["+N" + f"%0{self.base}d" % i for i in range(self.max_token)])
+            self.symbols.extend(["-N" + f"%0{self.base}d" % i for i in range(self.max_token)])
         self.symbols.extend(
             ["E" + str(i) for i in range(-self.max_exponent, self.max_exponent + 1)]
         )
+        self.float_descriptor_length = 2+self.mantissa_len if self.sign_as_token else 1+self.mantissa_len
 
     def encode(self, values):
         """
@@ -117,7 +121,10 @@ class FloatSequences(Encoder):
                 if expon < -self.max_exponent:
                     tokens = ["0" * self.base] * self.mantissa_len
                     expon = int(0)
-                seq.extend([sign, *["N" + token for token in tokens], "E" + str(expon)])
+                if self.sign_as_token:
+                    seq.extend([sign, *["N" + token for token in tokens], "E" + str(expon)])
+                else:
+                    seq.extend([*[sign + "N" + token for token in tokens], "E" + str(expon)])
             return seq
         else:
             seqs = [self.encode(val) for val in values]
@@ -132,20 +139,27 @@ class FloatSequences(Encoder):
         if len(lst) == 0:
             return None
         seq = []
-        for val in chunks(lst, 2 + self.mantissa_len):
+        for val in chunks(lst, self.float_descriptor_length):
             for x in val:
                 if x[0] not in ["-", "+", "E", "N"]:
                     return np.nan
             try:
-                sign = 1 if val[0] == "+" else -1
                 mant = ""
-                for x in val[1:-1]:
-                    mant += x[1:]
+                if self.sign_as_token:
+                    sign = 1 if val[0] == "+" else -1
+                    for x in val[1:-1]:
+                        mant += x[1:]                
+                    exp = int(val[-1][1:])
+                else:
+                    sign = 1 if val[0][0] == "+" else -1
+                    for x in val[:-1]:
+                        mant += x[2:]  
+                    exp = int(val[-1][1:])
                 mant = int(mant)
-                exp = int(val[-1][1:])
-                value = sign * mant * (10 ** exp)
-                value = float(value)
+                value = sign * float(f"{mant}e{exp}")
             except Exception:
+                import traceback
+                print(traceback.format_exc())
                 value = np.nan
             seq.append(value)
         return seq
@@ -168,6 +182,7 @@ class Equation(Encoder):
         self.float_encoder = float_encoder
         self.all_operators = all_operators
         self.constant_encoder = constant_encoder
+        self.float_descriptor_length = 2+self.params.mantissa_len if self.params.sign_as_token else 1+self.params.mantissa_len
 
     def encode(self, tree):
         res = []
@@ -206,15 +221,15 @@ class Equation(Encoder):
         elif lst[0].startswith("INT"):
             val, length = self.parse_int(lst)
             return Node(str(val), self.params), length
-        elif lst[0] == "+" or lst[0] == "-":
+        elif lst[0] == "+" or lst[0] == "-" or lst[0].startswith("+N") or lst[0].startswith('-N'):
             if self.params.use_two_hot:
                 return Node(str(lst[0]), self.params), 1
             else:
                 try:
-                    val = self.float_encoder.decode(lst[:3])[0]
+                    val = self.float_encoder.decode(lst[:self.float_descriptor_length])[0]
                 except Exception as e:
                     return None, 0
-                return Node(str(val), self.params), 3
+                return Node(str(val), self.params), self.float_descriptor_length
         elif (
             lst[0].startswith("CONSTANT") or lst[0] == "y"
         ):  ##added this manually CAREFUL!!

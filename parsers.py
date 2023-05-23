@@ -273,7 +273,7 @@ def get_parser():
     parser.add_argument(
         "--beam_size",
         type=int,
-        default=10,
+        default=1,
         help="Beam size, default = 1 (greedy decoding)",
     )
     parser.add_argument(

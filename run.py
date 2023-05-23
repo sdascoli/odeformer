@@ -23,11 +23,12 @@ extra_args = {
     'tokens_per_batch':10000,
     'min_dimension':1,
     'max_dimension':2,
-    'reload_data':f"/home/{user}/odeformer/experiments/datagen_dim_2_only/exp_export_data_True/"
+    'reload_data':f"/home/{user}/odeformer/experiments/datagen/exp_use_sympy_",
     }
 
 grid = {
-    "use_sympy":[True]
+    "use_sympy":[True, False],
+    #"sign_as_token":[False],
     #"use_two_hot":[False]
     #"fixed_init_scale":[True,False],
     # "ode_integrator": ["odeint","solve_ivp"],
@@ -93,6 +94,8 @@ for params in dict_product(grid):
     for arg, value in extra_args.items():
         if arg not in params:
             params[arg] = value
+
+    params['reload_data'] += str(params['use_sympy']) 
 
     for f in os.listdir():
         if f.endswith('.py'):

@@ -57,7 +57,7 @@ class LinearPointEmbedder(Embedder):
             self.input_dim,
             padding_idx=self.env.float_word2id["<PAD>"],
         )
-        self.float_scalar_descriptor_len = (2 + self.params.mantissa_len)
+        self.float_scalar_descriptor_len = (2 + self.params.mantissa_len) if self.params.sign_as_token else (1 + self.params.mantissa_len)
         self.total_dimension = 1 + self.params.max_dimension
         self.float_vector_descriptor_len = self.float_scalar_descriptor_len * self.total_dimension
 
@@ -101,8 +101,8 @@ class LinearPointEmbedder(Embedder):
             for x, y in seq:
                 x_toks = self.env.float_encoder.encode(x)
                 y_toks = self.env.float_encoder.encode(y)
-                input_dim = int(len(x_toks) / (2 + self.params.mantissa_len))
-                output_dim = int(len(y_toks) / (2 + self.params.mantissa_len))
+                input_dim = int(len(x_toks) / self.float_scalar_descriptor_len)
+                output_dim = int(len(y_toks) / self.float_scalar_descriptor_len)
                 x_toks = [
                     *x_toks,
                 ]

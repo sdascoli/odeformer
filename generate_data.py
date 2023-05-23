@@ -19,7 +19,7 @@ extra_args = {
     'n_steps_per_epoch':1000,
     'max_epoch':100,
     'ode_integrator':'solve_ivp',
-    'num_workers':40,
+    'num_workers':15,
     'use_queue':False,
     'batch_size':10,
     'min_dimension':2,
@@ -76,7 +76,7 @@ def dict_product(d):
 for params in dict_product(grid):
     if not free_gpus:
         break
-    exp_id = 'exp_'+'_'.join(['{}_{}'.format(k,v) for k,v in params.items()])
+    exp_id = 'datagen_'+'_'.join(['{}_{}'.format(k,v) for k,v in params.items()])
     params['dump_path'] = dump_path
     params['exp_name'] = exp_folder
     params['exp_id'] = exp_id
