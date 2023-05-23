@@ -7,26 +7,49 @@ import numpy as np
 from pysindy.differentiation import FiniteDifference
 from symbolicregression.envs.generators import integrate_ode
 
-__all__ = ("FiniteDifferenceMixin", "PredictionIntegrationMixin", "BatchMixin")
+__all__ = ("BatchMixin", "FiniteDifferenceMixin", "PredictionIntegrationMixin",)
 
+class BatchMixin:
+    
+    def fit_all(
+        self,
+        times,
+        trajectories,
+        *args, 
+        **kwargs,
+    ):
+        assert isinstance(trajectories, List)
+        predictions_per_equation = defaultdict(list)
+        for trajectory_i, (trajectory, time) in tqdm(
+            enumerate(zip(trajectories, times)), total=len(trajectories)
+        ):
+            try:
+                candidates = self.fit(times=time, trajectories=trajectory, *args, **kwargs)                    
+                predictions_per_equation[trajectory_i].extend(candidates[0])
+            except Exception as e:
+                print(traceback.format_exc())
+        return dict(predictions_per_equation)
 
 class FiniteDifferenceMixin:
     
-    def __init__(self, finite_difference_order: int=7, smoother_window_length: Union[None, int]=None):
-        self.finite_difference_order = finite_difference_order
-        self.smoother_window_length = smoother_window_length
+    def approximate_derivative(
+        self, 
+        trajectory: np.ndarray, 
+        times: np.ndarray,
+        finite_difference_order: int = 7,
+        smoother_window_length: Union[None, int] = None,
+    ) -> np.ndarray:
+        
+        assert len(times.shape) == 1, f"{times.shape}"
+        assert times.shape[0] == trajectory.shape[0], f"{times.shape} vs {trajectory.shape}"
         if smoother_window_length is None:
-            self.fd = FiniteDifference(order=self.finite_difference_order)
+            fd = FiniteDifference(order=finite_difference_order)
         else:
-            self.fd = SmoothedFiniteDifference(
-                order=self.finite_difference_order,
-                smoother_kws={'window_length': self.smoother_window_length},
+            fd = SmoothedFiniteDifference(
+                order=finite_difference_order,
+                smoother_kws={'window_length': smoother_window_length},
             )
-
-    def approximate_derivative(self, trajectory: np.ndarray, t: np.ndarray) -> np.ndarray:
-        assert len(t.shape) == 1
-        assert t.shape[0] == trajectory.shape[0]
-        return self.fd._differentiate(trajectory, t)
+        return fd._differentiate(trajectory, times)
     
     
 class PredictionIntegrationMixin:
@@ -49,22 +72,3 @@ class PredictionIntegrationMixin:
         trajectory = integrate_ode(y0, times, prediction, ode_integrator=ode_integrator)
         
         return trajectory
-    
-class BatchMixin:
-    
-    def fit_all(
-        self,
-        times,
-        trajectories,
-        *args, 
-        **kwargs,
-    ):
-        assert isinstance(trajectories, List)
-        predictions_per_equation = defaultdict(list)
-        for trajectory_i, (trajectory, time) in tqdm(enumerate(zip(trajectories, times)), total=len(trajectories)):
-            try:
-                candidates = self.fit(times=time, trajectories=trajectory, *args, **kwargs)                    
-                predictions_per_equation[trajectory_i].extend(candidates[0])
-            except Exception as e:
-                print(traceback.format_exc())
-        return dict(predictions_per_equation)
