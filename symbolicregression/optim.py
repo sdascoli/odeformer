@@ -89,7 +89,7 @@ class Adam(optim.Optimizer):
         return loss
 
 
-class AdamWithWarmup(Adam):
+class AdamWithWarmup(AdamW):
     """
     Adam with a warmup phase where we linearly increase the learning rate
     from some initial learning rate (`warmup-init-lr`) until the configured
@@ -138,7 +138,7 @@ class AdamWithWarmup(Adam):
             param_group["lr"] = self.get_lr_for_step(param_group["num_updates"])
 
 
-class AdamInverseSqrtWithWarmup(Adam):
+class AdamInverseSqrtWithWarmup(AdamW):
     """
     Decay the LR based on the inverse square root of the update number.
     We also support a warmup phase where we linearly increase the learning rate
@@ -196,7 +196,7 @@ class AdamInverseSqrtWithWarmup(Adam):
             param_group["lr"] = self.get_lr_for_step(param_group["num_updates"])
 
 
-class AdamCosineWithWarmup(Adam):
+class AdamCosineWithWarmup(AdamW):
     """
     Assign LR based on a cyclical schedule that follows the cosine function.
     See https://arxiv.org/pdf/1608.03983.pdf for details.
@@ -322,7 +322,7 @@ def get_optimizer(parameters, lr, s):
         optim_fn = Adam
         optim_params["betas"] = (
             optim_params.get("beta1", 0.9),
-            optim_params.get("beta2", 0.999),
+            optim_params.get("beta2", 0.95),
         )
         optim_params.pop("beta1", None)
         optim_params.pop("beta2", None)
@@ -338,7 +338,7 @@ def get_optimizer(parameters, lr, s):
         optim_fn = AdamInverseSqrtWithWarmup
         optim_params["betas"] = (
             optim_params.get("beta1", 0.9),
-            optim_params.get("beta2", 0.999),
+            optim_params.get("beta2", 0.95),
         )
         optim_params.pop("beta1", None)
         optim_params.pop("beta2", None)
@@ -347,7 +347,7 @@ def get_optimizer(parameters, lr, s):
         optim_params["smooth"] = False
         optim_params["betas"] = (
             optim_params.get("beta1", 0.9),
-            optim_params.get("beta2", 0.999),
+            optim_params.get("beta2", 0.95),
         )
         optim_params.pop("beta1", None)
         optim_params.pop("beta2", None)
@@ -356,7 +356,7 @@ def get_optimizer(parameters, lr, s):
         optim_params["smooth"] = True
         optim_params["betas"] = (
             optim_params.get("beta1", 0.9),
-            optim_params.get("beta2", 0.999),
+            optim_params.get("beta2", 0.95),
         )
         optim_params.pop("beta1", None)
         optim_params.pop("beta2", None)

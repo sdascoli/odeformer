@@ -443,9 +443,6 @@ class FunctionEnvironment(object):
 
         if tree is None:
             return {"tree": tree}, ["bad tree"]
-        sum_binary_ops = max(nb_binary_ops)
-        sum_unary_ops = max(nb_unary_ops)
-        sum_ops = sum_binary_ops + sum_unary_ops
 
         effective_dimension = self.generator.relabel_variables(tree)
         if dimension == 0 or (

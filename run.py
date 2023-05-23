@@ -9,20 +9,21 @@ import shutil
 from distutils import dir_util
 user = os.getlogin()
 
-exp_folder = 'sympy'
+exp_folder = 'sympy_new'
 
 dump_path = f'/home/{user}/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
 
 extra_args = {
     'collate_queue_size': 1000,
-    'n_steps_per_epoch':1000,
-    'print_freq': 10,
+    #'n_steps_per_epoch':1000,
+    'print_freq': 30,
     'ode_integrator':'solve_ivp',
     'num_workers':1,
     'tokens_per_batch':10000,
-    'min_dimension':1,
-    'max_dimension':2,
+    #'min_dimension':1,
+    #'max_dimension':2,
+    #'sign_as_token':True,
     'reload_data':f"/home/{user}/odeformer/experiments/datagen/exp_use_sympy_",
     }
 

@@ -879,8 +879,10 @@ def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', debug=False, a
     #if debug: print(trajectory, np.any(np.isnan(trajectory)), len(times)!=len(trajectory), len(times), len(trajectory))#, solved_times)
     
     if np.any(np.isnan(trajectory)) or len(times)!=len(trajectory):
+        if debug: print("Bad integration")
         return [np.nan for _ in range(len(times))]
     if len(caught_warnings) > 0 and not allow_warnings:
+        if debug: print("Caught warning")
         return [np.nan for _ in range(len(times))]
     
     return trajectory
@@ -889,6 +891,7 @@ def integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', debug=False, al
     try: 
         return _integrate_ode(y0, times, tree, ode_integrator, debug, allow_warnings)
     except MyTimeoutError:
+        if debug: print("Timeout error")
         return [np.nan for _ in range(len(times))]
 
 def tree_to_numexpr_fn(tree):
