@@ -879,6 +879,7 @@ def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', debug=False, a
                 ret = tree([y],[t])
                 return ret[0]
             try: 
+                # print("start solving")
                 trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times, method='RK23', rtol=1e-2, atol=1e-6)
                 solved_times = trajectory.t
                 trajectory = trajectory.y.T
@@ -932,25 +933,21 @@ def tree_to_numexpr_fn(tree):
             local_dict["x_{}".format(d)] = np.array(x)[:, d]
 
         local_dict["t"] = t[:]
-
         local_dict.update(extra_local_dict)
+        # predicted_dim = len(infix.split('|'))
         try:
             if '|' in infix:    
                 vals = np.concatenate([ne.evaluate(node, local_dict=local_dict).reshape(-1,1) for node in infix.split('|')], axis=1)
             else:
                 vals = ne.evaluate(infix, local_dict=local_dict).reshape(-1,1)
-            
         except Exception as e:
-            #print(e)
-            #print("problem with tree", infix)
-            #print(traceback.format_exc())
-            vals = [np.nan for _ in range(x.shape[0])]
-        # assert False
+            # print(e)
+            # print("problem with tree", infix)
+            # print(traceback.format_exc())
+            vals = np.array([np.nan for _ in range(x.shape[0])])#.reshape(-1, 1).repeat(predicted_dim, axis=1)
         return vals
 
     return wrapped_numexpr_fn
-    #import sympy
-    #return sympy.lambdify("x_0, t", sympy.parse_expr(infix), modules=[np])
 
 
 
