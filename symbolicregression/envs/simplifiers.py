@@ -17,29 +17,6 @@ import sympytorch
 import torch
 from ..utils import timeout, MyTimeoutError
 
-
-def simplify(f, seconds):
-    """
-    Simplify an expression.
-    """
-    assert seconds > 0
-
-    @timeout(seconds)
-    def _simplify(f):
-        try:
-            f2 = sp.simplify(f)
-            if any(s.is_Dummy for s in f2.free_symbols):
-                return f
-            else:
-                return f2
-        except MyTimeoutError:
-            return f
-        except Exception as e:
-            return f
-
-    return _simplify(f)
-
-
 class InvalidPrefixExpression(BaseException):
     pass
 
@@ -94,6 +71,28 @@ class Simplifier(ABC):
         for k in generator.variables:
             self.local_dict[k] = sp.Symbol(k, real=True, integer=False)
 
+    def simplify_tree(self, tree, expand=False, resimplify=False):
+        if hasattr(tree, "nodes"):
+            return NodeList([self.simplify_tree(node, expand, resimplify) for node in tree.nodes])
+        else:
+            expr = self.tree_to_sympy_expr(tree)
+            if expand:
+                expr = self.expand_expr(expr)
+            if resimplify:
+                expr = self.simplify_expr(expr)
+            new_tree = self.sympy_expr_to_tree(expr).nodes[0]
+            if new_tree is None:
+                new_tree = tree
+            return new_tree
+        
+    @classmethod
+    def readable_tree(cls, tree):
+        if tree is None:
+            return None
+        tree_sympy = cls.tree_to_sympy_expr(tree, round=True)
+        readable_tree = '  ,  '.join([str(tree) for tree in tree_sympy])
+        return readable_tree
+
     @classmethod
     def tree_to_sympy_expr(cls, tree, round=True):
         if hasattr(tree, 'nodes'):
@@ -142,14 +141,6 @@ class Simplifier(ABC):
                 f'Incorrect prefix expression "{expr}". "{r}" was not parsed.'
             )
         return f"({p})"
-    
-    @classmethod
-    def readable_tree(cls, tree):
-        if tree is None:
-            return None
-        tree_sympy = cls.tree_to_sympy_expr(tree, round=True)
-        readable_tree = '  ,  '.join([str(tree) for tree in tree_sympy])
-        return readable_tree
     
     @classmethod
     def round_expr(cls, expr, decimals=4):
@@ -225,27 +216,6 @@ class Simplifier(ABC):
         ints = [fl for fl in floats if int(fl) == fl]
         expr = expr.xreplace(dict(zip(ints, [int(i) for i in ints])))
         return expr
-    
-    def _apply_fn(self, trees, fn_stack=[]):
-        expr = self.tree_to_sympy_expr(tree)
-        for (fn, arg) in fn_stack:
-            expr = getattr(self, fn)(expr=expr, **arg)
-        new_tree = self.sympy_expr_to_tree(expr)
-        if new_tree is None:
-            new_tree = tree
-        return new_tree
-
-    def apply_fn(self, tree, fn_stack=[]):
-        if hasattr(tree, "nodes"):
-            return NodeList([self.apply_fn(node, fn_stack=fn_stack) for node in tree.nodes])
-        else:
-            expr = self.tree_to_sympy_expr(tree)
-            for (fn, arg) in fn_stack:
-                expr = getattr(self, fn)(expr=expr, **arg)
-            new_tree = self.sympy_expr_to_tree(expr).nodes[0]
-            if new_tree is None:
-                new_tree = tree
-            return new_tree
 
     @classmethod
     def write_infix(cls, token, args):

@@ -54,7 +54,8 @@ def build_modules(env, params):
     else:
         dec_id2word = env.equation_id2word
     if params.masked_input:
-        modules["encoder"].proj = nn.Linear(params.enc_emb_dim, 3*params.max_dimension*len(env.float_id2word), bias=True) 
+        float_descriptor_length = 3 if params.sign_as_token else 2
+        modules["encoder"].proj = nn.Linear(params.enc_emb_dim, float_descriptor_length*params.max_dimension*len(env.float_id2word), bias=True) 
 
     modules["decoder"] = TransformerModel(
         params,

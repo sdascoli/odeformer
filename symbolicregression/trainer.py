@@ -738,9 +738,10 @@ class Trainer(object):
             input_tokens, len1 = embedder.forward(x1, return_before_embed=True)
             # randomly mask a fraction x of the input tokens along seq dimension
             mask = np.random.rand(*input_tokens.shape[:2]) < self.params.masked_input
-            input_tokens[mask][3:] = encoder.word2id['<MASK>']
+            float_descriptor_length = 3 if self.params.sign_as_token else 2
+            input_tokens[mask][float_descriptor_length:] = encoder.word2id['<MASK>']
             x1 = embedder.compress(embedder.embed(input_tokens))
-            predict_input_tokens = input_tokens[:,:,3:]
+            predict_input_tokens = input_tokens[:,:,float_descriptor_length:]
         else:
             x1, len1 = embedder(x1)
 
@@ -789,12 +790,33 @@ class Trainer(object):
                 "predict", tensor=decoded, pred_mask=pred_mask, y=y, get_scores=False
             )
 
+            if self.params.masked_output:
+                # randomly mask a fraction x of the input tokens along seq dimension
+                output_mask = torch.rand(x2.shape[:2]) < self.params.masked_output
+                output_mask *= pred_mask
+                predict_output_tokens = x2[output_mask]
+                x2_masked = x2.clone()
+                x2_masked[output_mask] = encoder.word2id['<MASK>']
+
+                decoded = decoder(
+                    "fwd",
+                    x=x2_masked,
+                    lengths=len2,
+                    causal=False,
+                    src_enc=encoded.transpose(0, 1),
+                    src_len=len1,
+                )
+                _scores, loss_mlm = decoder(
+                    "predict", tensor=decoded, pred_mask=output_mask, y=predict_output_tokens, get_scores=False
+                )
+                loss = loss + loss_mlm
+
             if self.params.masked_input:
-                targets = predict_input_tokens # len, bs, 3 * max_dim
+                targets = predict_input_tokens # len, bs, float_descriptor_length * max_dim
                 targets = targets[mask]
                 encoded = encoded[mask]
                 targets = targets.flatten()
-                scores = encoder.proj(encoded) # len, bs, 3 * max_dim * n_words
+                scores = encoder.proj(encoded) # len, bs, float_descriptor_length * max_dim * n_words
                 scores = scores.view(-1, len(encoder.word2id))
                 loss_numeric = F.cross_entropy(scores, targets)
                 loss = loss + loss_numeric

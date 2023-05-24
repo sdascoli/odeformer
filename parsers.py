@@ -53,6 +53,12 @@ def get_parser():
         help="Fraction of inputs to mask.",
     )
     parser.add_argument(
+        "--masked_output",
+        type=float,
+        default=0,
+        help="Fraction of outputs to mask.",
+    )
+    parser.add_argument(
         "--use_cross_attention",
         type=bool_flag,
         default=True,

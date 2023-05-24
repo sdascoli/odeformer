@@ -339,12 +339,11 @@ class RandomFunctions(Generator):
         self.max_number = 10 ** (params.max_exponent + params.float_precision)
         self.operators = copy.deepcopy(operators_real)
 
-        self.operators_dowsample_ratio = defaultdict(float)
-        if params.operators_to_downsample != "":
-            for operator in self.params.operators_to_downsample.split(","):
-                operator, ratio = operator.split("_")
-                ratio = float(ratio)
-                self.operators_dowsample_ratio[operator] = ratio
+        self.operators_downsample_ratio = defaultdict(float)
+        for operator in self.params.operators_to_use.split(","):
+            operator, ratio = operator.split(":")
+            ratio = float(ratio)
+            self.operators_downsample_ratio[operator] = ratio
 
         if params.required_operators != "":
             self.required_operators = self.params.required_operators.split(",")
@@ -370,20 +369,24 @@ class RandomFunctions(Generator):
 
         unaries_probabilities = []
         for op in self.unaries:
-            if op not in self.operators_dowsample_ratio:
-                unaries_probabilities.append(1.0)
+            if op not in self.operators_downsample_ratio:
+                unaries_probabilities.append(0.0)
             else:
-                ratio = self.operators_dowsample_ratio[op]
+                ratio = self.operators_downsample_ratio[op]
                 unaries_probabilities.append(ratio)
         self.unaries_probabilities = np.array(unaries_probabilities)
-        self.unaries_probabilities /= self.unaries_probabilities.sum()
+        if self.unaries_probabilities.sum()==0:
+            self.use_unaries = False
+        else:
+            self.unaries_probabilities /= self.unaries_probabilities.sum()
+            self.use_unaries = True
 
         binaries_probabilities = []
         for op in self.binaries:
-            if op not in self.operators_dowsample_ratio:
-                binaries_probabilities.append(1.0)
+            if op not in self.operators_downsample_ratio:
+                binaries_probabilities.append(0.0)
             else:
-                ratio = self.operators_dowsample_ratio[op]
+                ratio = self.operators_downsample_ratio[op]
                 binaries_probabilities.append(ratio)
         self.binaries_probabilities = np.array(binaries_probabilities)
         self.binaries_probabilities /= self.binaries_probabilities.sum()
@@ -447,16 +450,22 @@ class RandomFunctions(Generator):
 
     def generate_float(self, rng, exponent=None):
         sign = rng.choice([-1, 1])
-        mantissa = float(rng.choice(range(1, 10 ** self.params.float_precision)))
-        min_power = (
-            -self.params.max_exponent_prefactor - (self.params.float_precision + 1) // 2
-        )
-        max_power = (
-            self.params.max_exponent_prefactor - 1 - (self.params.float_precision + 1) // 2
-        )
-        if not exponent:
-            exponent = rng.randint(min_power, max_power + 1)
-        constant = sign * (mantissa * 10 ** exponent)
+        # sample number loguniformly in max_prefactor, 1/max_prefactor
+
+        constant = rng.uniform(np.log10(1/self.params.max_prefactor), np.log10(self.params.max_prefactor))
+        constant = sign*10**constant
+
+
+        # mantissa = float(rng.choice(range(1, 10 ** self.params.float_precision)))
+        # min_power = (
+        #     -self.params.max_exponent_prefactor - (self.params.float_precision + 1) // 2
+        # )
+        # max_power = (
+        #     self.params.max_exponent_prefactor - 1 - (self.params.float_precision + 1) // 2
+        # )
+        # if not exponent:
+        #     exponent = rng.randint(min_power, max_power + 1)
+        # constant = sign * (mantissa * 10 ** exponent)
         return str(constant)
 
     def generate_int(self, rng):
@@ -570,8 +579,8 @@ class RandomFunctions(Generator):
 
         for i in range(dimension):
             tree = self.generate_tree(rng, nb_binary_ops_to_use[i], dimension)
-            tree = self.add_unaries(rng, tree, nb_unary_ops_to_use[i])
-            ##Adding constants
+            if self.use_unaries:
+                tree = self.add_unaries(rng, tree, nb_unary_ops_to_use[i])
             if self.params.reduce_num_constants:
                 tree = self.add_prefactors(rng, tree)
             else:
@@ -851,7 +860,7 @@ def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', debug=False, a
                 return tree([y],[t])[0]
             with stdout_redirected():
                 try: 
-                    trajectory = scipy.integrate.odeint(func, y0, times, rtol=1e-2, atol=1e-6)
+                    trajectory = scipy.integrate.odeint(func, y0, times)#, rtol=1e-2, atol=1e-6)
                     if abs(trajectory[-10:].max()) < 1e-100:
                         return None
                 except: 

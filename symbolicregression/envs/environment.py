@@ -456,7 +456,7 @@ class FunctionEnvironment(object):
 
         if self.params.use_sympy:
             len_before = len(tree.prefix().split(","))
-            tree = (self.simplifier.apply_fn(tree, []) if self.params.use_sympy else tree)
+            tree = (self.simplifier.simplify_tree(tree, expand=self.params.expand, resimplify=self.params.simplify) if self.params.use_sympy else tree)
             len_after = len(tree.prefix().split(","))
             if tree is None or len_after > 2 * len_before:
                 return {"tree": tree}, ["simplification error"]
@@ -622,8 +622,14 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--use_sympy",
             type=bool_flag,
-            default=False,
+            default=True,
             help="Whether to use sympy parsing (basic simplification)",
+        )
+        parser.add_argument(
+            "--expand",
+            type=bool_flag,
+            default=False,
+            help="Whether to use sympy expansion",
         )
         parser.add_argument(
             "--simplify",
@@ -640,9 +646,10 @@ class FunctionEnvironment(object):
 
         # encoding
         parser.add_argument(
-            "--operators_to_downsample",
+            "--operators_to_use",
             type=str,
-            default="sin_1,tan_0,arcsin_0,arccos_0,arctan_0,sqrt_0,pow2_1,pow3_0,inv_1,abs_0,exp_0,log_0,add_3,mul_1,sub_0,div_0",
+            default="sin:1,pow2:1,inv:1,add:3,mul:1",
+            #default="add:3,mul:1",
             help="Which operator to remove",
         )
         parser.add_argument(
@@ -655,7 +662,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--max_unary_depth",
             type=int,
-            default=2,
+            default=3,
             help="Max number of operators inside unary",
         )
 
@@ -733,9 +740,9 @@ class FunctionEnvironment(object):
             "--max_exponent", type=int, default=100, help="Maximal order of magnitude"
         )
         parser.add_argument(
-            "--max_exponent_prefactor",
+            "--max_prefactor",
             type=int,
-            default=1,
+            default=20,
             help="Maximal order of magnitude in prefactors",
         )
         parser.add_argument(
@@ -779,7 +786,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--max_binary_ops_per_dim",
             type=int,
-            default=6,
+            default=5,
             help="Max number of binary operators per input dimension",
         )
         parser.add_argument(
