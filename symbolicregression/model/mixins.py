@@ -10,6 +10,15 @@ from symbolicregression.envs.generators import integrate_ode
 __all__ = ("BatchMixin", "FiniteDifferenceMixin", "PredictionIntegrationMixin",)
 
 class BatchMixin:
+    """
+    This class lets models iteratively process a list of trajectories.
+    The base model needs to implement a fit() method.
+    
+    Methods
+    -------
+    fit_all(times, trajectories):
+        Calls model.fit for every element in times and trajectories.
+    """
     def fit_all(
         self,
         times: np.ndarray,
@@ -34,6 +43,17 @@ class BatchMixin:
         return dict(predictions_per_equation)
 
 class FiniteDifferenceMixin:
+    """
+    A class to approximate derivatives via pysindy's implementation.
+    
+    Methods
+    -------
+    approximate_derivative(trajectory, times, finite_difference_order, smoother_window_length):
+        Approximate derivatives.
+        
+    get_differentiation_method(finite_difference_order, smoother_window_length):
+        Create differentiation method instance.
+    """
     def approximate_derivative(
         self,
         trajectory: np.ndarray,
@@ -65,6 +85,14 @@ class FiniteDifferenceMixin:
         )
 
 class PredictionIntegrationMixin:
+    """
+    Implements integration of a predicted function.
+    
+    Methods
+    -------
+    integrate_prediction(times, y0, prediction, ode_integrator):
+        Integrate the prediction using ode_integrator over times interval, starting with y0.
+    """
     @torch.no_grad()
     def integrate_prediction(
         self, 
