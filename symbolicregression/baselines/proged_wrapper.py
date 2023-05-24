@@ -41,15 +41,17 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin):
     
     def fit(
         self,
-        times: np.ndarray,
-        trajectories: np.ndarray, # trajectories needs to have shape (len(time-series), #vars)
-        sort_candidates: bool = True, # this will be ignored, only here for compatibility
+        times: Union[List[np.ndarray], np.ndarray], 
+        trajectories: Union[List[np.ndarray], np.ndarray],
         verbose: Union[None, bool] = None,
         generator_template_name: Union[None, Literal["polynomial",]] = None,
+        *args, #ignored
+        **kwargs, #ignored
     ) -> Dict[int, List[Union[None, str]]]:
         
         if isinstance(trajectories, List):
-            return self.fit_all(times=times, trajectories=trajectories, )
+            return self.fit_all(times=times, trajectories=trajectories, *args, **kwargs,)
+        # trajectories needs to have shape (len(time-series), #vars)
         assert len(times.shape) == 1, f"len(times.shape) = {len(times.shape)}"
         assert times.shape[0] == trajectories.shape[0], \
             f"{times.shape[0]} vs {trajectories.shape[0]}"
