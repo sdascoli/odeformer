@@ -44,12 +44,12 @@ class PySRWrapper(PySRRegressor, BatchMixin, PredictionIntegrationMixin, FiniteD
         
     def fit(
         self, 
-        times: Union[List, np.ndarray], 
-        trajectories: Union[List, np.ndarray],
+        times: Union[List[np.ndarray], np.ndarray], 
+        trajectories: Union[List[np.ndarray], np.ndarray],
         finite_difference_order: Union[None, int] = None,
         smoother_window_length: Union[None, int] = None,
-        *args, 
-        **kwargs,
+        *args, # ignored
+        **kwargs, # ignored
     ) -> Dict[int, Union[None, List[str]]]:
         if isinstance(trajectories, List):
             return self.fit_all(
@@ -57,6 +57,7 @@ class PySRWrapper(PySRRegressor, BatchMixin, PredictionIntegrationMixin, FiniteD
                 trajectories=trajectories,
                 finite_difference_order=finite_difference_order,
                 smoother_window_length=smoother_window_length,
+                *args, **kwargs,
             )
         if self.feature_names is None:
             feature_names = [f"x_{i}" for i in range(trajectories.shape[1])]
@@ -76,7 +77,7 @@ class PySRWrapper(PySRRegressor, BatchMixin, PredictionIntegrationMixin, FiniteD
         
     def _hof_to_equations(
         self,
-        hof: Union[List, pd.DataFrame],
+        hof: Union[List[pd.DataFrame], pd.DataFrame],
         by: str = "score",
     ) -> Dict[int, Union[str, List[str]]]:
         
