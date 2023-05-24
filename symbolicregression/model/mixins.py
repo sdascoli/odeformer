@@ -1,64 +1,80 @@
-from typing import Union, List
+from typing import Dict, List, Union
 from tqdm.auto import tqdm
 from collections import defaultdict
 import traceback
 import torch
 import numpy as np
-from pysindy.differentiation import FiniteDifference
+from pysindy.differentiation import FiniteDifference, SmoothedFiniteDifference
 from symbolicregression.envs.generators import integrate_ode
 
 __all__ = ("BatchMixin", "FiniteDifferenceMixin", "PredictionIntegrationMixin",)
 
 class BatchMixin:
-    
     def fit_all(
         self,
-        times,
-        trajectories,
+        times: np.ndarray,
+        trajectories: np.ndarray,
         *args, 
         **kwargs,
-    ):
+    ) -> Dict[int, Union[None, List[str]]]:
+
         assert isinstance(trajectories, List)
         predictions_per_equation = defaultdict(list)
         for trajectory_i, (trajectory, time) in tqdm(
             enumerate(zip(trajectories, times)), total=len(trajectories)
         ):
             try:
-                candidates = self.fit(times=time, trajectories=trajectory, *args, **kwargs)                    
+                candidates: Dict[int, List[str, None]] = self.fit(
+                    times=time, trajectories=trajectory, *args, **kwargs
+                )
                 predictions_per_equation[trajectory_i].extend(candidates[0])
             except Exception as e:
                 print(traceback.format_exc())
+                predictions_per_equation[trajectory_i].append(None)
         return dict(predictions_per_equation)
 
 class FiniteDifferenceMixin:
-    
     def approximate_derivative(
-        self, 
-        trajectory: np.ndarray, 
+        self,
+        trajectory: np.ndarray,
         times: np.ndarray,
-        finite_difference_order: int = 7,
+        finite_difference_order: Union[None, int] = 2,
         smoother_window_length: Union[None, int] = None,
     ) -> np.ndarray:
-        
+
         assert len(times.shape) == 1, f"{times.shape}"
         assert times.shape[0] == trajectory.shape[0], f"{times.shape} vs {trajectory.shape}"
-        if smoother_window_length is None:
-            fd = FiniteDifference(order=finite_difference_order)
-        else:
-            fd = SmoothedFiniteDifference(
-                order=finite_difference_order,
-                smoother_kws={'window_length': smoother_window_length},
-            )
+        fd = self.get_differentiation_method(
+            finite_difference_order = finite_difference_order, 
+            smoother_window_length = smoother_window_length,
+        )
         return fd._differentiate(trajectory, times)
     
-    
+    def get_differentiation_method(
+        self, 
+        finite_difference_order: Union[None, int] = None, 
+        smoother_window_length: Union[None, int] = None,
+    ):
+        if finite_difference_order is None:
+            finite_difference_order = 2
+        if smoother_window_length is None:
+            return FiniteDifference(order=finite_difference_order)
+        return SmoothedFiniteDifference(
+            order=finite_difference_order,
+            smoother_kws={'window_length': smoother_window_length},
+        )
+
 class PredictionIntegrationMixin:
-    
     @torch.no_grad()
-    def integrate_prediction(self, times, y0, prediction=None, ode_integrator=None):   
+    def integrate_prediction(
+        self, 
+        times: np.ndarray,
+        y0: np.ndarray, 
+        prediction = None, 
+        ode_integrator: Union[None, str] = None,
+    ) -> np.ndarray:
         
-        print("prediction", prediction)
-        
+        _default_ode_integrator = "solve_ivp"
         if prediction is None:
             return None
         # integrate the ODE
@@ -66,9 +82,13 @@ class PredictionIntegrationMixin:
             # default to passed argument
             pass
         elif hasattr(self, "params") and self.params:
-            ode_integrator = self.params.ode_integrator
+            try:
+                if isinstance(self.params, Dict):
+                    ode_integrator = self.params["ode_integrator"]
+                else:
+                    ode_integrator = self.params.ode_integrator
+            except Exception:
+                ode_integrator = _default_ode_integrator
         else:
-            ode_integrator = "solve_ivp"
-        trajectory = integrate_ode(y0, times, prediction, ode_integrator=ode_integrator)
-        
-        return trajectory
+            ode_integrator = _default_ode_integrator
+        return integrate_ode(y0, times, prediction, ode_integrator=ode_integrator)

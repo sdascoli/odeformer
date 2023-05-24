@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+from typing import Dict, List
 import copy
 import json
 
@@ -128,24 +129,33 @@ class Evaluator(object):
         )
         if not os.path.exists(self.save_path): os.makedirs(self.save_path)
 
-        self.ablation_to_keep = list(map(lambda x: "info_" + x, self.params.ablation_to_keep.split(",")))
+        self.ablation_to_keep = list(
+            map(lambda x: "info_" + x, self.params.ablation_to_keep.split(","))
+        )
 
     def evaluate_on_iterator(self,iterator,save_file,):
         self.trainer.logger.info("evaluate_on_iterator")
         scores = OrderedDict({"epoch": self.trainer.epoch})
         batch_results = defaultdict(list)
-        for samples, _ in tqdm(iterator):
+        for samples_i, (samples, _) in enumerate(tqdm(iterator)):
             times = samples["times"]
             trajectories = samples["trajectory"]
             infos = samples["infos"]
             if "tree" in samples.keys():
                 trees = samples["tree"]
-                batch_results["trees"].extend([self.env.simplifier.readable_tree(tree) for tree in trees])
+                batch_results["trees"].extend(
+                    [self.env.simplifier.readable_tree(tree) for tree in trees]
+                )
             
-            all_candidates = self.model.fit(times, trajectories, verbose=False, sort_candidates=True)
+            all_candidates: Dict[int, List[str]] = self.model.fit(
+                times, trajectories, verbose=False, sort_candidates=True
+            )
+            print("all_candidates", all_candidates)
             best_results = {metric:[] for metric in self.params.validation_metrics.split(',')}
             best_candidates = []
-            for time, trajectory, candidates in zip(times, trajectories, all_candidates.values()):
+            for candidate_i, (time, trajectory, candidates) in enumerate(
+                zip(times, trajectories, all_candidates.values())
+            ):
                 if not candidates: 
                     for k in best_results:
                         best_results[k].append(np.nan)
@@ -155,8 +165,15 @@ class Evaluator(object):
                 trajectory = trajectory[idx]
                 best_candidate = candidates[0] # candidates are sorted
                 # TODO: check dim
-                pred_trajectory = self.model.integrate_prediction(time, y0=trajectory[0], prediction=best_candidate)
-                best_result = compute_metrics(pred_trajectory, trajectory, predicted_tree=best_candidate, metrics=self.params.validation_metrics)
+                pred_trajectory = self.model.integrate_prediction(
+                    time, y0=trajectory[0], prediction=best_candidate
+                )
+                best_result = compute_metrics(
+                    pred_trajectory, 
+                    trajectory, 
+                    predicted_tree=best_candidate, 
+                    metrics=self.params.validation_metrics
+                )
                 for k, v in best_result.items():
                     best_results[k].append(v[0])
                 best_candidates.append(best_candidate)
@@ -165,7 +182,10 @@ class Evaluator(object):
                 infos[k] = v.tolist()
 
             batch_results["predicted_trees"].extend(
-                [tree if isinstance(tree[0], str) else self.env.simplifier.readable_tree(tree) for tree in best_candidates]
+                [
+                    tree if tree is None or isinstance(tree[0], str) else self.env.simplifier.readable_tree(tree)
+                    for tree in best_candidates
+                ]
             )
 
             for k, v in infos.items():
@@ -206,7 +226,11 @@ class Evaluator(object):
     ):
 
         self.model.rescale = False
-        self.trainer.logger.info("====== STARTING EVALUATION IN DOMAIN (multi-gpu: {}) =======".format(self.params.multi_gpu))
+        self.trainer.logger.info(
+            "====== STARTING EVALUATION IN DOMAIN (multi-gpu: {}) =======".format(
+                self.params.multi_gpu
+            )
+        )
 
         iterator = self.env.create_test_iterator(
             task,
@@ -231,7 +255,9 @@ class Evaluator(object):
     ):
         
         self.model.rescale = self.params.rescale
-        self.trainer.logger.info("====== STARTING EVALUATION PMLB (multi-gpu: {}) =======".format(self.params.multi_gpu))
+        self.trainer.logger.info(
+            "====== STARTING EVALUATION PMLB (multi-gpu: {}) =======".format(self.params.multi_gpu)
+        )
 
         iterator = []
         from pmlb import fetch_data, dataset_names
@@ -265,7 +291,11 @@ class Evaluator(object):
     ):
         
         self.model.rescale = self.params.rescale
-        self.trainer.logger.info("====== STARTING EVALUATION OSCILLATORS (multi-gpu: {}) =======".format(self.params.multi_gpu))
+        self.trainer.logger.info(
+            "====== STARTING EVALUATION OSCILLATORS (multi-gpu: {}) =======".format(
+                self.params.multi_gpu
+            )
+        )
 
         iterator = []
         datasets = {}
