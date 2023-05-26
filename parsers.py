@@ -173,7 +173,7 @@ def get_parser():
     parser.add_argument(
         "--optimizer",
         type=str,
-        default='adam_cosine,warmup_updates=10000,init_period=100000,period_mult=1.5,lr_shrink=0.5,weight_decay=0.01',
+        default='adam_cosine,warmup_updates=30000,init_period=300000,period_mult=1.5,lr_shrink=0.5,weight_decay=0.01',
         help="Optimizer (SGD / RMSprop / Adam, etc.)",
     )
     parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate")

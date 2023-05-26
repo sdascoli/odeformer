@@ -27,24 +27,35 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
         #assert true[i].shape == predicted[i].shape, "Problem with shapes: {}, {}".format(true[i].shape, predicted[i].shape)
 
     for metric in metrics.split(","):
-        if metric == "r2":
-            for i in range(len(true)):
-                if predicted[i] is None or np.isnan(np.min(predicted[i])):
-                    results[metric].append(np.nan)
-                else:
-                    try:
-                        results[metric].append(r2_score(true[i], predicted[i], multioutput='variance_weighted'))
-                    except Exception as e:
+        if metrics.startswith("r2"):
+            if metric == "r2":
+                for i in range(len(true)):
+                    if predicted[i] is None or np.isnan(np.min(predicted[i])):
                         results[metric].append(np.nan)
-        if metric == "r2_zero":
-            for i in range(len(true)):
-                if predicted[i] is None or np.isnan(np.min(predicted[i])):
-                    results[metric].append(np.nan)
-                else:
-                    try:
-                        results[metric].append(max(0, r2_score(true[i], predicted[i], multioutput='variance_weighted')))
-                    except Exception as e:
+                    else:
+                        try:
+                            results[metric].append(r2_score(true[i], predicted[i], multioutput='variance_weighted'))
+                        except Exception as e:
+                            results[metric].append(np.nan)
+            elif metric == "r2_zero":
+                for i in range(len(true)):
+                    if predicted[i] is None or np.isnan(np.min(predicted[i])):
                         results[metric].append(np.nan)
+                    else:
+                        try:
+                            results[metric].append(max(0, r2_score(true[i], predicted[i], multioutput='variance_weighted')))
+                        except Exception as e:
+                            results[metric].append(np.nan)
+            elif metric.startswith("r2_zero_dim"):
+                dimension = int(metric.split("_")[-1])
+                for i in range(len(true)):
+                    if predicted[i] is None or np.isnan(np.min(predicted[i])):
+                        results[metric].append(np.nan)
+                    else:
+                        try:
+                            results[metric].append(max(0, r2_score(true[i], predicted[i], multioutput='raw_values')[dimension]))
+                        except Exception as e:
+                            results[metric].append(np.nan)
 
         elif metric.startswith("accuracy_l1"):
             if metric == "accuracy_l1":
