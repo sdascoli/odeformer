@@ -1,0 +1,42 @@
+apiVersion: run.ai/v1
+kind: RunaiJob
+metadata:
+  name: dascoli-train
+  labels:
+    priorityClassName: "build" # Interactive Job if present, for Train Job REMOVE this line
+    user: dascoli
+spec:
+#  ports:
+#    -name: "8888"
+#    port: 8888
+#    targetPort: 8888
+  template:
+    metadata:
+      labels:
+        user: stephane.dascoli
+    spec:	
+      hostIPC: true
+      schedulerName: runai-scheduler
+      restartPolicy: Never
+      securityContext:
+        runAsUser: 269005 # insert uid found in people.epfl in administrative data
+        runAsGroup: 10621 # insert gid as found in people.epfl in administrative data
+        fsGroup: 10621
+      containers:
+      - name: container-name
+        image: ic-registry.epfl.ch/mlo/pytorch
+        workingDir : /home/dascoli
+        command: ["/bin/bash"]
+        args:
+        - "-c"
+        - "sleep infinity"
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+#        volumeMounts:
+#          - mountPath: /MLBiodata1
+#            name: MLBiodata1
+#      volumes:
+#        - name: MLBiodata1
+#          persistentVolumeClaim:
+#            claimName: runai-pv-MLBiodata1
