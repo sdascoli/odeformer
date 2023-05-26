@@ -120,6 +120,8 @@ class FunctionEnvironment(object):
             global TIMEOUT
             TIMEOUT = 100000
 
+        self.float_descriptor_len = 3 if params.sign_as_token else 2
+
     def mask_from_seperator(self, x, sep):
         sep_id = self.float_word2id[sep]
         alen = (
@@ -516,6 +518,33 @@ class FunctionEnvironment(object):
                 [x in self.equation_word2id for x in tree_encoded]
             ), "tree: {}\n encoded: {}".format(tree, tree_encoded)
 
+
+        inputs = []
+        for seq_l in range(len(times)):
+            inputs.append([times[seq_l], trajectory[seq_l]])
+
+        inputs_encoded = []
+        for x, y in inputs:
+            x_toks = self.float_encoder.encode(x)
+            y_toks = self.float_encoder.encode(y)
+            input_dim = int(len(x_toks) /  self.float_descriptor_len)
+            output_dim = int(len(y_toks) / self.float_descriptor_len)
+            x_toks = [
+                *x_toks,
+            ]
+            y_toks = [
+                *y_toks,
+                *[
+                    "<PAD>"
+                    for _ in range(
+                        (self.params.max_dimension - output_dim)
+                        * self.float_descriptor_len
+                    )
+                ],
+            ]
+            toks = [*x_toks, *y_toks]
+            inputs_encoded.append(toks)
+
         info = {
             "n_points":       n_points,
             "n_unary_ops":    sum(nb_unary_ops),
@@ -526,6 +555,7 @@ class FunctionEnvironment(object):
         expr = {
             "times":                 times,
             "trajectory":            trajectory,
+            "inputs_encoded":        inputs_encoded,
             "tree_encoded":          tree_encoded,
             "skeleton_tree_encoded": skeleton_tree_encoded,
             "tree":                  tree,
@@ -1232,8 +1262,9 @@ class EnvDataset(Dataset):
             return np.array(lst)
 
         x = copy.deepcopy(self.data[idx])
-        x["times"] = str_list_to_float_array(x["times"])
-        x["trajectory"] = str_list_to_float_array(x["trajectory"])
+        #x["times"] = str_list_to_float_array(x["times"])
+        #x["trajectory"] = str_list_to_float_array(x["trajectory"])
+        #x["inputs_encoded"] = self.env.equation_encoder.encode(x["tree"])
         x["tree"] = self.env.equation_encoder.decode(x["tree"].split(","))
         x["tree_encoded"] = self.env.equation_encoder.encode(x["tree"])
         infos = {}
@@ -1244,15 +1275,16 @@ class EnvDataset(Dataset):
                 "trajectory",
                 "tree",
                 "tree_encoded",
+                "inputs_encoded",
             ]:
                 infos[col] = int(x[col])
         x["infos"] = infos
         for k in infos.keys():
             del x[k]
 
-        x["infos"]["input_sequence_length"] = self.env.get_length_after_batching([x['times'], x['trajectory']])[0].item()
+        x["infos"]["input_sequence_length"] = len(x['inputs_encoded'][0])
         if x["infos"]["input_sequence_length"] > self.params.tokens_per_batch:
-            return self.generate_sample()
+           return self.generate_sample()
 
         return x
 

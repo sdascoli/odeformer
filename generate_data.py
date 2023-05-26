@@ -10,7 +10,7 @@ from distutils import dir_util
 user = os.getlogin()
 
 
-exp_folder = 'datagen'
+exp_folder = 'datagen_encoded'
 
 dump_path = f'/home/{user}/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)

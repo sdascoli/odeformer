@@ -95,30 +95,31 @@ class LinearPointEmbedder(Embedder):
         return sequences_embeddings
     
     def encode(self, sequences: List[Sequence], pairs=True) -> List[torch.Tensor]:
-        res = []
-        for seq in sequences:
-            seq_toks = []
-            for x, y in seq:
-                x_toks = self.env.float_encoder.encode(x)
-                y_toks = self.env.float_encoder.encode(y)
-                input_dim = int(len(x_toks) / self.float_scalar_descriptor_len)
-                output_dim = int(len(y_toks) / self.float_scalar_descriptor_len)
-                x_toks = [
-                    *x_toks,
-                ]
-                y_toks = [
-                    *y_toks,
-                    *[
-                        "<OUTPUT_PAD>"
-                        for _ in range(
-                            (self.params.max_dimension - output_dim)
-                            * self.float_scalar_descriptor_len
-                        )
-                    ],
-                ]
-                toks = [*x_toks, *y_toks]
-                seq_toks.append([self.env.float_word2id[tok] for tok in toks])
-            res.append(torch.LongTensor(seq_toks))
+        # res = []
+        # for seq in sequences:
+        #     seq_toks = []
+        #     for x, y in seq:
+        #         x_toks = self.env.float_encoder.encode(x)
+        #         y_toks = self.env.float_encoder.encode(y)
+        #         input_dim = int(len(x_toks) / self.float_scalar_descriptor_len)
+        #         output_dim = int(len(y_toks) / self.float_scalar_descriptor_len)
+        #         x_toks = [
+        #             *x_toks,
+        #         ]
+        #         y_toks = [
+        #             *y_toks,
+        #             *[
+        #                 "<OUTPUT_PAD>"
+        #                 for _ in range(
+        #                     (self.params.max_dimension - output_dim)
+        #                     * self.float_scalar_descriptor_len
+        #                 )
+        #             ],
+        #         ]
+        #         toks = [*x_toks, *y_toks]
+        #         seq_toks.append([self.env.float_word2id[tok] for tok in toks])
+        #     res.append(torch.LongTensor(seq_toks))
+        return [torch.LongTensor([[self.env.float_word2id[tok] for tok in toks] for toks in seq]) for seq in sequences]
         return res
 
     def batch(self, seqs: List[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:

@@ -217,10 +217,13 @@ class Trainer(object):
             train_path = os.path.join(params.reload_data,'data.prefix')
             test_path = os.path.join(params.reload_data,'data.prefix.test')
             # check number of lines in test_path
-            with open(test_path) as f:
-                for i, l in enumerate(f):
-                    pass
-            n_eqs = i + 1
+            if os.path.isfile(test_path):
+                with open(test_path) as f:
+                    for i, l in enumerate(f):
+                        pass
+                n_eqs = i + 1
+            else:
+                n_eqs = 0
             if not os.path.isfile(test_path) or n_eqs < params.eval_size:
                 split_data(train_path, params.eval_size)
             self.data_path = {"functions": (train_path, test_path)}
@@ -697,12 +700,13 @@ class Trainer(object):
             outputs = {**get_dictionary_slice(i, samples["infos"])}
             times = samples["times"][i].tolist()
             trajectory = samples["trajectory"][i].tolist()
-            outputs["times"] = float_list_to_str_lst(
-                times, self.params.float_precision
-            )
-            outputs["trajectory"] = float_list_to_str_lst(
-                trajectory, self.params.float_precision
-            )
+            # outputs["times"] = float_list_to_str_lst(
+            #     times, self.params.float_precision
+            # )
+            # outputs["trajectory"] = float_list_to_str_lst(
+            #     trajectory, self.params.float_precision
+            # )
+            outputs["inputs_encoded"] = samples["inputs_encoded"][i]
             outputs["tree"] = samples["tree"][i].prefix()
 
             self.file_handler_prefix.write(json.dumps(outputs) + "\n")
@@ -736,14 +740,10 @@ class Trainer(object):
             for error_type, count in errors.items():
                 self.errors_statistics[error_type] += count
 
-        times = samples["times"]
-        trajectory = samples["trajectory"]
-
-        x1 = []
-        for seq_id in range(len(times)):
-            x1.append([])
-            for seq_l in range(len(times[seq_id])):
-                x1[seq_id].append([times[seq_id][seq_l], trajectory[seq_id][seq_l]])
+        #times = samples["times"]
+        #trajectory = samples["trajectory"]
+        inputs = samples["inputs_encoded"]
+        x1 = inputs
                 
         if self.params.masked_input: #randomly mask some inputs
             input_tokens, len1 = embedder.forward(x1, return_before_embed=True)
