@@ -20,6 +20,7 @@ from symbolicregression.utils import to_cuda
 import glob
 import scipy
 import pickle
+import wandb
 
 from parsers import get_parser
 import symbolicregression
@@ -138,7 +139,7 @@ class Evaluator(object):
             infos = samples["infos"]
             if "tree" in samples.keys():
                 trees = samples["tree"]
-                batch_results["trees"].extend([self.env.simplifier.readable_tree(tree) for tree in trees])
+                batch_results["trees"].extend(batch_results["trees"].extend([self.env.simplifier.readable_tree(tree) for tree in trees]))
 
             all_candidates = self.dstr.fit(times, trajectories, verbose=False, sort_candidates=True)
 
@@ -191,8 +192,9 @@ class Evaluator(object):
             for val, df_ablation in df.groupby(ablation):
                 avg_scores_ablation = df_ablation.mean()
                 for k, v in avg_scores_ablation.items():
-                    scores[k + "_{}_{}".format(ablation, val)] = v
-                    
+                    if k not in info_columns:
+                        scores[k + "_{}_{}".format(ablation, val)] = v
+                            
         return scores
         
     def evaluate_in_domain(
@@ -218,6 +220,9 @@ class Evaluator(object):
 
         scores = self.evaluate_on_iterator(iterator,
                                            save_file)
+        
+        if self.params.use_wandb:
+            wandb.log({'in_domain_'+metric: scores[metric] for metric in self.params.validation_metrics.split(',')})
 
         return scores
 
@@ -323,9 +328,9 @@ def main(params):
     evaluator = Evaluator(trainer)
     save = params.save_results
 
-    # if params.eval_in_domain:
-    #   scores = evaluator.evaluate_in_domain("functions",save=save,)
-    #   logger.info("__log__:%s" % json.dumps(scores))
+    if params.eval_in_domain:
+      scores = evaluator.evaluate_in_domain("functions",save=save,)
+      logger.info("__log__:%s" % json.dumps(scores))
 
     if params.eval_on_pmlb:
         pmlb_scores = evaluator.evaluate_on_pmlb(save=save)
@@ -341,10 +346,9 @@ if __name__ == "__main__":
     pk = pickle.load(open(params.reload_checkpoint + "/params.pkl", "rb"))
     pickled_args = pk.__dict__
     for p in params.__dict__:
-        if p in pickled_args and p not in ["dump_path", "reload_checkpoint", "rescale", "validation_metrics", "eval_in_domain", "eval_on_pmlb", "batch_size_eval", "beam_size", "beam_selection_metric", "subsample_prob", "eval_noise_gamma", "eval_noise_type"]:
+        if p in pickled_args and p not in ["dump_path", "reload_checkpoint", "rescale", "validation_metrics", "eval_in_domain", "eval_on_pmlb", "batch_size_eval", "beam_size", "beam_selection_metric", "subsample_prob", "eval_noise_gamma", "eval_noise_type", "use_wandb", "eval_size"]:
             params.__dict__[p] = pickled_args[p]
 
-    params.eval_size = 10
     params.is_slurm_job = False
     params.local_rank = -1
     params.master_port = -1
