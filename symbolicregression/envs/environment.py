@@ -78,6 +78,7 @@ class FunctionEnvironment(object):
         self.generator = generators.RandomFunctions(params, SPECIAL_WORDS)
         self.float_encoder = self.generator.float_encoder
         self.float_words = self.generator.float_words
+        self.prefix_encoder = self.generator.prefix_encoder
         self.equation_encoder = self.generator.equation_encoder
         self.equation_words = self.generator.equation_words
         if params.use_two_hot:
@@ -514,7 +515,9 @@ class FunctionEnvironment(object):
         else:
             assert all(
                 [x in self.equation_word2id for x in tree_encoded]
-            ), "tree: {}\n encoded: {}".format(tree, tree_encoded)
+            ), "tree:{}, encoded: {} bad tokens: {}".format(tree, 
+                                                            tree_encoded, 
+                                                            [token for token in tree_encoded if token not in self.equation_word2id])
 
         info = {
             "n_points":       n_points,
@@ -619,6 +622,12 @@ class FunctionEnvironment(object):
 
         parser.add_argument("--collate_queue_size", type=int, default=2000)
 
+        parser.add_argument(
+            "--use_infix",
+            type=bool_flag,
+            default=True,
+            help="Whether to use infix rather than prefix",
+        )
         parser.add_argument(
             "--use_sympy",
             type=bool_flag,
@@ -1234,7 +1243,7 @@ class EnvDataset(Dataset):
         x = copy.deepcopy(self.data[idx])
         x["times"] = str_list_to_float_array(x["times"])
         x["trajectory"] = str_list_to_float_array(x["trajectory"])
-        x["tree"] = self.env.equation_encoder.decode(x["tree"].split(","))
+        x["tree"] = self.env.prefix_encoder.decode(x["tree"].split(",")) # TODO change to equation_encoder
         x["tree_encoded"] = self.env.equation_encoder.encode(x["tree"])
         infos = {}
 

@@ -9,6 +9,7 @@ from typing import List, Union
 from argparse import Namespace
 import numpy as np
 import math
+import sympy as sp
 from .generators import Node, NodeList
 from .utils import *
 
@@ -34,9 +35,12 @@ class GeneralEncoder:
     def __init__(self, params, symbols, all_operators):
         self.constant_encoder = ConstantEncoder(params) if params.use_two_hot else None
         self.float_encoder = FloatSequences(params)
-        self.equation_encoder = Equation(
-            params, symbols, self.float_encoder, all_operators, self.constant_encoder
-        )
+        self.prefix_encoder = Equation(params, symbols, self.float_encoder, all_operators, self.constant_encoder)
+        self.infix_encoder = InfixEncoder(params, symbols, self.float_encoder, all_operators, self.constant_encoder)
+        if params.use_infix:
+            self.equation_encoder = self.infix_encoder
+        else:
+            self.equation_encoder = self.prefix_encoder
 
 class ConstantEncoder(Encoder):
     
@@ -82,13 +86,15 @@ class ConstantEncoder(Encoder):
 class FloatSequences(Encoder):
     def __init__(self, params):
         super().__init__(params)
+        self.params = params
         self.float_precision = params.float_precision
         self.max_exponent = params.max_exponent
         self.base = (self.float_precision + 1)
         self.max_token = 10 ** self.base
-        self.symbols = ["+", "-"]
+        self.symbols = []
         self.sign_as_token = params.sign_as_token
         if self.sign_as_token:
+            self.symbols.extend(["SIGN+", "SIGN-"])
             self.symbols.extend(["N" + f"%0{self.base}d" % i for i in range(self.max_token)])
         else:
             self.symbols.extend(["+N" + f"%0{self.base}d" % i for i in range(self.max_token)])
@@ -119,7 +125,7 @@ class FloatSequences(Encoder):
                     mantissa = ["0" * base]
                     expon = int(0)
                 if self.sign_as_token:
-                    token_sequence = [sign, f"N{mantissa}", f"E{expon}"]
+                    token_sequence = ["SIGN"+sign, f"N{mantissa}", f"E{expon}"]
                 else:
                     token_sequence = [f"{sign}N{mantissa}",f"E{expon}"]
                 seq += token_sequence
@@ -138,13 +144,10 @@ class FloatSequences(Encoder):
             return None
         seq = []
         for val in chunks(lst, self.float_descriptor_length):
-            for x in val:
-                if x[0] not in ["-", "+", "E", "N"]:
-                    return np.nan
             try:
                 mant = ""
                 if self.sign_as_token:
-                    sign = 1 if val[0] == "+" else -1
+                    sign = 1 if val[0] == "SIGN+" else -1
                     for x in val[1:-1]:
                         mant += x[1:]                
                     exp = int(val[-1][1:])
@@ -157,11 +160,11 @@ class FloatSequences(Encoder):
                 value = sign * float(f"{mant}e{exp}")
             except Exception:
                 import traceback
-                print(traceback.format_exc())
+                if self.params.debug:
+                    print(traceback.format_exc())
                 value = np.nan
             seq.append(value)
         return seq
-
 
 class Equation(Encoder):
     def __init__(self, params, symbols, float_encoder, all_operators, constant_encoder=None):
@@ -219,7 +222,7 @@ class Equation(Encoder):
         elif lst[0].startswith("INT"):
             val, length = self.parse_int(lst)
             return Node(str(val), self.params), length
-        elif lst[0] == "+" or lst[0] == "-" or lst[0].startswith("+N") or lst[0].startswith('-N'):
+        elif lst[0] == "SIGN+" or lst[0] == "SIGN-" or lst[0].startswith("+N") or lst[0].startswith('-N'):
             if self.params.use_two_hot:
                 return Node(str(lst[0]), self.params), 1
             else:
@@ -301,3 +304,133 @@ class Equation(Encoder):
                 break
         res.append("INT-" if neg else "INT+")
         return res[::-1]
+
+
+    
+class InfixEncoder(Encoder):
+    def __init__(self, params, symbols, float_encoder, all_operators, constant_encoder=None):
+        super().__init__(params)
+        self.params = params
+        self.max_int = self.params.max_int
+        self.symbols = symbols
+        if params.extra_unary_operators != "":
+            self.extra_unary_operators = self.params.extra_unary_operators.split(",")
+        else:
+            self.extra_unary_operators = []
+        if params.extra_binary_operators != "":
+            self.extra_binary_operators = self.params.extra_binary_operators.split(",")
+        else:
+            self.extra_binary_operators = []
+        self.float_encoder = float_encoder
+        self.all_operators = all_operators
+        self.constant_encoder = constant_encoder
+        self.float_descriptor_length = 3 if self.params.sign_as_token else 2
+        self.equation_encoder = Equation(params, symbols, float_encoder, all_operators, constant_encoder) # TODO: improve this
+
+    def encode(self, tree):
+        res = []
+        for elem in tree.infix().split(" "):
+            try:
+                val = float(elem)
+                if self.constant_encoder is not None:
+                    res.extend(self.constant_encoder.encode(val))
+                else:
+                    if elem.lstrip("-").isdigit():
+                        res.append(elem)
+                    else:
+                        res.extend(self.float_encoder.encode(np.array([val])))
+            except ValueError:
+                if elem != "": # 
+                    res.append(elem)
+        return res
+
+    def decode(self, lst):
+        res = []
+        i=0
+        while i<len(lst):
+            elem = lst[i]
+            if elem in ["SIGN+", "SIGN-"] or elem.startswith("+N") or elem.startswith("-N"):
+                value = self.float_encoder.decode(lst[i:i+self.float_descriptor_length])[0]
+                res.append(str(value))
+                i += self.float_descriptor_length
+            else:
+                if elem not in ["<EOS>", "<PAD>"]:
+                    res.append(elem)
+                i+=1
+        infix = " ".join(res)
+        # nodes = infix.split(" | ")
+        # nodes = [sp.parse_expr(node, local_dict=self.local_dict) for node in nodes]
+        # nodes = [self.sympy_expr_to_tree(node) for node in nodes]
+        # tree = NodeList(nodes)
+        return infix
+
+    def sympy_expr_to_tree(self, expr):
+        prefix = self.sympy_to_prefix(expr)
+        return self.equation_encoder.decode(prefix)
+
+    def _sympy_to_prefix(self, op, expr):
+        """
+        Parse a SymPy expression given an initial root operator.
+        """
+        n_args = len(expr.args)
+
+        # parse children
+        parse_list = []
+        for i in range(n_args):
+            if i == 0 or i < n_args - 1:
+                parse_list.append(op)
+            parse_list += self.sympy_to_prefix(expr.args[i])
+
+        return parse_list
+
+    def sympy_to_prefix(self, expr):
+        """
+        Convert a SymPy expression to a prefix one.
+        """
+        if isinstance(expr, sp.Symbol):
+            return [str(expr)]
+        elif isinstance(expr, sp.Integer):
+            return [str(expr)]
+        elif isinstance(expr, sp.Float):
+            s = str(expr)
+            return [s]
+        elif isinstance(expr, sp.Rational):
+            return ["mul", str(expr.p), "pow", str(expr.q), "-1"]
+        elif expr == sp.EulerGamma:
+            return ["euler_gamma"]
+        elif expr == sp.E:
+            return ["e"]
+        elif expr == sp.pi:
+            return ["pi"]
+
+        # SymPy operator
+        for op_type, op_name in self.SYMPY_OPERATORS.items():
+            if isinstance(expr, op_type):
+                return self._sympy_to_prefix(op_name, expr)
+
+        # Unknown operator
+        return self._sympy_to_prefix(str(type(expr)), expr)
+    
+    SYMPY_OPERATORS = {
+        # Elementary functions
+        sp.Add: "add",
+        sp.Mul: "mul",
+        sp.Mod: "mod",
+        sp.Pow: "pow",
+        # Misc
+        sp.Abs: "abs",
+        sp.sign: "sign",
+        sp.Heaviside: "step",
+        # Exp functions
+        sp.exp: "exp",
+        sp.log: "log",
+        # Trigonometric Functions
+        sp.sin: "sin",
+        sp.cos: "cos",
+        sp.tan: "tan",
+        # Trigonometric Inverses
+        sp.asin: "arcsin",
+        sp.acos: "arccos",
+        sp.atan: "arctan",
+    }
+    local_dict = {v:k for k,v in SYMPY_OPERATORS.items()}

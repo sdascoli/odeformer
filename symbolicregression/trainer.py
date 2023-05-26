@@ -24,6 +24,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import copy
 import contextlib
+import wandb
 
 # if torch.cuda.is_available():
 has_apex = True
@@ -366,6 +367,10 @@ class Trainer(object):
         """
         Print statistics about the training.
         """
+        if self.params.use_wandb:
+            wandb.log({'loss':self.stats["functions"][0],
+                   'lr': self.optimizer.param_groups[0]["lr"],
+                   })
         if self.n_total_iter % self.params.print_freq != 0:
             return
 

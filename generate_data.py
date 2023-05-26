@@ -30,6 +30,7 @@ extra_args = {
 
 grid = {
     'use_sympy':[True, False],
+    'use_infix':[True]
 }
 
 def get_free_gpus():

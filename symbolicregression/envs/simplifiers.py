@@ -66,7 +66,7 @@ class Simplifier(ABC):
     def __init__(self, generator):
 
         self.params = generator.params
-        self.encoder = generator.equation_encoder
+        self.encoder = generator.prefix_encoder
 
         for k in generator.variables:
             self.local_dict[k] = sp.Symbol(k, real=True, integer=False)
@@ -259,19 +259,6 @@ class Simplifier(ABC):
         """
         n_args = len(expr.args)
 
-        # assert (op == 'add' or op == 'mul') and (n_args >= 2) or (op != 'add' and op != 'mul') and (1 <= n_args <= 2)
-
-        # square root
-        # if op == 'pow':
-        #     if isinstance(expr.args[1], sp.Rational) and expr.args[1].p == 1 and expr.args[1].q == 2:
-        #         return ['sqrt'] + self.sympy_to_prefix(expr.args[0])
-        #     elif str(expr.args[1])=='2':
-        #         return ['sqr'] + self.sympy_to_prefix(expr.args[0])
-        #     elif str(expr.args[1])=='-1':
-        #         return ['inv'] + self.sympy_to_prefix(expr.args[0])
-        #     elif str(expr.args[1])=='-2':
-        #         return ['inv', 'sqr'] + self.sympy_to_prefix(expr.args[0])
-
         # parse children
         parse_list = []
         for i in range(n_args):
@@ -300,17 +287,6 @@ class Simplifier(ABC):
             return ["e"]
         elif expr == sp.pi:
             return ["pi"]
-
-        # if we want div and sub
-        # if isinstance(expr, sp.Mul) and len(expr.args)==2:
-        #    if isinstance(expr.args[0], sp.Mul) and isinstance(expr.args[0].args[0], sp.Pow): return ['div']+self.sympy_to_prefix(expr.args[1])+self.sympy_to_prefix(expr.args[0].args[1])
-        #    if isinstance(expr.args[1], sp.Mul) and isinstance(expr.args[1].args[0], sp.Pow): return ['div']+self.sympy_to_prefix(expr.args[0])+self.sympy_to_prefix(expr.args[1].args[1])
-        # if isinstance(expr, sp.Add) and len(expr.args)==2:
-        #    if isinstance(expr.args[0], sp.Mul) and str(expr.args[0].args[0])=='-1': return ['sub']+self.sympy_to_prefix(expr.args[1])+self.sympy_to_prefix(expr.args[0].args[1])
-        #    if isinstance(expr.args[1], sp.Mul) and str(expr.args[1].args[0])=='-1': return ['sub']+self.sympy_to_prefix(expr.args[0])+self.sympy_to_prefix(expr.args[1].args[1])
-
-        # if isinstance(expr, sp.Pow) and str(expr.args[1])=='-1':
-        #     return ['inv'] + self.sympy_to_prefix(expr.args[0])
 
         # SymPy operator
         for op_type, op_name in self.SYMPY_OPERATORS.items():

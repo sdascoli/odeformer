@@ -9,7 +9,7 @@ import shutil
 from distutils import dir_util
 user = os.getlogin()
 
-exp_folder = 'sympy_new'
+exp_folder = 'infix'
 
 dump_path = f'/home/{user}/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
@@ -24,11 +24,14 @@ extra_args = {
     #'min_dimension':1,
     #'max_dimension':2,
     #'sign_as_token':True,
-    'reload_data':f"/home/{user}/odeformer/experiments/datagen/exp_use_sympy_",
+    'reload_data':f"/home/{user}/odeformer/experiments/datagen/exp_use_sympy_True",
+    #'n_steps_per_epoch':3000,
+    'eval_on_pmlb':False,
     }
 
 grid = {
-    "use_sympy":[True, False],
+    "use_infix":[True, False]
+    #"use_sympy":[True, False],
     #"sign_as_token":[False],
     #"use_two_hot":[False]
     #"fixed_init_scale":[True,False],
@@ -96,7 +99,7 @@ for params in dict_product(grid):
         if arg not in params:
             params[arg] = value
 
-    params['reload_data'] += str(params['use_sympy']) 
+    #params['reload_data'] += str(params['use_sympy']) 
 
     for f in os.listdir():
         if f.endswith('.py'):

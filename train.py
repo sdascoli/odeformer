@@ -13,6 +13,7 @@ import torch
 import os
 import pickle
 from pathlib import Path
+import wandb
 
 import symbolicregression
 from symbolicregression.slurm import init_signal_handler, init_distributed_mode
@@ -30,7 +31,14 @@ np.seterr(all="raise")
 def main(params):
 
     setproctitle.setproctitle(params.exp_id)
-
+    if params.use_wandb:
+        wandb.init(
+        # set the wandb project where this run will be logged
+        project="sr-for-odes",
+        name=f"{params.exp_name}-{params.exp_id}",
+        # track hyperparameters and run metadata
+        config=params.__dict__,
+        )
 
     # initialize the multi-GPU / multi-node training
     # initialize experiment / SLURM signal handler for time limit / pre-emption

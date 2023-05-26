@@ -83,6 +83,13 @@ class Node:
         for c in self.children:
             s += "," + c.prefix()
         return s
+    
+    @staticmethod
+    def get_n_children(node):
+        if node.children:  
+            return len(node.children)
+        else:
+            return 0
 
     # export to latex qtree format: prefix with \Tree, use package qtree
     def qtree_prefix(self):
@@ -106,16 +113,33 @@ class Node:
         if nb_children == 1:
             s = str(self.value)
             if s == "pow2":
-                s = "(" + self.children[0].infix() + ")**2"
+                s = "( " + self.children[0].infix() + " ) pow 2"
+            elif s == "inv":
+                s = "1 / ( " + self.children[0].infix() + " )"
             elif s == "pow3":
-                s = "(" + self.children[0].infix() + ")**3"
+                s = "( " + self.children[0].infix() + " ) pow 3"
             else:
-                s = s + "(" + self.children[0].infix() + ")"
+                s = s + " ( " + self.children[0].infix() + " )"
             return s
-        s = "(" + self.children[0].infix()
-        for c in self.children[1:]:
-            s = s + " " + str(self.value) + " " + c.infix()
-        return s + ")"
+        else:
+            if self.value == "add":
+                return self.children[0].infix() + " add " + self.children[1].infix()
+            if self.value == "add":
+                return self.children[0].infix() + " sub " + self.children[1].infix()
+            if self.value == "pow":
+                res  = "( " + self.children[0].infix() + " ) pow"
+                res += (" " + self.children[1].infix())
+                return res
+            elif self.value == "mul":
+                res  = " ( " + self.children[0].infix() + " ) " if self.children[0].value in ["add","sub"] else (self.children[0].infix() + " ")
+                res += "mul"
+                res += " ( " + self.children[1].infix() + " ) " if self.children[1].value in ["add","sub"] else (" " + self.children[1].infix())
+                return res
+            elif self.value == "div":
+                res  = " ( " + self.children[0].infix() + " ) " if self.children[0].value=="add" else (self.children[0].infix() + " ")
+                res += "div"
+                res += " ( " + self.children[1].infix() + " ) " if self.children[1].value=="add" else (" " + self.children[1].infix())
+                return res
 
     def __len__(self):
         lenc = 1
@@ -419,6 +443,7 @@ class RandomFunctions(Generator):
         )
         self.float_encoder = self.general_encoder.float_encoder
         self.float_words = special_words + sorted(list(set(self.float_encoder.symbols)))
+        self.prefix_encoder = self.general_encoder.prefix_encoder
         self.equation_encoder = self.general_encoder.equation_encoder
         self.equation_words = sorted(list(set(self.symbols)))
         self.equation_words = special_words + self.equation_words
@@ -455,17 +480,6 @@ class RandomFunctions(Generator):
         constant = rng.uniform(np.log10(1/self.params.max_prefactor), np.log10(self.params.max_prefactor))
         constant = sign*10**constant
 
-
-        # mantissa = float(rng.choice(range(1, 10 ** self.params.float_precision)))
-        # min_power = (
-        #     -self.params.max_exponent_prefactor - (self.params.float_precision + 1) // 2
-        # )
-        # max_power = (
-        #     self.params.max_exponent_prefactor - 1 - (self.params.float_precision + 1) // 2
-        # )
-        # if not exponent:
-        #     exponent = rng.randint(min_power, max_power + 1)
-        # constant = sign * (mantissa * 10 ** exponent)
         return str(constant)
 
     def generate_int(self, rng):
@@ -623,7 +637,7 @@ class RandomFunctions(Generator):
             to_remove = indices[: len(indices) - nb_unaries]
             for index in sorted(to_remove, reverse=True):
                 del prefix[index]
-        tree = self.equation_encoder.decode(prefix).nodes[0]
+        tree = self.prefix_encoder.decode(prefix).nodes[0]
         return tree
 
     def _add_unaries(self, rng, tree):
@@ -642,30 +656,29 @@ class RandomFunctions(Generator):
         transformed_prefix = self._add_prefactors(rng, tree)
         if transformed_prefix == tree.prefix():
             a = self.generate_float(rng)
-            transformed_prefix = f"mul,{a}," + transformed_prefix
+            transformed_prefix = f"mul," + transformed_prefix + f",{a}"
         a = self.generate_float(rng)
-        transformed_prefix = f"add,{a}," + transformed_prefix
-        tree = self.equation_encoder.decode(transformed_prefix.split(",")).nodes[0]
+        transformed_prefix = f"add," + transformed_prefix + f",{a}"
+        tree = self.prefix_encoder.decode(transformed_prefix.split(",")).nodes[0]
         return tree
 
     def _add_prefactors(self, rng, tree):
 
         s = str(tree.value)
         a, b = self.generate_float(rng), self.generate_float(rng)
-        add_prefactor = f",add,{a}," if rng.rand() < self.params.prob_prefactor else ""
-        mul_prefactor = f",mul,{b}," if rng.rand() < self.params.prob_prefactor else ""
-        total_prefactor = add_prefactor.rstrip(",") + "," + mul_prefactor.lstrip(",")
-        if total_prefactor == ",":  # no prefactor
-            total_prefactor = ""
+        # add_prefactor = f",add,{a}," if rng.rand() < self.params.prob_prefactor else ""
+        # mul_prefactor = f",mul,{b}," if rng.rand() < self.params.prob_prefactor else ""
+        # total_prefactor = add_prefactor.rstrip(",") + "," + mul_prefactor.lstrip(",")
+        # if total_prefactor == ",":  # no prefactor
+        #     total_prefactor = ""
         if s in ["add", "sub"]:
-            s += (
-                "," if tree.children[0].value in ["add", "sub"] else mul_prefactor
-            ) + self._add_prefactors(rng, tree.children[0])
-            s += (
-                "," if tree.children[1].value in ["add", "sub"] else mul_prefactor
-            ) + self._add_prefactors(rng, tree.children[1])
+            for child in tree.children:
+                if child in ["add", "sub"]:
+                    s += "," + self._add_prefactors(rng, child)
+                else:
+                    s += ",mul," + self._add_prefactors(rng, child) + f",{b}"
         elif s in self.unaries and tree.children[0].value not in ["add", "sub"]:
-            s += total_prefactor + self._add_prefactors(rng, tree.children[0])
+            s += ",mul,add," + self._add_prefactors(rng, tree.children[0]) + f",{a},{b}"
         else:
             for c in tree.children:
                 s += f"," + self._add_prefactors(rng, c)
@@ -696,7 +709,7 @@ class RandomFunctions(Generator):
                     + prefix[idx + offset :]
                 )
             offset += 4
-        tree = self.equation_encoder.decode(prefix).nodes[0]
+        tree = self.prefix_encoder.decode(prefix).nodes[0]
 
         return tree
 
@@ -750,7 +763,7 @@ class RandomFunctions(Generator):
             else:
                 continue
 
-        new_tree = self.equation_encoder.decode(prefix)
+        new_tree = self.prefix_encoder.decode(prefix)
         return new_tree, constants
 
     def wrap_equation_floats(self, tree, constants):
@@ -815,7 +828,10 @@ def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', debug=False, a
                 jax_tree, jax_param = sympy2jax(tree, symbols)
                 jax_trees.append(jax_tree); jax_params.append(jax_param)
         else:
-            tree = tree_to_numexpr_fn(tree)
+            if hasattr(tree, "infix"):
+                tree = tree_to_numexpr_fn(tree.infix())
+            else:
+                tree = tree_to_numexpr_fn(tree)
 
         if ode_integrator == 'jax':
             def func(t,y,args=None):
@@ -903,8 +919,8 @@ def integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', debug=False, al
         if debug: print("Timeout error")
         return [np.nan for _ in range(len(times))]
 
-def tree_to_numexpr_fn(tree):
-    infix = tree.infix()
+def tree_to_numexpr_fn(infix):
+    #infix = tree.infix()
     numexpr_equivalence = {
         "add": "+",
         "sub": "-",
