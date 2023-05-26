@@ -24,7 +24,7 @@ spec:
         fsGroup: 10621
       containers:
       - name: container-name
-        image: Tpagliard-base-v2
+        image: ic-registry.epfl.ch/mlo/pytorch
         workingDir : /home/dascoli
         command: ["/bin/bash"]
         args:
