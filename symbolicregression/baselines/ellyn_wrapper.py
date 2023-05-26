@@ -13,6 +13,8 @@ __all__ = ("AFPWrapper", "EHCWrapper", "EPLEXWrapper", "FEAFPWrapper",)
 
 # """ellyn documentation: https://github.com/cavalab/ellyn/blob/master/environment.yml"""
 
+# TODO: we need a mixin for multi-dim input
+
 class EllynMixin(BatchMixin, FiniteDifferenceMixin, PredictionIntegrationMixin):
     def __init__(self, *args, **kwargs):
         self.base_model = ellyn(*args, **kwargs)

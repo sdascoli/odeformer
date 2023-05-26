@@ -9,6 +9,11 @@ from symbolicregression.envs.generators import integrate_ode
 
 __all__ = ("BatchMixin", "FiniteDifferenceMixin", "PredictionIntegrationMixin",)
 
+class MultiDimInputMixin:
+    # TODO: we need a mixin for multi-dim input
+    pass
+
+
 class BatchMixin:
     """
     This class lets models iteratively process a list of trajectories.
