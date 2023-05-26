@@ -9,7 +9,7 @@ import shutil
 from distutils import dir_util
 user = os.getlogin()
 
-exp_folder = 'sympy_new'
+exp_folder = 'mlm'
 
 dump_path = f'/home/{user}/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
@@ -24,11 +24,12 @@ extra_args = {
     #'min_dimension':1,
     #'max_dimension':2,
     #'sign_as_token':True,
-    'reload_data':f"/home/{user}/odeformer/experiments/datagen/exp_use_sympy_",
+    'reload_data':f"/home/{user}/odeformer/experiments/datagen/datagen_use_sympy_",
     }
 
 grid = {
-    "use_sympy":[True, False],
+    "use_sympy":[True],
+    "masked_output":[0, .3, .6],
     #"sign_as_token":[False],
     #"use_two_hot":[False]
     #"fixed_init_scale":[True,False],

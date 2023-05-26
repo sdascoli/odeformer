@@ -17,13 +17,14 @@ import torch
 from torch import nn
 from torch.nn.utils import clip_grad_norm_
 from .optim import get_optimizer
-from .utils import to_cuda
+from .utils import to_cuda, split_data
 from collections import defaultdict
 import torch.nn.functional as F
 import seaborn as sns
 import matplotlib.pyplot as plt
 import copy
 import contextlib
+import wandb
 
 # if torch.cuda.is_available():
 has_apex = True
@@ -213,11 +214,16 @@ class Trainer(object):
                 # and all(len(x) == 4 for x in s) ##if we want multiple datasets
                 # and len(s) == len(set([x[0] for x in s]))
             )
-            self.data_path = {
-                "functions": (os.path.join(params.reload_data,'data.prefix'), 
-                              os.path.join(params.reload_data,'data.prefix.test' ),
-                )
-            }
+            train_path = os.path.join(params.reload_data,'data.prefix')
+            test_path = os.path.join(params.reload_data,'data.prefix.test')
+            # check number of lines in test_path
+            with open(test_path) as f:
+                for i, l in enumerate(f):
+                    pass
+            n_eqs = i + 1
+            if not os.path.isfile(test_path) or n_eqs < params.eval_size:
+                split_data(train_path, params.eval_size)
+            self.data_path = {"functions": (train_path, test_path)}
 
             logger.info(self.data_path)
 
@@ -366,6 +372,11 @@ class Trainer(object):
         """
         Print statistics about the training.
         """
+        if self.params.use_wandb:
+            if self.stats["functions"]:
+                wandb.log({'loss':self.stats["functions"][0],
+                   'lr': self.optimizer.param_groups[0]["lr"],
+                   })
         if self.n_total_iter % self.params.print_freq != 0:
             return
 

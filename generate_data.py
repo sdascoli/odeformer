@@ -19,17 +19,18 @@ extra_args = {
     'n_steps_per_epoch':1000,
     'max_epoch':100,
     'ode_integrator':'solve_ivp',
-    'num_workers':15,
+    'num_workers':50,
     'use_queue':False,
     'batch_size':10,
     'min_dimension':2,
     'max_dimension':2,
     'print_freq':100,
     "export_data":True,
+    "use_wandb":False,
      }
 
 grid = {
-    'use_sympy':[True, False],
+    'use_sympy':[True],
 }
 
 def get_free_gpus():

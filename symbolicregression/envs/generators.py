@@ -18,16 +18,16 @@ import warnings
 import symbolicregression
 from symbolicregression.envs import encoders
 from symbolicregression.envs.utils import *
-#from symbolicregression.envs.export_jax import *
 from ..utils import bool_flag, timeout, MyTimeoutError
 from functools import partial
 import numexpr as ne
 
-import numba as nb
-from numba import njit
-from numbalsoda import lsoda_sig, lsoda
-import nbkode
+# import numba as nb
+# from numba import njit
+# from numbalsoda import lsoda_sig, lsoda
+# import nbkode
 
+#from symbolicregression.envs.export_jax import *
 # import jax
 # import jax.numpy as jnp
 # from diffrax import diffeqsolve, ODETerm, SaveAt

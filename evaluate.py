@@ -139,7 +139,7 @@ class Evaluator(object):
             infos = samples["infos"]
             if "tree" in samples.keys():
                 trees = samples["tree"]
-                batch_results["trees"].extend(batch_results["trees"].extend([self.env.simplifier.readable_tree(tree) for tree in trees]))
+                batch_results["trees"].extend([self.env.simplifier.readable_tree(tree) for tree in trees])
 
             all_candidates = self.dstr.fit(times, trajectories, verbose=False, sort_candidates=True)
 

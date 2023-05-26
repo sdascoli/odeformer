@@ -32,10 +32,12 @@ def main(params):
 
     setproctitle.setproctitle(params.exp_id)
     if params.use_wandb:
+        wandb.login(key = "51d61a581ff6e4e434e1e118a9e715eeb1c0eb0c") # TODO : don't leave this in public version
         wandb.init(
         # set the wandb project where this run will be logged
         project="sr-for-odes",
-        name=f"{params.exp_name}-{params.exp_id}",
+        group=params.exp_name,
+        name=params.exp_id,
         # track hyperparameters and run metadata
         config=params.__dict__,
         )

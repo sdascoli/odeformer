@@ -15,6 +15,7 @@ import random
 import getpass
 import argparse
 import subprocess
+import io
 
 import errno
 import signal
@@ -173,3 +174,22 @@ def timeout(seconds=10, error_message=os.strerror(errno.ETIME)):
         return wraps(func)(wrapper)
 
     return decorator
+
+def split_data(data_path, tst_size):
+    tst_path = data_path + '.test'
+
+    print(f"Reading data from {data_path} ...")
+    with io.open(data_path, mode='r', encoding='utf-8') as f:
+        lines = f.readlines()
+        f.close()
+    print(f"Read {len(lines)}")
+    with io.open(data_path, mode='w', encoding='utf-8') as f:
+        f.writelines(lines[tst_size:])
+
+    print(f"Writing test data to {tst_path} ...")
+    f_test = io.open(tst_path, mode='w', encoding='utf-8')
+
+    for i, line in enumerate(lines[:tst_size]):
+        f_test.write(line)
+
+    f_test.close()
