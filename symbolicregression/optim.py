@@ -222,7 +222,7 @@ class AdamCosineWithWarmup(AdamW):
         weight_decay=0,
         warmup_updates=10000,
         warmup_init_lr=1e-7,
-        min_lr=1e-9,
+        min_lr=None,
         init_period=100000000,
         period_mult=1,
         lr_shrink=0.75,
@@ -240,7 +240,10 @@ class AdamCosineWithWarmup(AdamW):
         self.lr_step = (warmup_end_lr - warmup_init_lr) / warmup_updates
 
         # then, apply cosine scheduler
-        self.min_lr = min_lr
+        if min_lr is None:
+            self.min_lr = lr / 100.
+        else:
+            self.min_lr = min_lr
         self.max_lr = lr
         self.period = init_period
         self.period_mult = period_mult
