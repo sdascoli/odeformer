@@ -40,6 +40,7 @@ def main(params):
         name=params.exp_id,
         # track hyperparameters and run metadata
         config=params.__dict__,
+        resume=True
         )
 
     # initialize the multi-GPU / multi-node training

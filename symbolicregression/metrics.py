@@ -27,7 +27,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
         #assert true[i].shape == predicted[i].shape, "Problem with shapes: {}, {}".format(true[i].shape, predicted[i].shape)
 
     for metric in metrics.split(","):
-        if metrics.startswith("r2"):
+        if metric.startswith("r2"):
             if metric == "r2":
                 for i in range(len(true)):
                     if predicted[i] is None or np.isnan(np.min(predicted[i])):
