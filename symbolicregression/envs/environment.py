@@ -456,7 +456,10 @@ class FunctionEnvironment(object):
 
         if self.params.use_sympy:
             len_before = len(tree.prefix().split(","))
-            tree = (self.simplifier.simplify_tree(tree, expand=self.params.expand, resimplify=self.params.simplify) if self.params.use_sympy else tree)
+            try:
+                tree = (self.simplifier.simplify_tree(tree, expand=self.params.expand, resimplify=self.params.simplify) if self.params.use_sympy else tree)
+            except:
+                return {"tree": tree}, ["simplification error"]
             len_after = len(tree.prefix().split(","))
             if tree is None or len_after > 2 * len_before:
                 return {"tree": tree}, ["simplification error"]
@@ -473,7 +476,7 @@ class FunctionEnvironment(object):
             n_points=n_points,
         )
         if datapoints is None:
-            return {"tree": tree}, ["datapoint generation error"]
+            return {"tree": tree}, ["datapoint generation error for tree {}".format(tree)]
 
         times, trajectory = datapoints
         n_points = trajectory.shape[0]
@@ -648,7 +651,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--operators_to_use",
             type=str,
-            default="sin:1,inv:1,add:3,mul:1",
+            default="sin:1,inv:1,id:2,add:2,sub:2,mul:1",
             #default="add:3,mul:1",
             help="Which operator to remove",
         )
@@ -662,7 +665,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--max_unary_depth",
             type=int,
-            default=3,
+            default=5,
             help="Max number of operators inside unary",
         )
 
@@ -745,7 +748,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--max_trajectory_value", 
             type=float, 
-            default=1e3, 
+            default=1e2, 
             help="Maximal value in trajectory"
         )
         parser.add_argument(
@@ -832,7 +835,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--prob_prefactor",
             type=float,
-            default=1.0,
+            default=1/2,
             help="Probability to generate prefactor",
         )
         parser.add_argument(

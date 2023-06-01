@@ -105,13 +105,13 @@ class Node:
         if nb_children == 1:
             s = str(self.value)
             if s == "pow2":
-                s = "( " + self.children[0].infix() + " ) pow 2"
+                s = "(" + self.children[0].infix() + ") pow 2"
             elif s == "inv":
-                s = "1 / ( " + self.children[0].infix() + " )"
+                s = "1/(" + self.children[0].infix() + ")"
             elif s == "pow3":
-                s = "( " + self.children[0].infix() + " ) pow 3"
+                s = "(" + self.children[0].infix() + ") pow 3"
             else:
-                s = s + " ( " + self.children[0].infix() + " )"
+                s = s + "(" + self.children[0].infix() + ")"
             return s
         else:
             if self.value == "add":
@@ -119,18 +119,18 @@ class Node:
             if self.value == "add":
                 return self.children[0].infix() + " - " + self.children[1].infix()
             if self.value == "pow":
-                res  = "( " + self.children[0].infix() + " ) **"
-                res += (" " + self.children[1].infix())
+                res  = "(" + self.children[0].infix() + ")**"
+                res += ("" + self.children[1].infix())
                 return res
             elif self.value == "mul":
-                res  = " ( " + self.children[0].infix() + " ) " if self.children[0].value in ["add","sub"] else (self.children[0].infix() + " ")
+                res  = "(" + self.children[0].infix() + ")" if self.children[0].value in ["add","sub"] else (self.children[0].infix() + " ")
                 res += "+"
-                res += " ( " + self.children[1].infix() + " ) " if self.children[1].value in ["add","sub"] else (" " + self.children[1].infix())
+                res += "(" + self.children[1].infix() + ")" if self.children[1].value in ["add","sub"] else (" " + self.children[1].infix())
                 return res
             elif self.value == "div":
-                res  = " ( " + self.children[0].infix() + " ) " if self.children[0].value=="add" else (self.children[0].infix() + " ")
+                res  = "(" + self.children[0].infix() + ")" if self.children[0].value=="add" else (self.children[0].infix() + " ")
                 res += "/"
-                res += " ( " + self.children[1].infix() + " ) " if self.children[1].value=="add" else (" " + self.children[1].infix())
+                res += "(" + self.children[1].infix() + ")" if self.children[1].value=="add" else (" " + self.children[1].infix())
                 return res
 
 
@@ -650,6 +650,7 @@ class RandomFunctions(Generator):
         for c in tree.children:
             if len(c.prefix().split(",")) < self.params.max_unary_depth:
                 unary = rng.choice(self.unaries, p=self.unaries_probabilities)
+                if unary=='id': s += "," + self._add_unaries(rng, c)
                 s += f",{unary}," + self._add_unaries(rng, c)
             else:
                 s += f"," + self._add_unaries(rng, c)
@@ -658,10 +659,10 @@ class RandomFunctions(Generator):
     def add_prefactors(self, rng, tree):
         transformed_prefix = self._add_prefactors(rng, tree)
         if transformed_prefix == tree.prefix():
-            a = self.generate_float(rng)
+            a = self.generate_float(rng) if rng.rand() < self.params.prob_prefactor else transformed_prefix
             transformed_prefix = f"mul,{a}," + transformed_prefix
         a = self.generate_float(rng)
-        transformed_prefix = f"add,{a}," + transformed_prefix
+        transformed_prefix = f"add,{a}," + transformed_prefix if rng.rand() < self.params.prob_prefactor else transformed_prefix
         tree = self.equation_encoder.decode(transformed_prefix.split(",")).nodes[0]
         return tree
 
@@ -669,11 +670,9 @@ class RandomFunctions(Generator):
 
         s = str(tree.value)
         a, b = self.generate_float(rng), self.generate_float(rng)
-        add_prefactor = f",add,{a}," if rng.rand() < self.params.prob_prefactor else ""
-        mul_prefactor = f",mul,{b}," if rng.rand() < self.params.prob_prefactor else ""
+        add_prefactor = f",add,{a}," if rng.rand() < self.params.prob_prefactor else ","
+        mul_prefactor = f",mul,{b}," if rng.rand() < self.params.prob_prefactor else ","
         total_prefactor = add_prefactor.rstrip(",") + "," + mul_prefactor.lstrip(",")
-        if total_prefactor == ",":  # no prefactor
-            total_prefactor = ""
         if s in ["add", "sub"]:
             s += (
                 "," if tree.children[0].value in ["add", "sub"] else mul_prefactor
@@ -815,6 +814,8 @@ class RandomFunctions(Generator):
             return None, None
         if np.any(np.abs(trajectory)>10**self.params.max_exponent):
             return None, None
+        if len(np.unique(trajectory[-10:])) == 1: # remove constant
+            return None, None
         # if np.any(np.abs(trajectory)>self.params.max_trajectory_value):
         #     return None, None
         
@@ -913,7 +914,7 @@ def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', events=None, d
     #if debug: print(trajectory, np.any(np.isnan(trajectory)), len(times)!=len(trajectory), len(times), len(trajectory))#, solved_times)
     
     if np.any(np.isnan(trajectory)) or len(times)!=len(trajectory):
-        if debug: print("Bad integration")
+        if debug: print("bad integration")
         return [np.nan for _ in range(len(times))]
     if len(caught_warnings) > 0 and not allow_warnings:
         if debug: print("Caught warning")

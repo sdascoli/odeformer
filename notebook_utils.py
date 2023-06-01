@@ -34,7 +34,7 @@ from symbolicregression.model import build_modules
 from symbolicregression.envs.generators import RandomFunctions
 from symbolicregression.envs.encoders import  Equation, FloatSequences
 from symbolicregression.envs.environment import FunctionEnvironment
-from symbolicregression.utils import bool_flag, initialize_exp
+from symbolicregression.utils import *
 from symbolicregression.model.sklearn_wrapper import SymbolicTransformerRegressor
 from symbolicregression.model.model_wrapper import ModelWrapper
 from symbolicregression.model.embedders import *

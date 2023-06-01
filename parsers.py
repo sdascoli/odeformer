@@ -187,7 +187,7 @@ def get_parser():
         help="Clip gradients norm (0 to disable)",
     )
     parser.add_argument(
-        "--n_steps_per_epoch", type=int, default=3000, help="Number of steps per epoch",
+        "--n_steps_per_epoch", type=int, default=1000, help="Number of steps per epoch",
     )
     parser.add_argument(
         "--max_epoch", type=int, default=100000, help="Number of epochs"

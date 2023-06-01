@@ -89,7 +89,7 @@ class Adam(optim.Optimizer):
         return loss
 
 
-class AdamWithWarmup(AdamW):
+class AdamWithWarmup(Adam):
     """
     Adam with a warmup phase where we linearly increase the learning rate
     from some initial learning rate (`warmup-init-lr`) until the configured
@@ -138,7 +138,7 @@ class AdamWithWarmup(AdamW):
             param_group["lr"] = self.get_lr_for_step(param_group["num_updates"])
 
 
-class AdamInverseSqrtWithWarmup(AdamW):
+class AdamInverseSqrtWithWarmup(Adam):
     """
     Decay the LR based on the inverse square root of the update number.
     We also support a warmup phase where we linearly increase the learning rate
@@ -196,7 +196,7 @@ class AdamInverseSqrtWithWarmup(AdamW):
             param_group["lr"] = self.get_lr_for_step(param_group["num_updates"])
 
 
-class AdamCosineWithWarmup(AdamW):
+class AdamCosineWithWarmup(Adam):
     """
     Assign LR based on a cyclical schedule that follows the cosine function.
     See https://arxiv.org/pdf/1608.03983.pdf for details.
