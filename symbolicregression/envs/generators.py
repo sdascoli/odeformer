@@ -78,10 +78,16 @@ class Node:
     def push_child(self, child):
         self.children.append(child)
 
-    def prefix(self):
+    def prefix(self, skeleton=False):
         s = str(self.value)
+        if skeleton:
+            try: 
+                float(s)
+                s = "CONSTANT"
+            except:
+                pass
         for c in self.children:
-            s += "," + c.prefix()
+            s += "," + c.prefix(skeleton=skeleton)
         return s
 
     # export to latex qtree format: prefix with \Tree, use package qtree
@@ -95,27 +101,38 @@ class Node:
     def infix(self):
         nb_children = len(self.children)
         if nb_children == 0:
-            if self.value.lstrip("-").isdigit():
-                return str(self.value)
-            else:
-                # try:
-                #    s = f"%.{self.params.float_precision}e" % float(self.value)
-                # except ValueError:
-                s = str(self.value)
-                return s
+            return str(self.value)
         if nb_children == 1:
             s = str(self.value)
             if s == "pow2":
-                s = "(" + self.children[0].infix() + ")**2"
+                s = "( " + self.children[0].infix() + " ) pow 2"
+            elif s == "inv":
+                s = "1 / ( " + self.children[0].infix() + " )"
             elif s == "pow3":
-                s = "(" + self.children[0].infix() + ")**3"
+                s = "( " + self.children[0].infix() + " ) pow 3"
             else:
-                s = s + "(" + self.children[0].infix() + ")"
+                s = s + " ( " + self.children[0].infix() + " )"
             return s
-        s = "(" + self.children[0].infix()
-        for c in self.children[1:]:
-            s = s + " " + str(self.value) + " " + c.infix()
-        return s + ")"
+        else:
+            if self.value == "add":
+                return self.children[0].infix() + " + " + self.children[1].infix()
+            if self.value == "add":
+                return self.children[0].infix() + " - " + self.children[1].infix()
+            if self.value == "pow":
+                res  = "( " + self.children[0].infix() + " ) **"
+                res += (" " + self.children[1].infix())
+                return res
+            elif self.value == "mul":
+                res  = " ( " + self.children[0].infix() + " ) " if self.children[0].value in ["add","sub"] else (self.children[0].infix() + " ")
+                res += "+"
+                res += " ( " + self.children[1].infix() + " ) " if self.children[1].value in ["add","sub"] else (" " + self.children[1].infix())
+                return res
+            elif self.value == "div":
+                res  = " ( " + self.children[0].infix() + " ) " if self.children[0].value=="add" else (self.children[0].infix() + " ")
+                res += "/"
+                res += " ( " + self.children[1].infix() + " ) " if self.children[1].value=="add" else (" " + self.children[1].infix())
+                return res
+
 
     def __len__(self):
         lenc = 1
@@ -292,8 +309,8 @@ class NodeList:
     def __len__(self):
         return sum([len(node) for node in self.nodes])
 
-    def prefix(self):
-        return ",|,".join([node.prefix() for node in self.nodes])
+    def prefix(self, skeleton=False):
+        return ",|,".join([node.prefix(skeleton=skeleton) for node in self.nodes])
 
     def __str__(self):
         return self.infix()
@@ -784,7 +801,13 @@ class RandomFunctions(Generator):
             y0 = self.params.init_scale * rng.randn(dimension)
         times = np.linspace(1, self.params.time_range, n_points)
         #times = times.repeat(n_init_conditions, axis=0)
-        trajectory = integrate_ode(y0, times, tree, self.params.ode_integrator, debug=self.params.debug)
+
+        stop_value = self.params.max_trajectory_value
+        def stop_event(t, y):
+            return np.min(stop_value-abs(y))
+        stop_event.terminal = True
+
+        trajectory = integrate_ode(y0, times, tree, self.params.ode_integrator, events=stop_event, debug=self.params.debug)
 
         if trajectory is None:
             return None, None
@@ -792,7 +815,9 @@ class RandomFunctions(Generator):
             return None, None
         if np.any(np.abs(trajectory)>10**self.params.max_exponent):
             return None, None
-
+        # if np.any(np.abs(trajectory)>self.params.max_trajectory_value):
+        #     return None, None
+        
         #trajectory = np.concatenate((t.reshape(-1,1),trajectory), axis=-1)
         if self.params.subsample_ratio:
             indices_to_remove = rng.choice(trajectory.shape[0], int(trajectory.shape[0] * self.params.subsample_ratio), replace=False)
@@ -802,7 +827,7 @@ class RandomFunctions(Generator):
         return tree, (times, trajectory)
 
 @timeout(10)
-def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', debug=False, allow_warnings=False):
+def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', events=None, debug=False, allow_warnings=False):
 
     with warnings.catch_warnings(record=True) as caught_warnings:
 
@@ -874,8 +899,8 @@ def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', debug=False, a
             def func(t,y):
                 return tree([y],[t])[0]
             try: 
-                trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times)#, method='RK23', rtol=1e-2, atol=1e-6)
-                solved_times = trajectory.t
+                trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times, events=events)#, method='RK23', rtol=1e-2, atol=1e-6)
+                events = trajectory.t_events
                 trajectory = trajectory.y.T
             except: 
                 if debug:
@@ -896,9 +921,9 @@ def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', debug=False, a
     
     return trajectory
 
-def integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', debug=False, allow_warnings=False):
+def integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', events=None, debug=False, allow_warnings=False):
     try: 
-        return _integrate_ode(y0, times, tree, ode_integrator, debug, allow_warnings)
+        return _integrate_ode(y0, times, tree, ode_integrator, events, debug, allow_warnings)
     except MyTimeoutError:
         if debug: print("Timeout error")
         return [np.nan for _ in range(len(times))]

@@ -140,12 +140,14 @@ class Evaluator(object):
             if "tree" in samples.keys():
                 trees = samples["tree"]
                 batch_results["trees"].extend([self.env.simplifier.readable_tree(tree) for tree in trees])
+            else:
+                trees = [None]*len(times)
 
             all_candidates = self.dstr.fit(times, trajectories, verbose=False, sort_candidates=True)
 
             best_results = {metric:[] for metric in self.params.validation_metrics.split(',')}
             best_candidates = []
-            for time, trajectory, candidates in zip(times, trajectories, all_candidates.values()):
+            for time, trajectory, tree, candidates in zip(times, trajectories, trees, all_candidates.values()):
                 if not candidates: 
                     for k in best_results:
                         best_results[k].append(np.nan)
@@ -155,7 +157,7 @@ class Evaluator(object):
                 trajectory = trajectory[idx]
                 best_candidate = candidates[0] # candidates are sorted
                 pred_trajectory = self.dstr.predict(time, y0=trajectory[0], tree=best_candidate) 
-                best_result = compute_metrics(pred_trajectory, trajectory, predicted_tree=best_candidate, metrics=self.params.validation_metrics)
+                best_result = compute_metrics(pred_trajectory, trajectory, predicted_tree=best_candidate, tree=tree, metrics=self.params.validation_metrics)
                 for k, v in best_result.items():
                     best_results[k].append(v[0])
                 best_candidates.append(best_candidate)
@@ -258,6 +260,9 @@ class Evaluator(object):
 
         scores = self.evaluate_on_iterator(iterator,save_file)
 
+        if self.params.use_wandb:
+            wandb.log({'pmlb_'+metric: scores[metric] for metric in self.params.validation_metrics.split(',')})
+
         return scores
     
     def evaluate_on_oscillators(
@@ -298,6 +303,9 @@ class Evaluator(object):
             save_file = os.path.join(self.save_path, "eval_oscillators.csv")
 
         scores = self.evaluate_on_iterator(iterator,save_file)
+
+        if self.params.use_wandb:
+            wandb.log({'oscillators_'+metric: scores[metric] for metric in self.params.validation_metrics.split(',')})
 
         return scores
 

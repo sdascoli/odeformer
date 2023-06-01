@@ -510,11 +510,11 @@ class FunctionEnvironment(object):
                 
             assert all(
                 [is_number(x) or x in self.equation_word2id for x in tree_encoded]
-            ), "tree: {}\n encoded: {}".format(tree, tree_encoded)
+            ), "bad tokens in encoded tree:".format([token for token in tree_encoded if token not in self.equation_word2id])
         else:
             assert all(
                 [x in self.equation_word2id for x in tree_encoded]
-            ), "tree: {}\n encoded: {}".format(tree, tree_encoded)
+            ), "tree_encoded: {}\n:".format([(token, token in self.equation_word2id) for token in tree_encoded])
 
         info = {
             "n_points":       n_points,
@@ -648,7 +648,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--operators_to_use",
             type=str,
-            default="sin:1,pow2:1,inv:1,add:3,mul:1",
+            default="sin:1,inv:1,add:3,mul:1",
             #default="add:3,mul:1",
             help="Which operator to remove",
         )
@@ -737,7 +737,16 @@ class FunctionEnvironment(object):
             help="Whether to use a sign token",
         )
         parser.add_argument(
-            "--max_exponent", type=int, default=100, help="Maximal order of magnitude"
+            "--max_exponent", 
+            type=int, 
+            default=100, 
+            help="Maximal order of magnitude"
+        )
+        parser.add_argument(
+            "--max_trajectory_value", 
+            type=float, 
+            default=1e3, 
+            help="Maximal value in trajectory"
         )
         parser.add_argument(
             "--max_prefactor",

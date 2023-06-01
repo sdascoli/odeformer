@@ -325,7 +325,7 @@ def get_optimizer(parameters, lr, s):
         optim_fn = Adam
         optim_params["betas"] = (
             optim_params.get("beta1", 0.9),
-            optim_params.get("beta2", 0.95),
+            optim_params.get("beta2", 0.999),
         )
         optim_params.pop("beta1", None)
         optim_params.pop("beta2", None)
@@ -341,7 +341,7 @@ def get_optimizer(parameters, lr, s):
         optim_fn = AdamInverseSqrtWithWarmup
         optim_params["betas"] = (
             optim_params.get("beta1", 0.9),
-            optim_params.get("beta2", 0.95),
+            optim_params.get("beta2", 0.999),
         )
         optim_params.pop("beta1", None)
         optim_params.pop("beta2", None)
@@ -350,7 +350,7 @@ def get_optimizer(parameters, lr, s):
         optim_params["smooth"] = False
         optim_params["betas"] = (
             optim_params.get("beta1", 0.9),
-            optim_params.get("beta2", 0.95),
+            optim_params.get("beta2", 0.999),
         )
         optim_params.pop("beta1", None)
         optim_params.pop("beta2", None)
@@ -359,7 +359,7 @@ def get_optimizer(parameters, lr, s):
         optim_params["smooth"] = True
         optim_params["betas"] = (
             optim_params.get("beta1", 0.9),
-            optim_params.get("beta2", 0.95),
+            optim_params.get("beta2", 0.999),
         )
         optim_params.pop("beta1", None)
         optim_params.pop("beta2", None)

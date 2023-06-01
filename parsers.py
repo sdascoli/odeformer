@@ -22,7 +22,7 @@ def get_parser():
     parser.add_argument("--save_results", type=bool_flag, default=True, help="Should we save results?")
 
     parser.add_argument("--exp_name", type=str, default="debug", help="Experiment name")
-    parser.add_argument("--use_wandb", type=bool_flag, default=True, help="Use wandb for logging")
+    parser.add_argument("--use_wandb", type=bool_flag, default=False, help="Use wandb for logging")
     parser.add_argument("--print_freq", type=int, default=100, help="Print every n steps")
     parser.add_argument("--save_periodic",type=int,default=25,help="Save the model periodically (0 to disable)",)
     parser.add_argument("--exp_id", type=str, default="", help="Experiment ID")
@@ -173,10 +173,13 @@ def get_parser():
     parser.add_argument(
         "--optimizer",
         type=str,
-        default='adam_cosine,warmup_updates=30000,init_period=300000,period_mult=1.5,lr_shrink=0.5,weight_decay=0.01',
+        default='adam_cosine,warmup_updates=10000,init_period=300000,period_mult=1.5,lr_shrink=0.5',
         help="Optimizer (SGD / RMSprop / Adam, etc.)",
     )
-    parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate")
+    parser.add_argument("--lr", 
+                        type=float, 
+                        default=2e-4, 
+                        help="Learning rate")
     parser.add_argument(
         "--clip_grad_norm",
         type=float,
@@ -320,7 +323,7 @@ def get_parser():
     parser.add_argument(
         "--validation_metrics",
         type=str,
-        default="r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio",
+        default="r2_zero,accuracy_l1_1e-1,snmse,edit_distance,is_valid,is_valid_tree",
         help="What metrics should we report? accuracy_tolerance/l1_error/r2/_complexity/_relative_complexity/is_symbolic_solution",
     )
     parser.add_argument("--beam_selection_metric", type=str, default='r2_zero', help='Metric to use for beam search selection')

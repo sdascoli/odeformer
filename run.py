@@ -9,12 +9,14 @@ import shutil
 from distutils import dir_util
 user = os.getlogin()
 
-exp_folder = 'mlm'
+exp_folder = 'mlm_new'
 
-dump_path = f'/home/{user}/odeformer/experiments'
+#dump_path = f'/home/{user}/odeformer/experiments'
+dump_path = f'/scratch/{user}/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
 
 extra_args = {
+    'use_wandb':True,
     'collate_queue_size': 1000,
     #'n_steps_per_epoch':1000,
     'print_freq': 30,
@@ -24,11 +26,10 @@ extra_args = {
     #'min_dimension':1,
     #'max_dimension':2,
     #'sign_as_token':True,
-    'reload_data':f"/home/{user}/odeformer/experiments/datagen/datagen_use_sympy_",
+    'reload_data':dump_path + "/datagen/datagen_use_sympy_True",
     }
 
 grid = {
-    "use_sympy":[True],
     "masked_output":[0, .3, .6],
     #"sign_as_token":[False],
     #"use_two_hot":[False]
@@ -96,8 +97,6 @@ for params in dict_product(grid):
     for arg, value in extra_args.items():
         if arg not in params:
             params[arg] = value
-
-    params['reload_data'] += str(params['use_sympy']) 
 
     for f in os.listdir():
         if f.endswith('.py'):

@@ -22,6 +22,10 @@ def check_model_params(params):
     """
     Check models parameters.
     """
+    if params.enc_emb_dim is None:
+        params.enc_emb_dim = params.emb_emb_dim
+    if params.dec_emb_dim is None:
+        params.dec_emb_dim = params.emb_emb_dim
     # model dimensions
     assert params.enc_emb_dim % params.n_enc_heads == 0
     assert params.dec_emb_dim % params.n_dec_heads == 0

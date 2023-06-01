@@ -27,35 +27,50 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
         #assert true[i].shape == predicted[i].shape, "Problem with shapes: {}, {}".format(true[i].shape, predicted[i].shape)
 
     for metric in metrics.split(","):
-        if metric.startswith("r2"):
+
+        if metric == "is_valid_tree":
+            for i in range(len(true)):
+                if predicted_tree[i] is None:
+                    results[metric].append(0)
+                else: 
+                    results[metric].append(1)
+
+        elif metric == "is_valid":
+            for i in range(len(true)):
+                if predicted[i] is None or np.isnan(np.min(predicted[i])):
+                    results[metric].append(0)
+                else: 
+                    results[metric].append(1)
+
+        elif metric.startswith("r2"):
             if metric == "r2":
                 for i in range(len(true)):
                     if predicted[i] is None or np.isnan(np.min(predicted[i])):
-                        results[metric].append(np.nan)
+                        results[metric].append(0)
                     else:
                         try:
                             results[metric].append(r2_score(true[i], predicted[i], multioutput='variance_weighted'))
                         except Exception as e:
-                            results[metric].append(np.nan)
+                            results[metric].append(0)
             elif metric == "r2_zero":
                 for i in range(len(true)):
                     if predicted[i] is None or np.isnan(np.min(predicted[i])):
-                        results[metric].append(np.nan)
+                        results[metric].append(0)
                     else:
                         try:
                             results[metric].append(max(0, r2_score(true[i], predicted[i], multioutput='variance_weighted')))
                         except Exception as e:
-                            results[metric].append(np.nan)
+                            results[metric].append(0)
             elif metric.startswith("r2_zero_dim"):
                 dimension = int(metric.split("_")[-1])
                 for i in range(len(true)):
                     if predicted[i] is None or np.isnan(np.min(predicted[i])):
-                        results[metric].append(np.nan)
+                        results[metric].append(0)
                     else:
                         try:
                             results[metric].append(max(0, r2_score(true[i], predicted[i], multioutput='raw_values')[dimension]))
                         except Exception as e:
-                            results[metric].append(np.nan)
+                            results[metric].append(0)
 
         elif metric.startswith("accuracy_l1"):
             if metric == "accuracy_l1":
@@ -72,13 +87,13 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
 
             for i in range(len(true)):
                 if predicted[i] is None or np.isnan(np.min(predicted[i])):
-                    results[metric].append(np.nan)
+                    results[metric].append(0)
                 else:
                     try:
                         is_close = np.isclose(predicted[i], true[i], atol=atol, rtol=rtol)
                         results[metric].append(float(is_close.mean()>=tolerance_point))
                     except Exception as e:
-                        results[metric].append(np.nan)
+                        results[metric].append(0)
 
         elif metric == "snmse":
             for i in range(len(true)):
@@ -176,4 +191,35 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                 else:
                     results[metric].append(len(predicted_tree[i].prefix().split(",")) - len(tree[i].prefix().split(",")))
 
+        elif metric == "edit_distance":
+            if not predicted_tree: 
+                results[metric].extend([np.nan for _ in range(len(true))])
+                continue
+            for i in range(len(predicted_tree)):
+                if predicted_tree[i] is None or tree[i] is None:
+                    results[metric].append(np.nan)
+                else:
+                    distance = min_edit_distance(predicted_tree[i].prefix(skeleton=True).split(","), tree[i].prefix(skeleton=True).split(","))
+                    results[metric].append(distance)
+
+        else:
+            raise NotImplementedError("Metric {} not implemented".format(metric))
+
     return results
+
+def min_edit_distance(s1, s2):
+    m, n = len(s1), len(s2)
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+    
+    for i in range(m + 1):
+        for j in range(n + 1):
+            if i == 0:
+                dp[i][j] = j
+            elif j == 0:
+                dp[i][j] = i
+            elif s1[i-1] == s2[j-1]:
+                dp[i][j] = dp[i-1][j-1]
+            else:
+                dp[i][j] = 1 + min(dp[i][j-1], dp[i-1][j], dp[i-1][j-1])
+
+    return dp[m][n]
