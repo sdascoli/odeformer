@@ -11,7 +11,71 @@ from pysindy.differentiation import FiniteDifference, SmoothedFiniteDifference
 from symbolicregression.envs.generators import integrate_ode
 
 __all__ = ("BatchMixin", "FiniteDifferenceMixin", "PredictionIntegrationMixin",)
+
+class SympyMixin:
+    def to_sympy(
+        self, 
+        eqs: Union[str, List[str], Dict[int, List[str]]], 
+        var_names: List[str], # e.g. "x_0,x_1" or ["x_0", "x_1"]
+        return_type: Literal["expr", "func", "str"] = "expr",
+        evaluate: bool = False
+    ):
+        keys, values = [], []
+        if isinstance(eqs, Dict):
+            for key in eqs.keys():
+                keys.append(key)
+                values.append(
+                    self.to_sympy(eqs=eqs[key], var_names=var_names, return_type=return_type, evaluate=evaluate)
+                )
+            return dict(zip(keys, values))
+        if isinstance(eqs, List):
+            return [
+                self.to_sympy(eqs=eq, var_names=var_names, return_type=return_type, evaluate=evaluate) for eq in eqs
+            ]
+        assert isinstance(eqs, str), f"Expected eqs to be instanceof str but found {type(eqs)}."
+        symbols = []
+        for var_name in var_names:
+            symbols.append(sympy.Symbol(var_name, real=True, finite=True))
+        
+        expr = [
+            sympy.parse_expr(e, evaluate=evaluate, local_dict=dict(zip(var_names, symbols))) for e in eqs.split("|")
+        ]
+        if return_type == "expr":
+            return expr
+        elif return_type == "func":
+            funcs = []
+            for e in expr:
+                funcs.append(sympy.lambdify(",".join(var_names), e))
             
+            def wrap_system(*args):
+                output = []
+                for f in funcs:
+                    print(args)
+                    output.append(f(*args))
+                return np.array(output).squeeze()
+                
+            return wrap_system
+            
+        elif return_type == "str":
+            return " | ".join([str(e) for e in expr])
+        else:
+            raise ValueError(f"Unknown return type: {return_type}.")
+    
+    def simplify(
+        self, 
+        eqs: Union[str, List[str], Dict[int, List[str]]], 
+        var_names: List[str],
+        evaluate=True,
+    ):
+        return self.to_sympy(eqs=eqs, var_names=var_names, return_type="str", evaluate=evaluate)
+    
+    def lambdify(
+        self, 
+        eqs: Union[str, List[str], Dict[int, List[str]]], 
+        var_names: List[str],
+        evaluate=True,
+    ):
+        return self.to_sympy(eqs=eqs, var_names=var_names, return_type="func", evaluate=evaluate)        
 
 class MultiDimMixin:
     """
