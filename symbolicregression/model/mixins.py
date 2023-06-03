@@ -50,7 +50,6 @@ class SympyMixin:
             def wrap_system(*args):
                 output = []
                 for f in funcs:
-                    print(args)
                     output.append(f(*args))
                 return np.array(output).squeeze()
                 
