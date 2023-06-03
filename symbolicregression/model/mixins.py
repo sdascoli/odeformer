@@ -1,17 +1,37 @@
 from typing import Dict, List, Union
+from typing_extensions import Literal
 from tqdm.auto import tqdm
 from collections import defaultdict
-import traceback
+import sympy
 import torch
 import numpy as np
+import itertools
+import traceback
 from pysindy.differentiation import FiniteDifference, SmoothedFiniteDifference
 from symbolicregression.envs.generators import integrate_ode
 
 __all__ = ("BatchMixin", "FiniteDifferenceMixin", "PredictionIntegrationMixin",)
+            
 
-class MultiDimInputMixin:
-    # TODO: we need a mixin for multi-dim input
-    pass
+class MultiDimMixin:
+    """
+    Mixin for vector valued output. Each component of the output is fit individually.
+    """
+    def fit_components(
+        self, 
+        times: np.ndarray, 
+        trajectories: np.ndarray, 
+        derivatives: np.ndarray, 
+        *args, 
+        **kwargs,
+    ) -> Dict[int, List[str]]:
+        assert len(trajectories.shape) == 2, f"len(times.shape) == {len(times.shape)}"
+        predictions_per_component: List[List[str]] = []
+        for _deriv in derivatives.T:
+            # supply all trajectories as input but only single output component to learn a func R^n -> R
+            predictions_per_component.append(self.fit(times, trajectories, _deriv, args, kwargs,)[0])
+        return {0: list(" | ".join(vs) for vs in itertools.product(*predictions_per_component))}
+        
 
 
 class BatchMixin:
@@ -66,9 +86,9 @@ class FiniteDifferenceMixin:
         finite_difference_order: Union[None, int] = 2,
         smoother_window_length: Union[None, int] = None,
     ) -> np.ndarray:
-
-        assert len(times.shape) == 1, f"{times.shape}"
-        assert times.shape[0] == trajectory.shape[0], f"{times.shape} vs {trajectory.shape}"
+        times = times.squeeze()
+        assert len(times.shape) == 1 or np.all(times.shape == trajectory.shape), f"{times.shape} vs {trajectory.shape}"
+        
         fd = self.get_differentiation_method(
             finite_difference_order = finite_difference_order, 
             smoother_window_length = smoother_window_length,
