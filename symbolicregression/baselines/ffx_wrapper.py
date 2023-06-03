@@ -1,7 +1,7 @@
 from typing import Dict, List, Union
 from ffx import FFXRegressor
 from symbolicregression.model.mixins import (
-    BatchMixin, PredictionIntegrationMixin, FiniteDifferenceMixin, MultiDimMixin
+    BatchMixin, PredictionIntegrationMixin, FiniteDifferenceMixin, MultiDimMixin, SympyMixin,
 )
 
 import re
@@ -9,10 +9,11 @@ import numpy as np
 
 __all__ = ("FFXWrapper",)
 
-# TODO: restrict function class, e.g. no "max", log10
+# TODO: restrict function class, e.g. no "max", log10?
 
-class FFXWrapper(FFXRegressor, BatchMixin, FiniteDifferenceMixin, MultiDimMixin, PredictionIntegrationMixin, ):
-    
+class FFXWrapper(
+    FFXRegressor, BatchMixin, FiniteDifferenceMixin, MultiDimMixin, PredictionIntegrationMixin, SympyMixin,
+):
     def fit(
         self, 
         times: Union[List[np.ndarray], np.ndarray], 
