@@ -34,13 +34,13 @@ def main(params):
     elif params.baseline_model == "proged":
         model = ProGEDWrapper(feature_names=["x_0", "x_1"])
     elif params.baseline_model == "afp":
-        model = AFPWrapper()
+        model = AFPWrapper(time_limit=60)
     elif params.baseline_model == "ehc":
-        model = EHCWrapper()
+        model = EHCWrapper(time_limit=60)
     elif params.baseline_model == "eplex":
-        model = EPLEXWrapper()
+        model = EPLEXWrapper(time_limit=60)
     elif params.baseline_model == "feafp":
-        model = FEAFPWrapper()
+        model = FEAFPWrapper(time_limit=60)
     elif params.baseline_model == "ffx":
         model = FFXWrapper()
         
