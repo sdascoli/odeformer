@@ -3,7 +3,7 @@ kind: RunaiJob
 metadata:
   name: dascoli-train
   labels:
-    priorityClassName: "build" # Interactive Job if present, for Train Job REMOVE this line
+    # priorityClassName: "build" # Interactive Job if present, for Train Job REMOVE this line
     user: dascoli
 spec:
 #  ports:
@@ -24,8 +24,8 @@ spec:
         fsGroup: 10621
       containers:
       - name: container-name
-        image: ic-registry.epfl.ch/mlo/pytorch
-        workingDir : /home/dascoli
+        image: registry.rcp.epfl.ch/liac-dascoli/odeformer #ic-registry.epfl.ch/mlo/pytorch
+        workingDir : ~ #/home/dascoli
         command: ["/bin/bash"]
         args:
         - "-c"
