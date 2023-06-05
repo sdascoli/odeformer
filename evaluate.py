@@ -211,6 +211,8 @@ class Evaluator(object):
 
         for metric in self.params.validation_metrics.split(','):
             scores[metric] = df[metric].mean()
+            scores[metric+"_num_nans"] = df[metric].isna().sum()
+            
         for ablation in self.ablation_to_keep:
             for val, df_ablation in df.groupby(ablation):
                 avg_scores_ablation = df_ablation.mean()
