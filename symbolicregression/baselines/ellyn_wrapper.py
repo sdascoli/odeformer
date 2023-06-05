@@ -1,9 +1,11 @@
-from typing import List, Union
+from typing import Dict, List, Union
 from ellyn import ellyn
 from symbolicregression.model.mixins import (
     BatchMixin, 
     FiniteDifferenceMixin,
-    PredictionIntegrationMixin, 
+    PredictionIntegrationMixin,
+    MultiDimMixin,
+    SympyMixin,
 )
 import sympy
 import numpy as np
@@ -11,11 +13,16 @@ import numpy as np
 
 __all__ = ("AFPWrapper", "EHCWrapper", "EPLEXWrapper", "FEAFPWrapper",)
 
-# """ellyn documentation: https://github.com/cavalab/ellyn/blob/master/environment.yml"""
+# """ellyn documentation: 
+# https://github.com/cavalab/ellyn/blob/master/environment.yml"""
 
-# TODO: we need a mixin for multi-dim input
-
-class EllynMixin(BatchMixin, FiniteDifferenceMixin, PredictionIntegrationMixin):
+class EllynMixin(
+    BatchMixin, 
+    FiniteDifferenceMixin, 
+    MultiDimMixin, 
+    PredictionIntegrationMixin, 
+    SympyMixin,
+):
     def __init__(self, *args, **kwargs):
         self.base_model = ellyn(*args, **kwargs)
         
@@ -23,12 +30,12 @@ class EllynMixin(BatchMixin, FiniteDifferenceMixin, PredictionIntegrationMixin):
         self, 
         times: Union[List[np.ndarray], np.ndarray],
         trajectories: Union[List[np.ndarray], np.ndarray],
+        derivatives: Union[None, np.ndarray] = None,
         finite_difference_order: Union[None, int] = None,
         smoother_window_length: Union[None, int] = None,
-        parse_sympy: bool = False,
-        *args, # ignored
-        **kwargs, # ignored
-    ):
+        *args,
+        **kwargs,
+    ) -> Dict[int, List[str]]:
         if isinstance(trajectories, List):
             return self.fit_all(
                 times=times, 
@@ -37,29 +44,35 @@ class EllynMixin(BatchMixin, FiniteDifferenceMixin, PredictionIntegrationMixin):
                 smoother_window_length=smoother_window_length,
                 *args, **kwargs,
             )
-        self.base_model.fit(
-            trajectories, 
-            self.approximate_derivative(
+        if derivatives is None:
+            derivatives = self.approximate_derivative(
                 trajectory=trajectories, 
                 times=times,
                 finite_difference_order=finite_difference_order,
                 smoother_window_length=smoother_window_length,
-            ).squeeze(),
-        )
-        eqs = self._get_equations()
-        if parse_sympy:
-            eqs = self._parse_sympy(eqs)
-        return {0: eqs}
+            ).squeeze()
+            if len(derivatives.shape) > 1:
+                return self.fit_components(
+                    times, trajectories, derivatives, args, kwargs,
+                )
+        self.base_model.fit(trajectories, derivatives)
+        return {0: self._get_equations()}
     
     def _get_equations(self):
         # see https://github.com/cavalab/ellyn/blob/master/src/ellyn.py#L485
         candidates = self.base_model.hof_
         order = np.argsort(self.base_model.fit_v)
         return self._format_equations(
-            (np.array(self.base_model.stacks_2_eqns(candidates))[order]).tolist()
+            (np.array(
+                self.base_model.stacks_2_eqns(candidates)
+            )[order]).tolist()
         )
     
-    def _format_equations(self, eq: Union[List[str], str]) -> Union[List[str], str]:
+    def _format_equations(
+        self, 
+        eq: Union[List[str], str]
+    ) -> Union[List[str], str]:
+        
         if isinstance(eq, List):
             eqs = []
             for e in eq:
@@ -78,7 +91,7 @@ class EllynMixin(BatchMixin, FiniteDifferenceMixin, PredictionIntegrationMixin):
         return str(sympy.parse_expr(eq))    
 
 class AFPWrapper(EllynMixin):
-    def __init__(self):
+    def __init__(self, time_limit: Union[None, int] = None):
         super().__init__(
             selection='afp',
             lex_eps_global=False,
@@ -95,12 +108,14 @@ class AFPWrapper(EllynMixin):
             max_len_init=20,
             popsize=1000,
             g = 250,
-            time_limit=60,
-            op_list=['n','v','+','-','*','/', 'exp','log','2','3', 'sqrt','sin','cos'],
+            time_limit=time_limit,
+            op_list=[
+                'n','v','+','-','*','/','exp','log','2','3','sqrt','sin','cos'
+            ],
         )
 
 class EHCWrapper(EllynMixin):
-    def __init__(self):
+    def __init__(self, time_limit: Union[None, int] = None):
         super().__init__(
             eHC_on=True,
             eHC_its=3,
@@ -119,12 +134,14 @@ class EHCWrapper(EllynMixin):
             max_len_init=20,
             popsize=1000,
             g=100,
-            time_limit=60,
-            op_list=['n','v','+','-','*','/', 'exp','log','2','3', 'sqrt','sin','cos'],
+            time_limit=time_limit,
+            op_list=[
+                'n','v','+','-','*','/','exp','log','2','3','sqrt','sin','cos'
+            ],
         )
         
 class EPLEXWrapper(EllynMixin):
-    def __init__(self):
+    def __init__(self, time_limit: Union[None, int] = None):
         super().__init__(
             selection='epsilon_lexicase',
             lex_eps_global=False,
@@ -141,12 +158,14 @@ class EPLEXWrapper(EllynMixin):
             max_len_init=20,
             popsize=500,
             g=500,
-            time_limit=60,
-            op_list=['n','v','+','-','*','/', 'exp','log','2','3', 'sqrt','sin','cos'],
+            time_limit=time_limit,
+            op_list=[
+                'n','v','+','-','*','/','exp','log','2','3','sqrt','sin','cos'
+            ],
         )
 
 class FEAFPWrapper(EllynMixin):
-    def __init__(self):
+    def __init__(self, time_limit: Union[None, int] = None):
         super().__init__(
             selection='afp',
             lex_eps_global=False,
@@ -169,6 +188,8 @@ class FEAFPWrapper(EllynMixin):
             FE_rank=True,
             popsize=1000,
             g=250,
-            time_limit=60,
-            op_list=['n','v','+','-','*','/','sin','cos','exp','log','2','3', 'sqrt'],
+            time_limit=time_limit,
+            op_list=[
+                'n','v','+','-','*','/','sin','cos','exp','log','2','3','sqrt'
+            ],
         )
