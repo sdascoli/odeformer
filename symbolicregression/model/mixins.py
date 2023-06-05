@@ -10,7 +10,13 @@ import traceback
 from pysindy.differentiation import FiniteDifference, SmoothedFiniteDifference
 from symbolicregression.envs.generators import integrate_ode
 
-__all__ = ("BatchMixin", "FiniteDifferenceMixin", "PredictionIntegrationMixin",)
+__all__ = (
+    "BatchMixin", 
+    "FiniteDifferenceMixin", 
+    "MultiDimMixin", 
+    "PredictionIntegrationMixin", 
+    "SympyMixin",
+)
 
 class SympyMixin:
     def to_sympy(
