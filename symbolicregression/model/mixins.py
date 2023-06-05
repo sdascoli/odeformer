@@ -88,7 +88,7 @@ class MultiDimMixin:
         *args, 
         **kwargs,
     ) -> Dict[int, List[str]]:
-        assert len(trajectories.shape) == 2, f"len(times.shape) == {len(times.shape)}"
+        assert len(trajectories.shape) == 2, f"len(trajectories.shape) == {len(trajectories.shape)}"
         predictions_per_component: List[List[str]] = []
         for _deriv in derivatives.T:
             # supply all trajectories as input but only single output component to learn a func R^n -> R
