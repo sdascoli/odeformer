@@ -217,10 +217,13 @@ class Trainer(object):
             train_path = os.path.join(params.reload_data,'data.prefix')
             test_path = os.path.join(params.reload_data,'data.prefix.test')
             # check number of lines in test_path
-            with open(test_path) as f:
-                for i, l in enumerate(f):
-                    pass
-            n_eqs = i + 1
+            if os.path.isfile(test_path):
+                with open(test_path) as f:
+                    for i, l in enumerate(f):
+                        pass
+                n_eqs = i + 1
+            else:
+                n_eqs = 0
             if not os.path.isfile(test_path) or n_eqs < params.eval_size:
                 split_data(train_path, params.eval_size)
             self.data_path = {"functions": (train_path, test_path)}

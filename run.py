@@ -9,7 +9,7 @@ import shutil
 from distutils import dir_util
 user = os.getlogin()
 
-exp_folder = 'mlm_new'
+exp_folder = 'mlm_bounded'
 
 #dump_path = f'/home/{user}/odeformer/experiments'
 dump_path = f'/scratch/{user}/odeformer/experiments'
@@ -26,11 +26,11 @@ extra_args = {
     #'min_dimension':1,
     #'max_dimension':2,
     #'sign_as_token':True,
-    'reload_data':dump_path + "/datagen/datagen_use_sympy_True",
+    'reload_data':dump_path + "/datagen_bounded/datagen_use_sympy_True",
     }
 
 grid = {
-    "masked_output":[0, .3, .6],
+    "masked_output":[0.6],
     #"sign_as_token":[False],
     #"use_two_hot":[False]
     #"fixed_init_scale":[True,False],
@@ -44,7 +44,7 @@ grid = {
 def get_free_gpus():
     output = subprocess.check_output("nvidia-smi --query-gpu=memory.free --format=csv,nounits,noheader", shell=True)
     free_memory = [int(x) for x in output.decode().strip().split('\n')]
-    free_gpus = [i for i, memory in enumerate(free_memory) if memory > 15000]  # Change the threshold based on your needs
+    free_gpus = [i for i, memory in enumerate(free_memory) if memory > 8000]  # Change the threshold based on your needs
     free_gpus = sorted(free_gpus, key=lambda i: free_memory[i], reverse=True)
     return free_gpus
 

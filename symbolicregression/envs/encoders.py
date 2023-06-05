@@ -116,7 +116,7 @@ class FloatSequences(Encoder):
                 mantissa = i + f
                 expon = int(e) - precision
                 if expon < -100:
-                    mantissa = ["0" * base]
+                    mantissa = "0"*self.base
                     expon = int(0)
                 if self.sign_as_token:
                     token_sequence = [sign, f"N{mantissa}", f"E{expon}"]

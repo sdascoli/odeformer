@@ -105,11 +105,11 @@ class Node:
         if nb_children == 1:
             s = str(self.value)
             if s == "pow2":
-                s = "(" + self.children[0].infix() + ") pow 2"
+                s = "(" + self.children[0].infix() + ")**2"
             elif s == "inv":
                 s = "1/(" + self.children[0].infix() + ")"
             elif s == "pow3":
-                s = "(" + self.children[0].infix() + ") pow 3"
+                s = "(" + self.children[0].infix() + ")**3"
             else:
                 s = s + "(" + self.children[0].infix() + ")"
             return s
@@ -123,14 +123,14 @@ class Node:
                 res += ("" + self.children[1].infix())
                 return res
             elif self.value == "mul":
-                res  = "(" + self.children[0].infix() + ")" if self.children[0].value in ["add","sub"] else (self.children[0].infix() + " ")
-                res += "+"
-                res += "(" + self.children[1].infix() + ")" if self.children[1].value in ["add","sub"] else (" " + self.children[1].infix())
+                res  = "(" + self.children[0].infix() + ")" if self.children[0].value in ["add","sub"] else (self.children[0].infix())
+                res += "*"
+                res += "(" + self.children[1].infix() + ")" if self.children[1].value in ["add","sub"] else (self.children[1].infix())
                 return res
             elif self.value == "div":
-                res  = "(" + self.children[0].infix() + ")" if self.children[0].value=="add" else (self.children[0].infix() + " ")
+                res  = "(" + self.children[0].infix() + ")" if self.children[0].value=="add" else (self.children[0].infix())
                 res += "/"
-                res += "(" + self.children[1].infix() + ")" if self.children[1].value=="add" else (" " + self.children[1].infix())
+                res += "(" + self.children[1].infix() + ")" if self.children[1].value=="add" else (self.children[1].infix())
                 return res
 
 

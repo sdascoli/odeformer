@@ -10,9 +10,9 @@ from distutils import dir_util
 user = os.getlogin()
 
 
-exp_folder = 'datagen'
+exp_folder = 'datagen_bounded'
 
-dump_path = f'/home/{user}/odeformer/experiments'
+dump_path = f'/scratch/{user}/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
 
 extra_args = {
@@ -27,41 +27,19 @@ extra_args = {
     'print_freq':100,
     "export_data":True,
     "use_wandb":False,
+    "cpu":True
      }
 
 grid = {
     'use_sympy':[True],
 }
 
-def get_free_gpus():
-    output = subprocess.check_output("nvidia-smi --query-gpu=memory.free --format=csv,nounits,noheader", shell=True)
-    free_memory = [int(x) for x in output.decode().strip().split('\n')]
-    free_gpus = [i for i, memory in enumerate(free_memory) if memory > 15000]  # Change the threshold based on your needs
-    free_gpus = sorted(free_gpus, key=lambda i: free_memory[i], reverse=True)
-    return free_gpus
-
-def get_most_free_gpu():
-    output = subprocess.check_output("nvidia-smi --query-gpu=memory.free --format=csv,nounits,noheader", shell=True)
-    free_memory = [int(x) for x in output.decode().strip().split('\n')]
-    most_free = free_memory.index(max(free_memory))
-    # set visible devices to the most free gpu
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(most_free)
-    return free_gpus
-
-# Get the list of free GPUs
-free_gpus = get_free_gpus()
-print("Free GPUs: ",free_gpus)
-if not free_gpus:
-    print("No free GPUs available!")
-    exit()
-
 # Path to your PyTorch script
 pytorch_script = "train.py"
 
 # Function to run the PyTorch script with a specific learning rate on a specific GPU
-def run_experiment(gpu_id, args, logfile):
+def run_experiment(args, logfile):
     env_vars = os.environ.copy()
-    env_vars["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     command = ["python", pytorch_script]
     for arg, value in args.items():
         command.append(f"--{arg}")
@@ -75,8 +53,6 @@ def dict_product(d):
         yield dict(zip(keys, element))
 
 for params in dict_product(grid):
-    if not free_gpus:
-        break
     exp_id = 'datagen_'+'_'.join(['{}_{}'.format(k,v) for k,v in params.items()])
     params['dump_path'] = dump_path
     params['exp_name'] = exp_folder
@@ -99,9 +75,8 @@ for params in dict_product(grid):
     os.chdir(job_dir)
 
     logfile = os.path.join(job_dir,'train.log')
-    gpu_id = free_gpus.pop(0)
-    print(f"Starting experiment {exp_id} on GPU: {gpu_id}")
-    run_experiment(gpu_id, params, logfile)
+    print(f"Starting experiment {exp_id}")
+    run_experiment(params, logfile)
     sleep(1)
 
 print("All experiments started.")
