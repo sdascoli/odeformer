@@ -11,7 +11,7 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin):
     def __init__(
         self, 
         feature_names: List[str],
-        num_candidates: int = 10, 
+        num_candidates: int = 16, 
         verbosity: int = 1, 
         num_workers: int = 1,
         debug: bool = True,
