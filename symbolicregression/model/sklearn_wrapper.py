@@ -75,6 +75,12 @@ class SymbolicTransformerRegressor(BaseEstimator):
             times = [times]
             trajectories = [trajectories]
         n_datasets = len(times)
+
+        # take finite differences
+        if self.params:
+            if self.params.differentiate:
+                for i in range(len(times)):
+                    trajectories[i], times[i] = np.diff(trajectories[i], axis=0), times[i][1:]
         
         if self.params:
             scaler = utils_wrapper.Scaler(time_range=[1, self.params.time_range], feature_scale=self.params.init_scale) if self.rescale else None 

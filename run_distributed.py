@@ -9,28 +9,25 @@ import shutil
 from distutils import dir_util
 user = os.getlogin()
 
-exp_folder = 'mlm_bounded'
+exp_folder = 'large'
 
 #dump_path = f'/home/{user}/odeformer/experiments'
 dump_path = f'/scratch/{user}/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
 
 extra_args = {
-    'use_wandb':True,
+    'ngpu':4
+    'use_wandb':True
     'collate_queue_size': 1000,
-    #'n_steps_per_epoch':1000,
-    'print_freq': 30,
-    'ode_integrator':'solve_ivp',
     'num_workers':1,
+    'print_freq': 100,
     'tokens_per_batch':10000,
-    #'min_dimension':1,
-    #'max_dimension':2,
-    #'sign_as_token':True,
-    'reload_data':dump_path + "/datagen_bounded/datagen_use_sympy_True",
+    'reload_data':dump_path + "/datagen/datagen_use_sympy_True",
     }
 
 grid = {
-    "masked_output":[0,0.3,0.6],
+    #"use_sympy":[True],
+    #"masked_output":[0, .3, .6],
     #"sign_as_token":[False],
     #"use_two_hot":[False]
     #"fixed_init_scale":[True,False],
@@ -44,7 +41,7 @@ grid = {
 def get_free_gpus():
     output = subprocess.check_output("nvidia-smi --query-gpu=memory.free --format=csv,nounits,noheader", shell=True)
     free_memory = [int(x) for x in output.decode().strip().split('\n')]
-    free_gpus = [i for i, memory in enumerate(free_memory) if memory > 10000]  # Change the threshold based on your needs
+    free_gpus = [i for i, memory in enumerate(free_memory) if memory > 15000]  # Change the threshold based on your needs
     free_gpus = sorted(free_gpus, key=lambda i: free_memory[i], reverse=True)
     return free_gpus
 
@@ -70,7 +67,7 @@ pytorch_script = "train.py"
 def run_experiment(gpu_id, args, logfile):
     env_vars = os.environ.copy()
     env_vars["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-    command = ["python", pytorch_script]
+    command = ["torchrun", "--n_proc_per_node", str(args['ngpu']), pytorch_script]
     for arg, value in args.items():
         command.append(f"--{arg}")
         command.append(str(value))

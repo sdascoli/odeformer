@@ -222,7 +222,7 @@ class AdamCosineWithWarmup(Adam):
         weight_decay=0,
         warmup_updates=10000,
         warmup_init_lr=1e-7,
-        min_lr=None,
+        min_lr=1e-9,
         init_period=100000000,
         period_mult=1,
         lr_shrink=0.75,

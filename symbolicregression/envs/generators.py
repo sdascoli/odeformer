@@ -661,8 +661,8 @@ class RandomFunctions(Generator):
         if transformed_prefix == tree.prefix():
             a = self.generate_float(rng) if rng.rand() < self.params.prob_prefactor else transformed_prefix
             transformed_prefix = f"mul,{a}," + transformed_prefix
-        a = self.generate_float(rng)
-        transformed_prefix = f"add,{a}," + transformed_prefix if rng.rand() < self.params.prob_prefactor else transformed_prefix
+        #a = self.generate_float(rng)
+        #transformed_prefix = f"add,{a}," + transformed_prefix if rng.rand() < self.params.prob_prefactor else transformed_prefix
         tree = self.equation_encoder.decode(transformed_prefix.split(",")).nodes[0]
         return tree
 
@@ -814,16 +814,23 @@ class RandomFunctions(Generator):
             return None, None
         if np.any(np.abs(trajectory)>10**self.params.max_exponent):
             return None, None
-        if len(np.unique(trajectory[-10:])) == 1: # remove constant
-            return None, None
-        # if np.any(np.abs(trajectory)>self.params.max_trajectory_value):
-        #     return None, None
+        if rng.rand() < self.params.discard_stationary_trajectory_prob:
+            window_len = n_points//4
+            last = trajectory[-window_len:]
+            if np.max(np.abs((np.max(last, axis=0)-np.min(last, axis=0))/window_len)) < 1e-3: # remove constant
+                return None, None
+
         
         #trajectory = np.concatenate((t.reshape(-1,1),trajectory), axis=-1)
         if self.params.subsample_ratio:
             indices_to_remove = rng.choice(trajectory.shape[0], int(trajectory.shape[0] * self.params.subsample_ratio), replace=False)
             trajectory = np.delete(trajectory, indices_to_remove, axis=0)
             times = np.delete(times, indices_to_remove, axis=0)
+
+        # take finite differences
+        if self.params.differentiate:
+            trajectory = np.diff(trajectory, axis=0)
+            times = times[1:]
         
         return tree, (times, trajectory)
 

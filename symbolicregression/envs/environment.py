@@ -651,7 +651,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--operators_to_use",
             type=str,
-            default="sin:1,inv:1,id:2,add:2,sub:2,mul:1",
+            default="sin:1,inv:1,pow2:1,id:3,add:2,sub:2,mul:1",
             #default="add:3,mul:1",
             help="Which operator to remove",
         )
@@ -661,14 +661,12 @@ class FunctionEnvironment(object):
             default="",
             help="Which operator to not repeat",
         )
-
         parser.add_argument(
             "--max_unary_depth",
             type=int,
             default=5,
             help="Max number of operators inside unary",
         )
-
         parser.add_argument(
             "--required_operators",
             type=str,
@@ -752,6 +750,12 @@ class FunctionEnvironment(object):
             help="Maximal value in trajectory"
         )
         parser.add_argument(
+            "--discard_stationary_trajectory_prob", 
+            type=float, 
+            default=1, 
+            help="Probability to discard stationary trajectories"
+        )
+        parser.add_argument(
             "--max_prefactor",
             type=int,
             default=20,
@@ -777,6 +781,12 @@ class FunctionEnvironment(object):
         )
 
         # generator
+        parser.add_argument(
+            "--differentiate",
+            type=bool_flag,
+            default=False,
+            help="Whether to use two hot embeddings",
+        )
         parser.add_argument(
             "--use_two_hot",
             type=bool_flag,
@@ -862,7 +872,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--time_range",
             type=float,
-            default=5.0,
+            default=10.0,
             help="Time range for ODE integration",
         )
         parser.add_argument(
@@ -935,6 +945,8 @@ class EnvDataset(Dataset):
         assert task in FunctionEnvironment.TRAINING_TASKS
         assert size is None or not self.train
         assert not params.batch_load or params.reload_size > 0
+        assert not params.differentiate and params.subsample_ratio 
+        
         # batching
         self.num_workers = params.num_workers
         self.batch_size = params.batch_size

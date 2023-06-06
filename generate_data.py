@@ -10,7 +10,7 @@ from distutils import dir_util
 user = os.getlogin()
 
 
-exp_folder = 'datagen_bounded'
+exp_folder = 'datagen_diff'
 
 dump_path = f'/scratch/{user}/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
@@ -27,7 +27,12 @@ extra_args = {
     'print_freq':100,
     "export_data":True,
     "use_wandb":False,
-    "cpu":True
+    "cpu":True,
+    
+    "differentiate":True,
+    "subsample_ratio":0,
+    "n_points":100,
+    "max_points":150,
      }
 
 grid = {

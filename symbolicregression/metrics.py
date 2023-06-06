@@ -13,18 +13,9 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
     results = defaultdict(list)
     if metrics == "":
         return {}
-    
     if len(true.shape)<3: # we are dealing with a single trajectory
         predicted, true, predicted_tree, tree = [predicted], [true], [predicted_tree], [tree]
-        
     assert len(true) == len(predicted), "issue with len, true: {}, predicted: {}".format(len(true), len(predicted))
-    for i in range(len(true)):
-        if predicted[i] is None: continue
-        #if len(true[i].shape)==2:
-        #    true[i]=true[i][:,0]
-        #if len(predicted[i].shape)==2:
-        #    predicted[i]=predicted[i][:,0]
-        #assert true[i].shape == predicted[i].shape, "Problem with shapes: {}, {}".format(true[i].shape, predicted[i].shape)
 
     for metric in metrics.split(","):
 

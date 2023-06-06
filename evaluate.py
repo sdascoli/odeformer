@@ -138,8 +138,8 @@ class Evaluator(object):
             trajectories = samples["trajectory"]
             infos = samples["infos"]
             if "tree" in samples.keys():
-                trees = samples["tree"]
-                batch_results["trees"].extend([self.env.simplifier.readable_tree(tree) for tree in trees])
+                trees = [self.env.simplifier.simplify_tree(tree, expand=True) for tree in samples["tree"]]
+                batch_results["trees"].extend([None if tree is None else tree.infix() for tree in trees])
             else:
                 trees = [None]*len(times)
 
@@ -157,6 +157,7 @@ class Evaluator(object):
                 trajectory = trajectory[idx]
                 best_candidate = candidates[0] # candidates are sorted
                 pred_trajectory = self.dstr.predict(time, y0=trajectory[0], tree=best_candidate) 
+                best_candidate = self.env.simplifier.simplify_tree(best_candidate, expand=True)
                 best_result = compute_metrics(pred_trajectory, trajectory, predicted_tree=best_candidate, tree=tree, metrics=self.params.validation_metrics)
                 for k, v in best_result.items():
                     best_results[k].append(v[0])
@@ -165,7 +166,7 @@ class Evaluator(object):
             for k, v in infos.items():
                 infos[k] = v.tolist()
 
-            batch_results["predicted_trees"].extend([self.env.simplifier.readable_tree(tree) for tree in best_candidates])
+            batch_results["predicted_trees"].extend([None if tree is None else tree.infix() for tree in best_candidates])
 
             for k, v in infos.items():
                 batch_results["info_" + k].extend(v)        
