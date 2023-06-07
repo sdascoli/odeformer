@@ -8,11 +8,17 @@ from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
 from symbolicregression.baselines.proged_wrapper import ProGEDWrapper
 
 def format_and_save(params, scores, batch_results, name):
+    gamma = params.eval_noise_gamma
+    subsample_ratio = params.subsample_ratio
+    if gamma is None:
+        gamma = "None"
+    if subsample_ratio is None:
+        subsample_ratio = "None"
     scores = pd.DataFrame(scores, index=[0]).T
     scores.to_csv(
-        path_or_buf=Path(params.eval_dump_path) / f"{params.baseline_model}_{name}.csv"
+        path_or_buf=Path(params.eval_dump_path) / f"{params.baseline_model}_{name}_{gamma}_{subsample_ratio}.csv"
     )
-    batch_results.to_csv(path_or_buf=Path(params.eval_dump_path) / f"{params.baseline_model}_{name}_batch_results.csv")
+    batch_results.to_csv(path_or_buf=Path(params.eval_dump_path) / f"{params.baseline_model}_{name}_{gamma}_{subsample_ratio}_batch_results.csv")
     print(f"Saving results for {params.baseline_model} under:\n{params.eval_dump_path}")
 
 def main(params):
@@ -89,8 +95,11 @@ if __name__ == "__main__":
     params.eval_only = True
     params.cpu = True
     
+    params.eval_noise_gamma = 0.02
+    params.subsample_ratio = 0.2
+    
     params.eval_on_pmlb = False
-    params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/polynomial_2d.txt"
+    params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/polynomial_2d.txt.pkl"
     
     symbolicregression.utils.CUDA = not params.cpu
     if params.batch_size_eval is None:
