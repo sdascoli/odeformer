@@ -22,7 +22,7 @@ extra_args = {
     'print_freq': 30,
     'ode_integrator':'solve_ivp',
     'num_workers':1,
-    'tokens_per_batch':10000,
+    'tokens_per_batch':8000,
     'min_dimension':2,
     'max_dimension':2,
     #'sign_as_token':True,

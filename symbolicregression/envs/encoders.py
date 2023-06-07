@@ -95,8 +95,8 @@ class FloatSequences(Encoder):
         if self.float_descriptor_length == 3:
             self.symbols.extend(["N" + f"%0{self.ndigits}d" % i for i in range(self.max_token)])
         elif self.float_descriptor_length == 2:
-            self.symbols.extend(["+N" + f"%0{self.ndigits}d" % i for i in range(self.max_token)])
-            self.symbols.extend(["-N" + f"%0{self.ndigits}d" % i for i in range(self.max_token)])
+            self.symbols.extend(["N+" + f"%0{self.ndigits}d" % i for i in range(self.max_token)])
+            self.symbols.extend(["N-" + f"%0{self.ndigits}d" % i for i in range(self.max_token)])
         self.symbols.extend(
             ["E" + str(i) for i in range(-self.max_exponent, self.max_exponent + 1)]
         )
@@ -124,7 +124,7 @@ class FloatSequences(Encoder):
                 if self.float_descriptor_length == 3:
                     token_sequence = [sign, f"N{mantissa}", f"E{expon}"]
                 else:
-                    token_sequence = [f"{sign}N{mantissa}",f"E{expon}"]
+                    token_sequence = [f"N{sign}{mantissa}",f"E{expon}"]
                 seq += token_sequence
             return seq
         else:
@@ -145,16 +145,13 @@ class FloatSequences(Encoder):
                 if x[0] not in ["-", "+", "E", "N"]:
                     return np.nan
             try:
-                mant = ""
                 if self.float_descriptor_length == 2:
-                    sign = 1 if val[0] == "+" else -1
-                    for x in val[1:-1]:
-                        mant += x[1:]                
-                    exp = int(val[-1][1:])
+                    sign = 1 if val[0][1] == "+" else -1
+                    mant = val[0][2:]
+                    exp = int(val[1][1:])
                 else:
-                    sign = 1 if val[0][0] == "+" else -1
-                    for x in val[:-1]:
-                        mant += x[2:]  
+                    sign = 1 if val[0] == "+" else -1
+                    mant = val[1][1:]
                     exp = int(val[-1][1:])
                 mant = int(mant)
                 value = sign * float(f"{mant}e{exp}")
@@ -179,11 +176,11 @@ class FPSymbol(Encoder):
         self.limit = 10 ** self.logrange
         self.output_length = 1
         # less than 1
-        self.symbols.extend(["N" + str(i) + "e0" for i in range(-dig + 1, dig)])
+        self.symbols.extend(["N" + str(i) + "E0" for i in range(-dig + 1, dig)])
         for i in range(self.max_exponent):
             for k in range(10**self.ndigits):
-                self.symbols.append("N" + str(k) + "e" + str(i))
-                self.symbols.append("N-" + str(k) + "e" + str(i))
+                self.symbols.append("N+" + str(k) + "E" + str(i))
+                self.symbols.append("N-" + str(k) + "E" + str(i))
 
     def encode(self, values):
 
@@ -198,7 +195,7 @@ class FPSymbol(Encoder):
                 sign = -1 if value < 0 else 1
                 v = abs(value) * self.base
                 if v == 0:
-                    return ["N0e0"]
+                    return ["N0E0"]
                 e = int(math.log10(v))
                 if e < 0:
                     e = 0
@@ -210,8 +207,8 @@ class FPSymbol(Encoder):
                     e += 1
                 if e >= self.max_exponent:
                     return ["NaN"] if value > 0 else ["-NaN"]
-                pref = "N" if sign == 1 else "N-"
-                res.append(pref + str(m) + "e" + str(e))
+                pref = "N+" if sign == 1 else "N-"
+                res.append(pref + str(m) + "E" + str(e))
             return res
         else:
             return [self.encode(v) for v in values]
@@ -225,7 +222,7 @@ class FPSymbol(Encoder):
                 return -self.limit, 1
             if value[0] != "N":
                 return np.nan, 1
-            m, e = value[1:].split("e")
+            m, e = value[1:].split("E")
             v = (int(m) * (10 ** int(e))) / self.limit
             res.append(v)
         return res
@@ -287,7 +284,7 @@ class Equation(Encoder):
         elif lst[0].startswith("INT"):
             val, length = self.parse_int(lst)
             return Node(str(val), self.params), length
-        elif lst[0] == "+" or lst[0] == "-" or lst[0].startswith("+N") or lst[0].startswith('-N'):
+        elif lst[0] == "+" or lst[0] == "-" or lst[0].startswith("+N") or lst[0].startswith('-N') or lst[0].startswith('N'):
             if self.params.use_two_hot:
                 return Node(str(lst[0]), self.params), 1
             else:
