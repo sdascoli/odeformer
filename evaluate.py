@@ -134,7 +134,17 @@ class Evaluator(object):
             map(lambda x: "info_" + x, self.params.ablation_to_keep.split(","))
         )
 
-    def evaluate_on_iterator(self,iterator,save_file,):
+    def evaluate_on_iterator(
+        self,
+        iterator,
+        save_file: str,
+        gamma: Union[None, float] = None,
+        subsample_ratio: Union[None, float] = None,
+    ):
+        if gamma is None:
+            gamma = self.params.eval_noise_gamma
+        if subsample_ratio is None:
+            subsample_ratio = self.params.subsample_ratio
         self.trainer.logger.info("evaluate_on_iterator")
         scores = OrderedDict({"epoch": self.trainer.epoch})
         batch_results = defaultdict(list)
@@ -147,7 +157,36 @@ class Evaluator(object):
                 batch_results["trees"].extend(
                     [self.env.simplifier.readable_tree(tree) for tree in trees]
                 )
-            
+            if gamma > 0:
+                if isinstance(trajectories, List):
+                    trajectories = [
+                        tra + self.env._create_noise(
+                            train=False, trajectory=tra, gamma=gamma,
+                        )
+                        for tra in trajectories
+                    ]
+                else:
+                    trajectories = self.env._create_noise(
+                        train=False, trajectory=trajectories, gamma=gamma,
+                    )
+                    
+            if subsample_ratio < 1:
+                if isinstance(trajectories, List):
+                    subsampled_tra_and_time = [
+                        self.env._subsample_trajectory(
+                            times=time, trajectory=tra, subsample_ratio=subsample_ratio,
+                        )
+                        for (time, tra) in zip(times, trajectories)
+                    ]
+                    subsampled_tra_and_time = list(map(list, zip(*subsampled_tra_and_time)))
+                    times = subsampled_tra_and_time[0]
+                    trajectories = subsampled_tra_and_time[1]
+                    
+                else:
+                    times, trajectories = self.env._subsample_trajectory(
+                        times=time, trajectory=trajectories,
+                    )
+
             all_candidates: Dict[int, List[str]] = self.model.fit(
                 times, trajectories, verbose=False, sort_candidates=True
             )
