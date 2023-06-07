@@ -9,7 +9,7 @@ import shutil
 from distutils import dir_util
 user = os.getlogin()
 
-exp_folder = 'mlm_bounded'
+exp_folder = 'poly'
 
 #dump_path = f'/home/{user}/odeformer/experiments'
 dump_path = f'/scratch/{user}/odeformer/experiments'
@@ -26,11 +26,12 @@ extra_args = {
     #'min_dimension':1,
     #'max_dimension':2,
     #'sign_as_token':True,
-    'reload_data':dump_path + "/datagen_bounded/datagen_use_sympy_True",
+    'reload_data':dump_path + "/datagen_poly/datagen_use_sympy_True",
     }
 
 grid = {
-    "masked_output":[0,0.3,0.6],
+    'use_sympy':[True],
+    #"masked_output":[0,0.3,0.6],
     #"sign_as_token":[False],
     #"use_two_hot":[False]
     #"fixed_init_scale":[True,False],

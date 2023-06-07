@@ -116,7 +116,7 @@ class Node:
         else:
             if self.value == "add":
                 return self.children[0].infix() + " + " + self.children[1].infix()
-            if self.value == "add":
+            if self.value == "sub":
                 return self.children[0].infix() + " - " + self.children[1].infix()
             if self.value == "pow":
                 res  = "(" + self.children[0].infix() + ")**"
@@ -124,12 +124,12 @@ class Node:
                 return res
             elif self.value == "mul":
                 res  = "(" + self.children[0].infix() + ")" if self.children[0].value in ["add","sub"] else (self.children[0].infix())
-                res += "*"
+                res += " * "
                 res += "(" + self.children[1].infix() + ")" if self.children[1].value in ["add","sub"] else (self.children[1].infix())
                 return res
             elif self.value == "div":
                 res  = "(" + self.children[0].infix() + ")" if self.children[0].value=="add" else (self.children[0].infix())
-                res += "/"
+                res += " / "
                 res += "(" + self.children[1].infix() + ")" if self.children[1].value=="add" else (self.children[1].infix())
                 return res
 
@@ -468,21 +468,8 @@ class RandomFunctions(Generator):
     def generate_float(self, rng, exponent=None):
         sign = rng.choice([-1, 1])
         # sample number loguniformly in max_prefactor, 1/max_prefactor
-
         constant = rng.uniform(np.log10(1/self.params.max_prefactor), np.log10(self.params.max_prefactor))
         constant = sign*10**constant
-
-
-        # mantissa = float(rng.choice(range(1, 10 ** self.params.float_precision)))
-        # min_power = (
-        #     -self.params.max_exponent_prefactor - (self.params.float_precision + 1) // 2
-        # )
-        # max_power = (
-        #     self.params.max_exponent_prefactor - 1 - (self.params.float_precision + 1) // 2
-        # )
-        # if not exponent:
-        #     exponent = rng.randint(min_power, max_power + 1)
-        # constant = sign * (mantissa * 10 ** exponent)
         return str(constant)
 
     def generate_int(self, rng):
@@ -817,7 +804,7 @@ class RandomFunctions(Generator):
         if rng.rand() < self.params.discard_stationary_trajectory_prob:
             window_len = n_points//4
             last = trajectory[-window_len:]
-            if np.max(np.abs((np.max(last, axis=0)-np.min(last, axis=0))/window_len)) < 1e-3: # remove constant
+            if np.all(np.abs((np.max(last, axis=0)-np.min(last, axis=0))/window_len) < 1e-3): # remove constant
                 return None, None
 
         

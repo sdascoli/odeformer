@@ -173,7 +173,7 @@ def get_parser():
     parser.add_argument(
         "--optimizer",
         type=str,
-        default='adam_cosine,warmup_updates=10000,init_period=300000,period_mult=1.5,lr_shrink=0.5',
+        default='adam_cosine,warmup_updates=10000,init_period=100000,period_mult=1.5,lr_shrink=0.5',
         help="Optimizer (SGD / RMSprop / Adam, etc.)",
     )
     parser.add_argument("--lr", 
@@ -187,7 +187,7 @@ def get_parser():
         help="Clip gradients norm (0 to disable)",
     )
     parser.add_argument(
-        "--n_steps_per_epoch", type=int, default=1000, help="Number of steps per epoch",
+        "--n_steps_per_epoch", type=int, default=3000, help="Number of steps per epoch",
     )
     parser.add_argument(
         "--max_epoch", type=int, default=100000, help="Number of epochs"
