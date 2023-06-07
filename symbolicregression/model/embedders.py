@@ -57,12 +57,12 @@ class LinearPointEmbedder(Embedder):
             self.input_dim,
             padding_idx=self.env.float_word2id["<PAD>"],
         )
-        self.float_scalar_descriptor_len = 3 if self.params.sign_as_token else 2
         self.total_dimension = 1 + self.params.max_dimension
-        self.float_vector_descriptor_len = self.float_scalar_descriptor_len * self.total_dimension
+        self.float_descriptor_length = self.params.float_descriptor_length
+        self.float_vector_descriptor_length = self.float_descriptor_length * self.total_dimension
 
         self.activation_fn = getattr(F, params.activation)
-        size = self.float_vector_descriptor_len*self.input_dim
+        size = self.float_vector_descriptor_length*self.input_dim
         hidden_size = size * self.params.emb_expansion_factor
         self.hidden_layers = nn.ModuleList()
         self.hidden_layers.append(nn.Linear(size, hidden_size))
@@ -85,7 +85,7 @@ class LinearPointEmbedder(Embedder):
         self, sequences_embeddings: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Takes: (N_max * (d_in+d_out)*(float_descriptor_len, B, d) tensors
+        Takes: (N_max * (d_in+d_out)*(float_descriptor_length, B, d) tensors
         Returns: (N_max, B, d)
         """
         max_len, bs, float_descriptor_length, dim = sequences_embeddings.size()
@@ -101,8 +101,8 @@ class LinearPointEmbedder(Embedder):
             for x, y in seq:
                 x_toks = self.env.float_encoder.encode(x)
                 y_toks = self.env.float_encoder.encode(y)
-                input_dim = int(len(x_toks) / self.float_scalar_descriptor_len)
-                output_dim = int(len(y_toks) / self.float_scalar_descriptor_len)
+                input_dim = int(len(x_toks) / self.float_descriptor_length)
+                output_dim = int(len(y_toks) / self.float_descriptor_length)
                 x_toks = [
                     *x_toks,
                 ]
@@ -112,7 +112,7 @@ class LinearPointEmbedder(Embedder):
                         "<OUTPUT_PAD>"
                         for _ in range(
                             (self.params.max_dimension - output_dim)
-                            * self.float_scalar_descriptor_len
+                            * self.float_descriptor_length
                         )
                     ],
                 ]
@@ -125,7 +125,7 @@ class LinearPointEmbedder(Embedder):
         pad_id = self.env.float_word2id["<PAD>"]
         lengths = [len(x) for x in seqs]
         bs, slen = len(lengths), max(lengths)
-        sent = torch.LongTensor(slen, bs, self.float_vector_descriptor_len).fill_(pad_id)
+        sent = torch.LongTensor(slen, bs, self.float_vector_descriptor_length).fill_(pad_id)
         for i, seq in enumerate(seqs):
             sent[0 : len(seq), i, :] = seq
         return sent, torch.LongTensor(lengths)

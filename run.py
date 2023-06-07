@@ -9,7 +9,7 @@ import shutil
 from distutils import dir_util
 user = os.getlogin()
 
-exp_folder = 'poly'
+exp_folder = 'bounded'
 
 #dump_path = f'/home/{user}/odeformer/experiments'
 dump_path = f'/scratch/{user}/odeformer/experiments'
@@ -23,15 +23,15 @@ extra_args = {
     'ode_integrator':'solve_ivp',
     'num_workers':1,
     'tokens_per_batch':10000,
-    #'min_dimension':1,
-    #'max_dimension':2,
+    'min_dimension':2,
+    'max_dimension':2,
     #'sign_as_token':True,
-    'reload_data':dump_path + "/datagen_poly/datagen_use_sympy_True",
+    'reload_data':dump_path + "/datagen_bounded/datagen_subsample_ratio_0",
     }
 
 grid = {
-    'use_sympy':[True],
-    #"masked_output":[0,0.3,0.6],
+    #'float_descriptor_length':[1,2,3],
+    "masked_output":[0,0.5],
     #"sign_as_token":[False],
     #"use_two_hot":[False]
     #"fixed_init_scale":[True,False],

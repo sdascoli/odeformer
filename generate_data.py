@@ -10,7 +10,7 @@ from distutils import dir_util
 user = os.getlogin()
 
 
-exp_folder = 'datagen_diff'
+exp_folder = 'datagen_bounded'
 
 dump_path = f'/scratch/{user}/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
@@ -19,7 +19,7 @@ extra_args = {
     'n_steps_per_epoch':1000,
     'max_epoch':100,
     'ode_integrator':'solve_ivp',
-    'num_workers':50,
+    'num_workers':40,
     'use_queue':False,
     'batch_size':10,
     'min_dimension':2,
@@ -28,15 +28,11 @@ extra_args = {
     "export_data":True,
     "use_wandb":False,
     "cpu":True,
-    
-    "differentiate":True,
-    "subsample_ratio":0,
-    "n_points":100,
     "max_points":150,
      }
 
 grid = {
-    'use_sympy':[True],
+    'subsample_ratio':[0],
 }
 
 # Path to your PyTorch script

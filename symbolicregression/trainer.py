@@ -752,7 +752,7 @@ class Trainer(object):
             input_tokens, len1 = embedder.forward(x1, return_before_embed=True)
             # randomly mask a fraction x of the input tokens along seq dimension
             mask = np.random.rand(*input_tokens.shape[:2]) < self.params.masked_input
-            float_descriptor_length = 3 if self.params.sign_as_token else 2
+            float_descriptor_length = self.params.float_descriptor_length
             input_tokens[mask][float_descriptor_length:] = encoder.word2id['<MASK>']
             x1 = embedder.compress(embedder.embed(input_tokens))
             predict_input_tokens = input_tokens[:,:,float_descriptor_length:]

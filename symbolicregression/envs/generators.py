@@ -44,23 +44,24 @@ logger = getLogger()
 import random
 
 operators_real = {
-    "add": 2,
-    "sub": 2,
-    "mul": 2,
-    "div": 2,
-    "abs": 1,
-    "inv": 1,
-    "sqrt": 1,
-    "log": 1,
-    "exp": 1,
-    "sin": 1,
+    "add"   : 2,
+    "sub"   : 2,
+    "mul"   : 2,
+    "div"   : 2,
+    "abs"   : 1,
+    "inv"   : 1,
+    "sqrt"  : 1,
+    "log"   : 1,
+    "exp"   : 1,
+    "sin"   : 1,
     "arcsin": 1,
-    "cos": 1,
+    "cos"   : 1,
     "arccos": 1,
-    "tan": 1,
+    "tan"   : 1,
     "arctan": 1,
-    "pow2": 1,
-    "pow3": 1,
+    "pow2"  : 1,
+    "pow3"  : 1,
+    'id'    : 1
 }
 
 operators_extra = {"pow": 2}
@@ -128,9 +129,9 @@ class Node:
                 res += "(" + self.children[1].infix() + ")" if self.children[1].value in ["add","sub"] else (self.children[1].infix())
                 return res
             elif self.value == "div":
-                res  = "(" + self.children[0].infix() + ")" if self.children[0].value=="add" else (self.children[0].infix())
+                res  = "(" + self.children[0].infix() + ")" if self.children[0].value in ["add","sub"] else (self.children[0].infix())
                 res += " / "
-                res += "(" + self.children[1].infix() + ")" if self.children[1].value=="add" else (self.children[1].infix())
+                res += "(" + self.children[1].infix() + ")" if self.children[1].value in ["add","sub"] else (self.children[1].infix())
                 return res
 
 
@@ -656,16 +657,17 @@ class RandomFunctions(Generator):
     def _add_prefactors(self, rng, tree):
 
         s = str(tree.value)
-        a, b = self.generate_float(rng), self.generate_float(rng)
+        a, b, c = [self.generate_float(rng) for _ in range(3)]
         add_prefactor = f",add,{a}," if rng.rand() < self.params.prob_prefactor else ","
-        mul_prefactor = f",mul,{b}," if rng.rand() < self.params.prob_prefactor else ","
-        total_prefactor = add_prefactor.rstrip(",") + "," + mul_prefactor.lstrip(",")
+        mul_prefactor1 = f",mul,{b}," if rng.rand() < self.params.prob_prefactor else ","
+        mul_prefactor2 = f",mul,{c}," if rng.rand() < self.params.prob_prefactor else ","
+        total_prefactor = add_prefactor.rstrip(",") + "," + mul_prefactor1.lstrip(",")
         if s in ["add", "sub"]:
             s += (
-                "," if tree.children[0].value in ["add", "sub"] else mul_prefactor
+                "," if tree.children[0].value in ["add", "sub"] else mul_prefactor1
             ) + self._add_prefactors(rng, tree.children[0])
             s += (
-                "," if tree.children[1].value in ["add", "sub"] else mul_prefactor
+                "," if tree.children[1].value in ["add", "sub"] else mul_prefactor2
             ) + self._add_prefactors(rng, tree.children[1])
         elif s in self.unaries and tree.children[0].value not in ["add", "sub"]:
             s += total_prefactor + self._add_prefactors(rng, tree.children[0])

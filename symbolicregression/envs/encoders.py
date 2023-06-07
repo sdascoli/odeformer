@@ -33,7 +33,10 @@ class Encoder(ABC):
 class GeneralEncoder:
     def __init__(self, params, symbols, all_operators):
         self.constant_encoder = ConstantEncoder(params) if params.use_two_hot else None
-        self.float_encoder = FloatSequences(params)
+        if params.float_descriptor_length == 1:
+            self.float_encoder = FPSymbol(params)
+        else:
+            self.float_encoder = FloatSequences(params)
         self.equation_encoder = Equation(
             params, symbols, self.float_encoder, all_operators, self.constant_encoder
         )
@@ -84,19 +87,19 @@ class FloatSequences(Encoder):
         super().__init__(params)
         self.float_precision = params.float_precision
         self.max_exponent = params.max_exponent
-        self.base = (self.float_precision + 1)
-        self.max_token = 10 ** self.base
+        self.ndigits = (self.float_precision + 1)
+        self.max_token = 10 ** self.ndigits
         self.symbols = ["+", "-"]
-        self.sign_as_token = params.sign_as_token
-        if self.sign_as_token:
-            self.symbols.extend(["N" + f"%0{self.base}d" % i for i in range(self.max_token)])
-        else:
-            self.symbols.extend(["+N" + f"%0{self.base}d" % i for i in range(self.max_token)])
-            self.symbols.extend(["-N" + f"%0{self.base}d" % i for i in range(self.max_token)])
+        self.float_descriptor_length = params.float_descriptor_length
+
+        if self.float_descriptor_length == 3:
+            self.symbols.extend(["N" + f"%0{self.ndigits}d" % i for i in range(self.max_token)])
+        elif self.float_descriptor_length == 2:
+            self.symbols.extend(["+N" + f"%0{self.ndigits}d" % i for i in range(self.max_token)])
+            self.symbols.extend(["-N" + f"%0{self.ndigits}d" % i for i in range(self.max_token)])
         self.symbols.extend(
             ["E" + str(i) for i in range(-self.max_exponent, self.max_exponent + 1)]
         )
-        self.float_descriptor_length = 3 if self.sign_as_token else 2
 
     def encode(self, values):
         """
@@ -116,9 +119,9 @@ class FloatSequences(Encoder):
                 mantissa = i + f
                 expon = int(e) - precision
                 if expon < -100:
-                    mantissa = "0"*self.base
+                    mantissa = "0"*self.ndigits
                     expon = int(0)
-                if self.sign_as_token:
+                if self.float_descriptor_length == 3:
                     token_sequence = [sign, f"N{mantissa}", f"E{expon}"]
                 else:
                     token_sequence = [f"{sign}N{mantissa}",f"E{expon}"]
@@ -143,7 +146,7 @@ class FloatSequences(Encoder):
                     return np.nan
             try:
                 mant = ""
-                if self.sign_as_token:
+                if self.float_descriptor_length == 2:
                     sign = 1 if val[0] == "+" else -1
                     for x in val[1:-1]:
                         mant += x[1:]                
@@ -161,6 +164,71 @@ class FloatSequences(Encoder):
                 value = np.nan
             seq.append(value)
         return seq
+    
+class FPSymbol(Encoder):
+    def __init__(self, params):
+        super().__init__(params)
+        self.float_precision = params.float_precision
+        self.max_exponent = 3
+        assert (self.float_precision + self.max_exponent) % 2 == 0
+        self.symbols = ["NaN", "-NaN"]
+        self.ndigits = (self.float_precision + 1)
+        dig = 10 ** self.float_precision
+        self.logrange = (self.float_precision + self.max_exponent) // 2
+        self.base = 10 ** (self.logrange - self.float_precision)
+        self.limit = 10 ** self.logrange
+        self.output_length = 1
+        # less than 1
+        self.symbols.extend(["N" + str(i) + "e0" for i in range(-dig + 1, dig)])
+        for i in range(self.max_exponent):
+            for k in range(10**self.ndigits):
+                self.symbols.append("N" + str(k) + "e" + str(i))
+                self.symbols.append("N-" + str(k) + "e" + str(i))
+
+    def encode(self, values):
+
+        if isinstance(values, float):
+            values = [values]
+        values = np.array(values)
+        if len(values.shape) == 1:
+            res = []
+            for value in values:
+                if abs(value) > self.limit:
+                    return ["NaN"] if value > 0 else ["-NaN"]
+                sign = -1 if value < 0 else 1
+                v = abs(value) * self.base
+                if v == 0:
+                    return ["N0e0"]
+                e = int(math.log10(v))
+                if e < 0:
+                    e = 0
+                m = int(v * (10 ** (self.float_precision - e)) + 0.5)
+                if m == 0:
+                    sign = 1
+                if m == 10 ** self.ndigits:
+                    m = int(m/10)
+                    e += 1
+                if e >= self.max_exponent:
+                    return ["NaN"] if value > 0 else ["-NaN"]
+                pref = "N" if sign == 1 else "N-"
+                res.append(pref + str(m) + "e" + str(e))
+            return res
+        else:
+            return [self.encode(v) for v in values]
+
+    def decode(self, lst):
+        res = []
+        for value in lst:
+            if value == "NaN":
+                return self.limit, 1
+            if value == "-NaN":
+                return -self.limit, 1
+            if value[0] != "N":
+                return np.nan, 1
+            m, e = value[1:].split("e")
+            v = (int(m) * (10 ** int(e))) / self.limit
+            res.append(v)
+        return res
 
 
 class Equation(Encoder):
@@ -180,7 +248,7 @@ class Equation(Encoder):
         self.float_encoder = float_encoder
         self.all_operators = all_operators
         self.constant_encoder = constant_encoder
-        self.float_descriptor_length = 3 if self.params.sign_as_token else 2
+        self.float_descriptor_length = params.float_descriptor_length
 
     def encode(self, tree):
         res = []

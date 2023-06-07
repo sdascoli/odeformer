@@ -70,10 +70,6 @@ class FunctionEnvironment(object):
         self.rng = None
         self.float_precision = params.float_precision
         self.max_size = None
-        self.float_tolerance = 10 ** (-params.float_precision)
-        self.additional_tolerance = [
-            10 ** (-i) for i in range(params.float_precision + 1)
-        ]
 
         self.generator = generators.RandomFunctions(params, SPECIAL_WORDS)
         self.float_encoder = self.generator.float_encoder
@@ -651,7 +647,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--operators_to_use",
             type=str,
-            default="sin:1,inv:1,pow2:1,id:5,add:2,sub:2,mul:1",
+            default="sin:1,inv:1,pow2:1,id:3,add:2,sub:2,mul:1",
             #default="add:3,mul:1",
             help="Which operator to remove",
         )
@@ -732,10 +728,10 @@ class FunctionEnvironment(object):
             help="Number of digits in the mantissa",
         )
         parser.add_argument(
-            "--sign_as_token",
-            type=bool_flag,
-            default=False,
-            help="Whether to use a sign token",
+            "--float_descriptor_length",
+            type=int,
+            default=2,
+            help="Type of encoding for floats",
         )
         parser.add_argument(
             "--max_exponent", 
@@ -945,7 +941,7 @@ class EnvDataset(Dataset):
         assert task in FunctionEnvironment.TRAINING_TASKS
         assert size is None or not self.train
         assert not params.batch_load or params.reload_size > 0
-        assert not params.differentiate and params.subsample_ratio 
+        assert not (params.differentiate and params.subsample_ratio)
         
         # batching
         self.num_workers = params.num_workers
