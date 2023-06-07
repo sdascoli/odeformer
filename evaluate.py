@@ -180,7 +180,15 @@ class Evaluator(object):
                 best_candidates.append(best_candidate)
  
             for k, v in infos.items():
-                infos[k] = v.tolist()
+                if isinstance(v, np.ndarray):
+                    infos[k] = v.tolist()
+                elif isinstance(v, List):
+                    infos[k] = v
+                else:
+                    raise TypeError(
+                        f"v should be of type List of np.ndarray but has type: {type(v)}"
+                    )
+                    
 
             batch_results["predicted_trees"].extend(
                 [
@@ -364,10 +372,10 @@ class Evaluator(object):
                         times, y0=y0, prediction=line
                     )
                     samples['infos'] = {
-                        'dimension': 2, 
-                        'n_unary_ops': np.nan, 
-                        'n_input_points': len(times),
-                        'name': f"{_filename}_{line_i:03d}_{line}"
+                        'dimension': [2],
+                        'n_unary_ops': [np.nan],
+                        'n_input_points': [len(times)],
+                        'name': [f"{_filename}_{line_i:03d}_{line}"],
                     }
                     samples['times'].append(times)
                     samples["trajectory"].append(trajectory)
