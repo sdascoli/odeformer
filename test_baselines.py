@@ -7,6 +7,13 @@ from symbolicregression.baselines.ellyn_wrapper import (
 from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
 from symbolicregression.baselines.proged_wrapper import ProGEDWrapper
 
+def format_and_save(params, scores, batch_results, name):
+    scores = pd.DataFrame(scores, index=[0]).T
+    scores.to_csv(
+        path_or_buf=Path(params.eval_dump_path) / f"{params.baseline_model}_{name}.csv"
+    )
+    batch_results.to_csv(path_or_buf=Path(params.eval_dump_path) / f"{params.baseline_model}_{name}_batch_results.csv")
+    print(f"Saving results for {params.baseline_model} under:\n{params.eval_dump_path}")
 
 def main(params):
         
@@ -45,11 +52,17 @@ def main(params):
         model = FFXWrapper()
         
     evaluator_default = Evaluator(trainer, model)
-    pmlb_scores_default, batch_results = evaluator_default.evaluate_on_pmlb(save=params.save_results)
-    pmlb_scores_default = pd.DataFrame(pmlb_scores_default, index=[0]).T
-    pmlb_scores_default.to_csv(path_or_buf=Path(params.eval_dump_path) / f"{params.baseline_model}_pmlb_scores_default.csv")
-    batch_results.to_csv(path_or_buf=Path(params.eval_dump_path) / f"{params.baseline_model}_batch_results.csv")
-    print(f"Saving results for {params.baseline_model} under:\n{params.eval_dump_path}")
+    if params.eval_on_pmlb:
+        scores, batch_results = evaluator_default.evaluate_on_pmlb(save=params.save_results)
+        format_and_save(params, scores, batch_results, "pmlb")
+        
+    if params.eval_on_file is not None:
+        scores, batch_results = evaluator_default.evaluate_on_file(
+            path=params.eval_on_file, save=params.save_results, seed=13,
+        )
+        _name = Path(params.eval_on_file).name
+        format_and_save(params, scores, batch_results, str(_name))
+    
     
     
 if __name__ == "__main__":
@@ -57,7 +70,7 @@ if __name__ == "__main__":
     parser = get_parser()
     
     parser.add_argument("--baseline_model", 
-        type=str, default="pysr",
+        type=str, default="sindy_poly3",
         choices=["proged", "pysr", "sindy_poly3", "sindy", "afp", "feafp", "eplex", "ehc", "ffx",]
     )
     
@@ -75,6 +88,10 @@ if __name__ == "__main__":
     params.validation_metrics = 'r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio'
     params.eval_only = True
     params.cpu = True
+    
+    params.eval_on_pmlb = False
+    params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/polynomial_2d.txt"
+    
     symbolicregression.utils.CUDA = not params.cpu
     if params.batch_size_eval is None:
         params.batch_size_eval = int(1.5 * params.batch_size)
