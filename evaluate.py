@@ -344,9 +344,9 @@ class Evaluator(object):
             if seed is not None:
                 np.random.seed(seed)
             iterator = []
-            samples = defaultdict(list)
             with open(path) as f:
                 for line_i, line in enumerate(f):
+                    samples = defaultdict(list)
                     line = line.rstrip("\n")
                     eqs = line.split("|")
                     dim = len(eqs)
