@@ -222,6 +222,8 @@ class Evaluator(object):
             scores[metric] = df[metric].mean()
             scores[metric+"_num_nans"] = df[metric].isna().sum()
             
+        scores["num_samples"] = df.shape[0]
+            
         for ablation in self.ablation_to_keep:
             for val, df_ablation in df.groupby(ablation):
                 avg_scores_ablation = df_ablation.mean()
@@ -371,6 +373,11 @@ class Evaluator(object):
                     trajectory = self.model.integrate_prediction(
                         times, y0=y0, prediction=line
                     )
+                    if np.nan in trajectory:
+                        self.trainer.logger.info(
+                            f"NaN detected in solution trajectory of {line}. Excluding this equation."
+                        )
+                        continue
                     samples['infos'] = {
                         'dimension': [2],
                         'n_unary_ops': [np.nan],
@@ -387,17 +394,8 @@ class Evaluator(object):
             save_file = os.path.join(self.save_path, f"eval_{_filename}.csv")
         else:
             save_file = None
-        scores = self.evaluate_on_iterator(iterator,save_file)
-        return scores
+        return self.evaluate_on_iterator(iterator,save_file)
                     
-                    
-                    
-                    
-                    
-                    
-            
-        
-
 
 def main(params):
 
