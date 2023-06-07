@@ -773,23 +773,6 @@ class RandomFunctions(Generator):
         tree_with_constants = env.word_to_infix(prefix, is_float=False, str_array=False)
         return tree_with_constants
 
-    def _subsample_trajectory(
-        self, 
-        times: np.ndarray, 
-        trajectory: np.ndarray, 
-        subsample_ratio: Union[None, float]
-    ):
-        if subsample_ratio is None:
-            subsample_ratio = self.params.subsample_ratio
-        indices_to_remove = rng.choice(
-            trajectory.shape[0], 
-            int(trajectory.shape[0] * subsample_ratio), 
-            replace=False,
-        )
-        trajectory = np.delete(trajectory, indices_to_remove, axis=0)
-        times = np.delete(times, indices_to_remove, axis=0)
-        return times, trajectory
-
     def generate_datapoints(
         self,
         tree,
@@ -813,10 +796,6 @@ class RandomFunctions(Generator):
             return None, None
         if np.any(np.abs(trajectory)>10**self.params.max_exponent):
             return None, None
-
-        #trajectory = np.concatenate((t.reshape(-1,1),trajectory), axis=-1)
-        if self.params.subsample_ratio:
-            times, trajectory = self._subsample_trajectory(times, trajectory)
         
         return tree, (times, trajectory)
 

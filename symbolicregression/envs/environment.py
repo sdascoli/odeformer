@@ -424,7 +424,12 @@ class FunctionEnvironment(object):
                     print(traceback.format_exc())
                 continue
 
-    def _create_noise(self, train: bool, trajectory: np.ndarray, gamma: Union[None, float] = None):
+    def _create_noise(
+        self, 
+        train: bool, 
+        trajectory: np.ndarray, 
+        gamma: Union[None, float] = None
+    ):
         if gamma is None:
             gamma = (
                 self.rng.uniform(0, self.params.train_noise_gamma)
@@ -435,6 +440,26 @@ class FunctionEnvironment(object):
             (np.abs(trajectory) + 1e-100) / np.sqrt(trajectory.shape[0])
         )
         return gamma * norm * np.random.randn(*trajectory.shape)
+    
+    def _subsample_trajectory(
+        self, 
+        times: np.ndarray, 
+        trajectory: np.ndarray, 
+        subsample_ratio: Union[None, float],
+        rng=None,
+    ):
+        if subsample_ratio is None:
+            subsample_ratio = self.params.subsample_ratio
+        if rng is None:
+            rng = self.rng
+        indices_to_remove = rng.choice(
+            trajectory.shape[0], 
+            int(trajectory.shape[0] * subsample_ratio), 
+            replace=False,
+        )
+        trajectory = np.delete(trajectory, indices_to_remove, axis=0)
+        times = np.delete(times, indices_to_remove, axis=0)
+        return times, trajectory
 
     @timeout(TIMEOUT)
     def _gen_expr(
@@ -505,6 +530,10 @@ class FunctionEnvironment(object):
             except Exception as e:
                 print(e, "norm computation error")
                 return {"tree": tree}, ["norm computation error"]
+            
+        #trajectory = np.concatenate((t.reshape(-1,1),trajectory), axis=-1)
+        if self.params.subsample_ratio:
+            times, trajectory = self._subsample_trajectory(times, trajectory)
 
         # encode tree
         tree_encoded = self.equation_encoder.encode(tree)
