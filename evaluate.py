@@ -337,7 +337,8 @@ class Evaluator(object):
         _filename = Path(path).name
         if path.endswith(".pkl"):
             # read pickle file which is assumed to have correct format
-            raise NotImplementedError()
+            with open(path, "rb") as fpickle:
+                iterator = pickle.load(fpickle)
         else:
             # read text file where each line is assumed to be an equation
             if seed is not None:
@@ -446,6 +447,6 @@ if __name__ == "__main__":
     params.local_rank = -1
     params.master_port = -1
     params.use_cross_attention = True
-    params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/polynomial_2d.txt"
+    params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/polynomial_2d.txt.pkl"
 
     main(params)
