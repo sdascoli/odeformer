@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Dict, List
+from typing import Dict, List, Union
 import copy
 import json
 
@@ -20,6 +20,7 @@ from copy import deepcopy
 from symbolicregression.utils import to_cuda
 import glob
 import scipy
+import sympy
 import pickle
 
 from parsers import get_parser
@@ -331,6 +332,62 @@ class Evaluator(object):
         scores = self.evaluate_on_iterator(iterator,save_file)
 
         return scores
+    
+    def evaluate_on_file(self, path: str, save: bool, seed: Union[None, int]):
+        _filename = Path(path).name
+        if path.endswith(".pkl"):
+            # read pickle file which is assumed to have correct format
+            raise NotImplementedError()
+        else:
+            # read text file where each line is assumed to be an equation
+            if seed is not None:
+                np.random.seed(seed)
+            iterator = []
+            samples = defaultdict(list)
+            with open(path) as f:
+                for line_i, line in enumerate(f):
+                    line = line.rstrip("\n")
+                    eqs = line.split("|")
+                    dim = len(eqs)
+                    var_names = [f"x_{k}" for k in range(dim)]
+                    # eqs = [sympy.parse_expr(eq) for eq in eqs]
+                    # component_funcs = [sympy.lambdify(",".join(var_names), eq) for eq in eqs]
+                    # def ode_func(*args):
+                    #     outputs = []
+                    #     for cf in component_funcs:
+                    #         outputs.append(cf(*args))
+                    #     return np.array(outputs).squeeze()
+                    y0 = np.ones(len(var_names))
+                    times = np.linspace(0, 5, 256)
+                    trajectory = self.model.integrate_prediction(
+                        times, y0=y0, prediction=line
+                    )
+                    samples['infos'] = {
+                        'dimension': 2, 
+                        'n_unary_ops': np.nan, 
+                        'n_input_points': len(times),
+                        'name': f"{_filename}_{line_i:03d}_{line}"
+                    }
+                    samples['times'].append(times)
+                    samples["trajectory"].append(trajectory)
+                    iterator.append((samples, None))
+            with open(path+".pkl", "wb") as fpickle:
+                pickle.dump(iterator, fpickle)
+                
+        if save:
+            save_file = os.path.join(self.save_path, f"eval_{_filename}.csv")
+        else:
+            save_file = None
+        scores = self.evaluate_on_iterator(iterator,save_file)
+        return scores
+                    
+                    
+                    
+                    
+                    
+                    
+            
+        
 
 
 def main(params):
@@ -369,6 +426,9 @@ def main(params):
         logger.info("__pmlb__:%s" % json.dumps(pmlb_scores))
         osc_scores = evaluator.evaluate_on_oscillators(save=save)
         logger.info("__oscillators__:%s" % json.dumps(osc_scores))
+    
+    if params.eval_on_file is not None:
+        evaluator.evaluate_on_file(path=params.eval_on_file, seed=params.random_seed)
 
 
 if __name__ == "__main__":
@@ -386,5 +446,6 @@ if __name__ == "__main__":
     params.local_rank = -1
     params.master_port = -1
     params.use_cross_attention = True
+    params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/polynomial_2d.txt"
 
     main(params)
