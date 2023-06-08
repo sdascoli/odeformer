@@ -146,12 +146,12 @@ class Evaluator(object):
 
             if self.params.max_masked_variables:  # randomly mask some variables
                 masked_trajectories = copy.deepcopy(trajectories)
-                n_masked_variables_arr = np.array([])
+                n_masked_variables_arr = []
                 for seq_id in range(len(times)):
                     n_masked_variables = max(np.random.randint(0, self.params.max_masked_variables + 1), infos["dimension"][seq_id]-1)
                     masked_trajectories[seq_id][:, -n_masked_variables:] = np.nan
                     n_masked_variables_arr.append(n_masked_variables)
-                infos['n_masked_variables'] = n_masked_variables_arr
+                infos['n_masked_variables'] = np.array(n_masked_variables_arr)
                 all_candidates = self.dstr.fit(times, masked_trajectories, verbose=False, sort_candidates=True)
             else:
                 all_candidates = self.dstr.fit(times, trajectories, verbose=False, sort_candidates=True)
