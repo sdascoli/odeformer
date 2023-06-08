@@ -206,8 +206,8 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     for dim in range(dimension):
                         pred_terms = predicted_tree[i].nodes[dim].infix(skeleton=True).split(" + ")
                         terms = tree[i].nodes[dim].infix(skeleton=True).split(" + ")
-                        missing.append(sum([1 for term in terms if term not in pred_terms]))
-                        extra.append(sum([1 for term in pred_terms if term not in terms]))
+                        missing.append(sum([1 for term in terms if term not in pred_terms])/len(terms))
+                        extra.append(sum([1 for term in pred_terms if term not in terms])/len(terms))
                     results[metric].append(np.mean(missing) + np.mean(extra))
         else:
             raise NotImplementedError("Metric {} not implemented".format(metric))
