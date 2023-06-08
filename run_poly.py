@@ -27,10 +27,13 @@ extra_args = {
     'max_dimension':6,
     #'sign_as_token':True,
     'reload_data':dump_path + "/datagen_poly/datagen_use_sympy_True",
+    #'lr':0.0001,
+    #'operators_to_use':'add:4,mul:1',
     }
 
 grid = {
-    "float_descriptor_length":[1,2,3]
+    "float_descriptor_length":[3],
+    "max_masked_variables":[3],
     #'use_sympy':[True],
     #"masked_output":[0,0.3,0.6],
     #"sign_as_token":[False],

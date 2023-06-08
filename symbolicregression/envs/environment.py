@@ -690,6 +690,7 @@ class FunctionEnvironment(object):
 
         parser.add_argument("--min_dimension", type=int, default=1)
         parser.add_argument("--max_dimension", type=int, default=2)
+        parser.add_argument("--max_masked_variables", type=int, default=0)
         parser.add_argument(
             "--enforce_dim",
             type=bool_flag,
@@ -730,7 +731,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--float_descriptor_length",
             type=int,
-            default=2,
+            default=3,
             help="Type of encoding for floats",
         )
         parser.add_argument(

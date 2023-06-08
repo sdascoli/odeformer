@@ -89,7 +89,7 @@ class FloatSequences(Encoder):
         self.max_exponent = params.max_exponent
         self.ndigits = (self.float_precision + 1)
         self.max_token = 10 ** self.ndigits
-        self.symbols = ["+", "-"]
+        self.symbols = ["+", "-", "NaN"]
         self.float_descriptor_length = params.float_descriptor_length
 
         if self.float_descriptor_length == 3:
@@ -111,15 +111,17 @@ class FloatSequences(Encoder):
         values = np.array(values)
         if len(values.shape) == 1:
             seq = []
-            for val in values:
-                if isinstance(val, str):
-                    sign = '-' if val.startswith('-') else '+'
-                    mantissa, expon = val.lstrip('-').split('e')
+            for value in values:
+                if np.isnan(value):
+                    return ["NaN"]*self.float_descriptor_length
+                if isinstance(value, str):
+                    sign = '-' if value.startswith('-') else '+'
+                    mantissa, expon = value.lstrip('-').split('e')
                     mantissa = mantissa.replace('.', '')
                     expon = int(expon)
                 else:
-                    sign = "+" if val >= 0 else "-"
-                    m, e = (f"%.{precision}e" % val).split("e")
+                    sign = "+" if value >= 0 else "-"
+                    m, e = (f"%.{precision}e" % value).split("e")
                     i, f = m.lstrip("-").split(".")
                     mantissa = i + f
                     expon = int(e) - precision
@@ -133,7 +135,7 @@ class FloatSequences(Encoder):
                 seq += token_sequence
             return seq
         else:
-            seqs = [self.encode(val) for val in values]
+            seqs = [self.encode(value) for value in values]
         return seqs
 
     def decode(self, lst):
@@ -195,6 +197,8 @@ class FPSymbol(Encoder):
         if len(values.shape) == 1:
             res = []
             for value in values:
+                if np.isnan(value):
+                    return ["NaN"]
                 if abs(value) > self.limit:
                     return ["NaN"] if value > 0 else ["-NaN"]
                 sign = -1 if value < 0 else 1

@@ -137,13 +137,24 @@ class Evaluator(object):
             times = samples["times"]
             trajectories = samples["trajectory"]
             infos = samples["infos"]
+
             if "tree" in samples.keys():
                 trees = [self.env.simplifier.simplify_tree(tree, expand=True) for tree in samples["tree"]]
                 batch_results["trees"].extend([None if tree is None else tree.infix() for tree in trees])
             else:
                 trees = [None]*len(times)
 
-            all_candidates = self.dstr.fit(times, trajectories, verbose=False, sort_candidates=True)
+            if self.params.max_masked_variables:  # randomly mask some variables
+                masked_trajectories = copy.deepcopy(trajectories)
+                n_masked_variables_arr = np.array([])
+                for seq_id in range(len(times)):
+                    n_masked_variables = max(np.random.randint(0, self.params.max_masked_variables + 1), infos["dimension"][seq_id]-1)
+                    masked_trajectories[seq_id][:, -n_masked_variables:] = np.nan
+                    n_masked_variables_arr.append(n_masked_variables)
+                infos['n_masked_variables'] = n_masked_variables_arr
+                all_candidates = self.dstr.fit(times, masked_trajectories, verbose=False, sort_candidates=True)
+            else:
+                all_candidates = self.dstr.fit(times, trajectories, verbose=False, sort_candidates=True)
 
             best_results = {metric:[] for metric in self.params.validation_metrics.split(',')}
             best_candidates = []
@@ -163,12 +174,10 @@ class Evaluator(object):
                     best_results[k].append(v[0])
                 best_candidates.append(best_candidate)
  
-            for k, v in infos.items():
-                infos[k] = v.tolist()
-
             batch_results["predicted_trees"].extend([None if tree is None else tree.infix() for tree in best_candidates])
 
             for k, v in infos.items():
+                infos[k] = v.tolist()
                 batch_results["info_" + k].extend(v)        
             for k, v in best_results.items():
                 batch_results[k ].extend(v)
