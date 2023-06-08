@@ -29,7 +29,7 @@ extra_args = {
     "use_wandb":False,
     "cpu":True,
     
-    "operators_to_use":'add:4,mul:1'
+    "operators_to_use":'add:3,mul:1'
      }
 
 grid = {

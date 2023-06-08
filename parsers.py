@@ -178,7 +178,7 @@ def get_parser():
     )
     parser.add_argument("--lr", 
                         type=float, 
-                        default=1e-4, 
+                        default=2e-4, 
                         help="Learning rate")
     parser.add_argument(
         "--clip_grad_norm",

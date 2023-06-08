@@ -647,7 +647,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--operators_to_use",
             type=str,
-            default="sin:1,inv:1,pow2:1,id:3,add:2,sub:2,mul:1",
+            default="sin:1,inv:1,pow2:1,id:3,add:3,mul:1",
             #default="add:3,mul:1",
             help="Which operator to remove",
         )

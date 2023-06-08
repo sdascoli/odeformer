@@ -70,6 +70,7 @@ class SymbolicTransformerRegressor(BaseEstimator):
         self.rescale = rescale
 
         assert not (self.average_trajectories and self.rescale), "Cannot average trajectories and rescale at the same time"
+        assert not (self.params is None and self.rescale), "Need to know the time and feature range to rescale to"
 
         if not isinstance(times, list):
             times = [times]
@@ -82,10 +83,7 @@ class SymbolicTransformerRegressor(BaseEstimator):
                 for i in range(len(times)):
                     trajectories[i], times[i] = np.diff(trajectories[i], axis=0), times[i][1:]
         
-        if self.params:
-            scaler = utils_wrapper.Scaler(time_range=[1, self.params.time_range], feature_scale=self.params.init_scale) if self.rescale else None 
-        else:
-            scaler = utils_wrapper.Scaler(time_range=[1, 5], feature_scale=1) if self.rescale else None
+        scaler = utils_wrapper.Scaler(time_range=[1, self.params.time_range], feature_scale=self.params.init_scale) if self.rescale else None 
         scale_params = {}
         if scaler is not None:
             scaled_times = []

@@ -194,6 +194,7 @@ def load_run(run, extra_args = {}):
         model=mw,
         max_input_points=int(params.max_points*params.subsample_ratio),
         rescale=params.rescale,
+        params = params
     )
 
     return dstr
