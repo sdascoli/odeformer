@@ -178,7 +178,7 @@ class Evaluator(object):
 
             for k, v in infos.items():
                 infos[k] = v.tolist()
-                batch_results["info_" + k].extend(v)        
+                batch_results["info_" + k].extend(infos[k])        
             for k, v in best_results.items():
                 batch_results[k ].extend(v)
             
