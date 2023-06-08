@@ -193,6 +193,22 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     distance = min_edit_distance(predicted_tree[i].prefix(skeleton=True).split(","), tree[i].prefix(skeleton=True).split(","))
                     results[metric].append(distance)
 
+        elif metric == "term_difference":
+            if not predicted_tree: 
+                results[metric].extend([np.nan for _ in range(len(true))])
+                continue
+            for i in range(len(predicted_tree)):
+                if predicted_tree[i] is None or tree[i] is None or len(predicted_tree[i].nodes) != len(tree[i].nodes):
+                    results[metric].append(np.nan)
+                else:
+                    dimension = len(predicted_tree[i].nodes)
+                    extra, missing = [], []
+                    for dim in range(dimension):
+                        pred_terms = predicted_tree[i].nodes[dim].infix(skeleton=True).split(" + ")
+                        terms = tree[i].nodes[dim].infix(skeleton=True).split(" + ")
+                        missing.append(sum([1 for term in terms if term not in pred_terms]))
+                        extra.append(sum([1 for term in pred_terms if term not in terms]))
+                    results[metric].append(np.mean(missing) + np.mean(extra))
         else:
             raise NotImplementedError("Metric {} not implemented".format(metric))
 

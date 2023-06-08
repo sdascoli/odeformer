@@ -99,39 +99,45 @@ class Node:
         s += "]"
         return s
 
-    def infix(self):
+    def infix(self, skeleton=False):
+        s = str(self.value)
+        if skeleton:
+            try: 
+                float(s)
+                s = "CONSTANT"
+            except:
+                pass
         nb_children = len(self.children)
         if nb_children == 0:
-            return str(self.value)
+            return s
         if nb_children == 1:
-            s = str(self.value)
             if s == "pow2":
-                s = "(" + self.children[0].infix() + ")**2"
+                s = "(" + self.children[0].infix(skeleton=skeleton) + ")**2"
             elif s == "inv":
-                s = "1/(" + self.children[0].infix() + ")"
+                s = "1/(" + self.children[0].infix(skeleton=skeleton) + ")"
             elif s == "pow3":
-                s = "(" + self.children[0].infix() + ")**3"
+                s = "(" + self.children[0].infix(skeleton=skeleton) + ")**3"
             else:
-                s = s + "(" + self.children[0].infix() + ")"
+                s = s + "(" + self.children[0].infix(skeleton=skeleton) + ")"
             return s
         else:
-            if self.value == "add":
-                return self.children[0].infix() + " + " + self.children[1].infix()
-            if self.value == "sub":
-                return self.children[0].infix() + " - " + self.children[1].infix()
-            if self.value == "pow":
-                res  = "(" + self.children[0].infix() + ")**"
-                res += ("" + self.children[1].infix())
+            if s == "add":
+                return self.children[0].infix(skeleton=skeleton) + " + " + self.children[1].infix(skeleton=skeleton)
+            if s == "sub":
+                return self.children[0].infix(skeleton=skeleton) + " - " + self.children[1].infix(skeleton=skeleton)
+            if s == "pow":
+                res  = "(" + self.children[0].infix(skeleton=skeleton) + ")**"
+                res += ("" + self.children[1].infix(skeleton=skeleton))
                 return res
-            elif self.value == "mul":
-                res  = "(" + self.children[0].infix() + ")" if self.children[0].value in ["add","sub"] else (self.children[0].infix())
+            elif s == "mul":
+                res  = "(" + self.children[0].infix(skeleton=skeleton) + ")" if self.children[0].value in ["add","sub"] else (self.children[0].infix(skeleton=skeleton))
                 res += " * "
-                res += "(" + self.children[1].infix() + ")" if self.children[1].value in ["add","sub"] else (self.children[1].infix())
+                res += "(" + self.children[1].infix(skeleton=skeleton) + ")" if self.children[1].value in ["add","sub"] else (self.children[1].infix(skeleton=skeleton))
                 return res
-            elif self.value == "div":
-                res  = "(" + self.children[0].infix() + ")" if self.children[0].value in ["add","sub"] else (self.children[0].infix())
+            elif s == "div":
+                res  = "(" + self.children[0].infix(skeleton=skeleton) + ")" if self.children[0].value in ["add","sub"] else (self.children[0].infix(skeleton=skeleton))
                 res += " / "
-                res += "(" + self.children[1].infix() + ")" if self.children[1].value in ["add","sub"] else (self.children[1].infix())
+                res += "(" + self.children[1].infix(skeleton=skeleton) + ")" if self.children[1].value in ["add","sub"] else (self.children[1].infix(skeleton=skeleton))
                 return res
 
 
@@ -304,8 +310,8 @@ class NodeList:
             self.nodes.append(node)
         self.params = nodes[0].params
 
-    def infix(self):
-        return " | ".join([node.infix() for node in self.nodes])
+    def infix(self, skeleton=False):
+        return " | ".join([node.infix(skeleton=skeleton) for node in self.nodes])
 
     def __len__(self):
         return sum([len(node) for node in self.nodes])
