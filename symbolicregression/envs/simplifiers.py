@@ -75,17 +75,20 @@ class Simplifier(ABC):
         if hasattr(tree, "nodes"):
             return NodeList([self.simplify_tree(node, expand, resimplify) for node in tree.nodes])
         else:
-            if tree is None:
-                return tree
-            expr = self.tree_to_sympy_expr(tree)
-            if expand:
-                expr = self.expand_expr(expr)
-            if resimplify:
-                expr = self.simplify_expr(expr)
-            new_tree = self.sympy_expr_to_tree(expr).nodes[0]
-            if new_tree is None:
-                new_tree = tree
-            return new_tree
+            with timeout(1):
+                if tree is None:
+                    return tree
+                expr = self.tree_to_sympy_expr(tree)
+                if expand:
+                    expr = self.expand_expr(expr)
+                if resimplify:
+                    expr = self.simplify_expr(expr)
+                new_tree = self.sympy_expr_to_tree(expr)
+                if new_tree is None:
+                    return tree
+                else: 
+                    return new_tree.nodes[0]
+            return tree
         
     @classmethod
     def readable_tree(cls, tree):

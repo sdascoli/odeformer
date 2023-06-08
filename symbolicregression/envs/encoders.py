@@ -106,21 +106,26 @@ class FloatSequences(Encoder):
         Write a float number
         """
         precision = self.float_precision
-        if isinstance(values, float):
+        if isinstance(values, float) or isinstance(values, str):
             values = [values]
         values = np.array(values)
         if len(values.shape) == 1:
             seq = []
             for val in values:
-                assert val not in [-np.inf, np.inf], "cannot encode infinity"
-                sign = "+" if val >= 0 else "-"
-                m, e = (f"%.{precision}e" % val).split("e")
-                i, f = m.lstrip("-").split(".")
-                mantissa = i + f
-                expon = int(e) - precision
-                if expon < -100:
-                    mantissa = "0"*self.ndigits
-                    expon = int(0)
+                if isinstance(val, str):
+                    sign = '-' if val.startswith('-') else '+'
+                    mantissa, expon = val.lstrip('-').split('e')
+                    mantissa = mantissa.replace('.', '')
+                    expon = int(expon)
+                else:
+                    sign = "+" if val >= 0 else "-"
+                    m, e = (f"%.{precision}e" % val).split("e")
+                    i, f = m.lstrip("-").split(".")
+                    mantissa = i + f
+                    expon = int(e) - precision
+                    if expon < -100:
+                        mantissa = "0"*self.ndigits
+                        expon = int(0)
                 if self.float_descriptor_length == 3:
                     token_sequence = [sign, f"N{mantissa}", f"E{expon}"]
                 else:

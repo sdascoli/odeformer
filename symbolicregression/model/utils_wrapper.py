@@ -63,7 +63,7 @@ class Scaler(ABC):
                 if prefix[idx].startswith("x_"):
                     dim = int(prefix[idx][-1])
                     if dim>=len(scale): 
-                        continue
+                        return tree
                     a = str(scale[dim])
                     prefix_to_add = ["mul", a, prefix[idx]]
                 else:
