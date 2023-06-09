@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 #
-from typing import Tuple, List, Optional
+from typing import List, Optional, Tuple, Union
 from abc import ABC, abstractmethod
 import torch
 import torch.nn as nn
@@ -140,29 +140,98 @@ class LinearPointEmbedder(Embedder):
         assert lengths.max() <= self.max_seq_len, "issue with lengths after batching"
         return lengths
     
-class TwoHotEmbedder(nn.EmbeddingBag):
+
+class TwoHotEmbedder():
     
-    def __init__(self, num_embeddings: int, embedding_dim: int, padding_idx: Optional[int] = None):
-        super().__init__(
-            num_embeddings=num_embeddings, 
-            embedding_dim=embedding_dim,
-            padding_idx=padding_idx,
-            mode="sum"
-        )
+    def __init__(
+        self, 
+        num_embeddings: Union[None, int], # if None, you must supply min_value and max_value
+        embedding_dim: int,
+        min_value: Union[None, int] = None, # min is included, ignored if num_embeddings is not None
+        max_value: Union[None, int] = None, # min is excluded, ignored if num_embeddings is not None
+        init_from_arange: bool = False, # useful for debugging
+        require_grad: bool = False, # only applies when init_from_arange
+    ):
+        """
+        Arguments:
+        ----------
+        - num_embeddings: number of embeddings.
+        - embedding_dim: dimension of embeddings.
+        - min_value: smallest value to be represented (min is included).
+        - max_value: supremum, this is the first value outside the represented range of values.
+        -init_from_arange: If True, initialize embeddings such that an input of 0 gets an embedding vector of zeros, 
+            an input of 1 gets an embedding vector of ones, etc.
+        - require_grad: If True, embeddings are learnable, otherwise they will be fixed to their init values.
+        
+        """
+        self.embedding_dim = embedding_dim
+        self._min_value = min_value
+        self._max_value = max_value
+        if num_embeddings is None:
+            assert max_value > min_value, \
+                f"max_value must be larger than min_value but found {max_value} vs {min_value}."
+            num_embeddings = max_value - min_value + 2
+        elif min_value is not None or max_value is not None:
+            print("min_value and max_value will be ignored since num_embeddings is not None.")
+        self.num_embeddings = num_embeddings
+        self.pad_embedding_value = self.num_embeddings
+        self.init_from_arange = init_from_arange
+        if init_from_arange:
+            self.embd_bag = torch.nn.EmbeddingBag.from_pretrained(
+                embeddings=torch.arange(
+                    min_value, max_value+2, dtype=torch.float32
+                ).reshape(-1, 1).repeat(1, self.embedding_dim),
+                padding_idx=self.num_embeddings-1,
+                mode="sum",
+                freeze=not require_grad,
+            )
+        else:
+            self.embd_bag = torch.nn.EmbeddingBag(
+                num_embeddings=self.num_embeddings,
+                embedding_dim=self.embedding_dim,
+                padding_idx=self.num_embeddings-1,
+                mode="sum",
+            )
     
-    def forward(self, idx: torch.Tensor) -> torch.Tensor:
-        # inp has shape = (seq_len, batch size)
-        shape_output = list(idx.shape)
+    def __call__(self, inputs: Union[List[torch.Tensor], torch.Tensor]) -> Tuple[torch.Tensor, torch.LongTensor]:
+        return self.forward(inputs)
+    
+    def forward(self, inputs: Union[List[torch.Tensor], torch.Tensor]) -> Tuple[torch.Tensor, torch.LongTensor]:
+        if isinstance(inputs, List):
+            inputs, seq_lens = self.batch(inputs)
+        else:
+            seq_lens = torch.LongTensor([inputs.shape[0]] * (1 if len(inputs.shape) == 1 else inputs.shape[1]))
+        encoded = self.encode(inputs)
+        return encoded, seq_lens
+    
+    def encode(self, inputs: torch.Tensor) -> torch.Tensor:
+        # inputs has shape = (seq_len, batch size)
+        shape_output = list(inputs.shape)
         shape_output.append(self.embedding_dim)
         # for the two-hot representation we need to specify:
         # - the neighboring bins that support the distribution (=support_idcs)
         # - the probability mass that is assigned to each of the bins (=support_weights)
-        support_idcs = torch.stack((idx.reshape(-1), idx.reshape(-1))).T # shape=(seq_len * batch size, 2)
+        support_idcs = torch.stack((inputs.reshape(-1), inputs.reshape(-1))).T # shape=(seq_len * batch size, 2)
         # the right bins contains the decimal value, the left bin contains 1-decimal value
         support_weights = support_idcs % 1
         support_weights[:, 0] = 1 - support_weights[:, 1]
         support_weights = support_weights.to(torch.float32) # TODO: which dtype to use? needs to be consistent with self.weight
         support_idcs[:, 0] = torch.floor(support_idcs[:, 0])
         support_idcs[:, 1] = torch.ceil(support_idcs[:, 1])
-        support_idcs= support_idcs.to(torch.int64)
-        return super().forward(input=support_idcs, per_sample_weights=support_weights).reshape(shape_output)
+        support_idcs = support_idcs.to(torch.int64)
+        support_idcs[support_idcs != self.embd_bag.padding_idx] -= self._min_value
+        out = self.embd_bag(
+            input=support_idcs, per_sample_weights=support_weights,
+        )
+        if self.init_from_arange:
+            out[support_idcs[:,0]==self.embd_bag.padding_idx] = self.pad_embedding_value
+        return out.reshape(shape_output)
+        
+    def batch(self, seqs: List[torch.Tensor]) -> Tuple[torch.Tensor, torch.LongTensor]:
+        pad_id = self.embd_bag.padding_idx
+        lengths = [len(x) for x in seqs]
+        bs, slen = len(lengths), max(lengths)
+        sent = torch.Tensor(slen, bs).to(dtype=seqs[0].dtype).fill_(pad_id)
+        for i, seq in enumerate(seqs):
+            sent[0 : len(seq), i] = seq
+        return sent, torch.LongTensor(lengths)
