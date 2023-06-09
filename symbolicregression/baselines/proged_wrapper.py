@@ -52,7 +52,7 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin):
         if isinstance(trajectories, List):
             return self.fit_all(times=times, trajectories=trajectories, *args, **kwargs,)
         # trajectories needs to have shape (len(time-series), #vars)
-        assert len(times.shape) == 1, f"len(times.shape) = {len(times.shape)}"
+        # assert len(times.shape) == 1, f"len(times.shape) = {len(times.shape)}"
         assert times.shape[0] == trajectories.shape[0], \
             f"{times.shape[0]} vs {trajectories.shape[0]}"
         if generator_template_name is None:
