@@ -357,7 +357,7 @@ def get_parser():
     )
     parser.add_argument("--eval_on_pmlb", type=bool_flag, default=True)
     parser.add_argument("--eval_in_domain", type=bool_flag, default=True)
-    parser.add_argument("--rescale", type=bool_flag, default=True, help="Whether to rescale at inference.")
+    parser.add_argument("--rescale", type=bool_flag, default=False, help="Whether to rescale at inference.")
 
 
     # debug

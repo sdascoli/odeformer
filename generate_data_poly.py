@@ -7,19 +7,17 @@ import itertools
 from pathlib import Path
 import shutil
 from distutils import dir_util
-user = os.getlogin()
-
 
 exp_folder = 'datagen_poly'
 
-dump_path = f'/scratch/{user}/odeformer/experiments'
+dump_path = f'/sb_u0621_liac_scratch/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
 
 extra_args = {
     'n_steps_per_epoch':1000,
     'max_epoch':100,
     'ode_integrator':'solve_ivp',
-    'num_workers':50,
+    'num_workers':60,
     'use_queue':False,
     'batch_size':10,
     'min_dimension':1,

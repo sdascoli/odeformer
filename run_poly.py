@@ -7,12 +7,12 @@ import itertools
 from pathlib import Path
 import shutil
 from distutils import dir_util
-user = os.getlogin()
+#user = os.getlogin()
 
-exp_folder = 'poly'
+exp_folder = 'poly_big'
 
 #dump_path = f'/home/{user}/odeformer/experiments'
-dump_path = f'/scratch/{user}/odeformer/experiments'
+dump_path = f'/sb_u0621_liac_scratch/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
 
 extra_args = {
@@ -22,18 +22,19 @@ extra_args = {
     'print_freq': 30,
     'ode_integrator':'solve_ivp',
     'num_workers':1,
-    'tokens_per_batch':8000,
+    'tokens_per_batch':10000,
     'min_dimension':1,
     'max_dimension':6,
     #'sign_as_token':True,
     'reload_data':dump_path + "/datagen_poly/datagen_use_sympy_True",
-    #'lr':0.0001,
-    #'operators_to_use':'add:4,mul:1',
+    'float_descriptor_length':3
     }
 
 grid = {
-    "float_descriptor_length":[3],
-    "max_masked_variables":[3],
+    #"max_masked_variables":[2],
+    "enc_emb_dim":[256,512],
+    "dec_emb_dim":[256,512],
+    #"float_descriptor_length":[3]
     #'use_sympy':[True],
     #"masked_output":[0,0.3,0.6],
     #"sign_as_token":[False],

@@ -745,7 +745,7 @@ class Trainer(object):
 
         if params.max_masked_variables:  # randomly mask some variables
             for seq_id in range(len(times)):
-                n_masked_variables = max(np.random.randint(0, self.params.max_masked_variables + 1), infos["dimension"][seq_id]-1)
+                n_masked_variables = min(np.random.randint(0, self.params.max_masked_variables + 1), infos["dimension"][seq_id]-1)
                 trajectory[seq_id][:, -n_masked_variables:] = np.nan
 
         x1 = []

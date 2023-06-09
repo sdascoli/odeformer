@@ -148,7 +148,7 @@ class Evaluator(object):
                 masked_trajectories = copy.deepcopy(trajectories)
                 n_masked_variables_arr = []
                 for seq_id in range(len(times)):
-                    n_masked_variables = max(np.random.randint(0, self.params.max_masked_variables + 1), infos["dimension"][seq_id]-1)
+                    n_masked_variables = min(np.random.randint(0, self.params.max_masked_variables + 1), infos["dimension"][seq_id]-1)
                     masked_trajectories[seq_id][:, -n_masked_variables:] = np.nan
                     n_masked_variables_arr.append(n_masked_variables)
                 infos['n_masked_variables'] = np.array(n_masked_variables_arr)
