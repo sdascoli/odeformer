@@ -451,7 +451,7 @@ class Evaluator(object):
                 samples['infos'][_key_name] = [f"{_filename}_{line_i:03d}"]
                 assert samples["trajectory"][0].shape[1] == samples["infos"]["dimension"][0], \
                     "Expected dimension does not match time series: " \
-                    f"{samples['info']['dimension']} vs {samples['trajectory'].shape}"
+                    f"{samples['infos']['dimension']} vs {samples['trajectory'].shape}"
                 iterator.append((samples, None))
             with open(path+".pkl", "wb") as fpickle:
                 pickle.dump(iterator, fpickle)
