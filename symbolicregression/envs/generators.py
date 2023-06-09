@@ -876,8 +876,7 @@ def _integrate_ode(
             #@njit
             times = np.array(times)+1
             def func(t,y):
-                ret = tree([y],[t])
-                return ret[0]
+                return tree([y],[t])[0]
             try: 
                 # print("start solving")
                 trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times, method='RK23', rtol=1e-2, atol=1e-6)
@@ -911,7 +910,6 @@ def tree_to_numexpr_fn(tree):
         infix = tree.infix()
     else:
         infix = tree
-        
     numexpr_equivalence = {
         "add": "+",
         "sub": "-",
@@ -943,7 +941,7 @@ def tree_to_numexpr_fn(tree):
             #print(e)
             #print("problem with tree", infix)
             #print(traceback.format_exc())
-            vals = np.array([np.nan for _ in range(x.shape[0])])#.reshape(-1, 1).repeat(predicted_dim, axis=1)
+            vals = np.array([np.nan for _ in range(x.shape[0])])
         return vals
 
     return wrapped_numexpr_fn
