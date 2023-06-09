@@ -7,6 +7,7 @@
 from typing import Dict, List, Union
 import copy
 import json
+import argparse
 
 from pathlib import Path
 
@@ -28,7 +29,7 @@ import symbolicregression
 from symbolicregression.slurm import init_signal_handler, init_distributed_mode
 from symbolicregression.utils import bool_flag, initialize_exp
 from symbolicregression.model import check_model_params, build_modules
-from symbolicregression.envs import build_env
+from symbolicregression.envs import build_env, load_jsons
 from symbolicregression.trainer import Trainer
 from symbolicregression.model.sklearn_wrapper import SymbolicTransformerRegressor
 from symbolicregression.model.model_wrapper import ModelWrapper
@@ -142,9 +143,15 @@ class Evaluator(object):
         subsample_ratio: Union[None, float] = None,
     ):
         if gamma is None:
-            gamma = self.params.eval_noise_gamma
+            if hasattr(self.params, "eval_noise_gamma"):
+                gamma = self.params.eval_noise_gamma
+            else:
+                gamma = 0
         if subsample_ratio is None:
-            subsample_ratio = self.params.subsample_ratio
+            if hasattr(self.params, "subsample_ratio"):
+                subsample_ratio = self.params.subsample_ratio
+            else:
+                subsample_ratio = 0
         self.trainer.logger.info("evaluate_on_iterator")
         scores = OrderedDict({"epoch": self.trainer.epoch})
         batch_results = defaultdict(list)
@@ -184,13 +191,12 @@ class Evaluator(object):
                     
                 else:
                     times, trajectories = self.env._subsample_trajectory(
-                        times=time, trajectory=trajectories,
+                        times=times, trajectory=trajectories, subsample_ratio=subsample_ratio,
                     )
 
             all_candidates: Dict[int, List[str]] = self.model.fit(
                 times, trajectories, verbose=False, sort_candidates=True
             )
-            print("all_candidates", all_candidates)
             best_results = {metric:[] for metric in self.params.validation_metrics.split(',')}
             best_candidates = []
             for candidate_i, (time, trajectory, candidates) in enumerate(
@@ -201,7 +207,7 @@ class Evaluator(object):
                         best_results[k].append(np.nan)
                     best_candidates.append(None)
                     continue
-                time, idx = sorted(time), np.argsort(time)
+                time, idx = sorted(time), np.argsort(time) # TODO: works with 2-dim time array?
                 trajectory = trajectory[idx]
                 best_candidate = candidates[0] # candidates are sorted
                 # TODO: check dim
@@ -320,7 +326,7 @@ class Evaluator(object):
             x = data['x'].values.reshape(-1,1)
             y = data['y'].values.reshape(-1,1)
             samples = defaultdict(list)
-            samples['infos'] = {'dimension':2, 'n_unary_ops':0, 'n_input_points':100, 'name':name}
+            samples['infos'] = {'dimension':2, 'n_unary_ops':0, 'n_points':100, 'name':name}
             for k,v in samples['infos'].items():
                 samples['infos'][k] = np.array([v]*4)
             for j in range(4):
@@ -360,7 +366,7 @@ class Evaluator(object):
         
         for name, data in datasets.items():
             samples = defaultdict(list)
-            samples['infos'] = {'dimension':2, 'n_unary_ops':0, 'n_input_points':100, 'name':name}
+            samples['infos'] = {'dimension':2, 'n_unary_ops':0, 'n_points':100, 'name':name}
             for k,v in samples['infos'].items():
                 samples['infos'][k] = np.array([v])
 
@@ -382,18 +388,68 @@ class Evaluator(object):
 
         return scores
     
-    def evaluate_on_file(self, path: str, save: bool, seed: Union[None, int]):
+    def evaluate_on_file(
+        self, 
+        path: str, 
+        save: bool, 
+        seed: Union[None, int], 
+        params:Union[None, argparse.Namespace]
+    ):
         _filename = Path(path).name
         if path.endswith(".pkl"):
             # read pickle file which is assumed to have correct format
             with open(path, "rb") as fpickle:
                 iterator = pickle.load(fpickle)
+        elif path.endswith(".test"): # TODO: good filename?
+            reload_size = -1
+            n_gpu_per_node = 1
+            local_rank = 1
+            if hasattr(params, "reload_size"):
+                reload_size = params.reload_size
+            if hasattr(params, "n_gpu_per_node"):
+                n_gpu_per_node = params.n_gpu_per_node
+            if hasattr(params, "local_rank"):
+                local_rank = params.local_rank
+            lines = load_jsons(
+                path, 
+                train=False, 
+                reload_size=reload_size,
+                n_gpu_per_node=n_gpu_per_node,
+                local_rank=local_rank,
+            )
+            iterator = []
+            for line_i, line in enumerate(lines):
+                samples = defaultdict(list)
+                samples["times"] = [np.array(line.pop("times"), dtype=np.float64)]
+                samples["trajectory"] = [np.array(line.pop("trajectory"), dtype=np.float64)]
+                samples['infos'] = {}
+                for key in line.keys():
+                    samples['infos'][key] = line[key]
+                    if not isinstance(samples['infos'][key], List):
+                        samples['infos'][key] = [samples['infos'][key]]
+                    try:
+                        samples['infos'][key] = [float(s) for s in samples['infos'][key]]
+                    except ValueError:
+                        # leave non-numeric values as is
+                        pass
+                # add filename, do not overwrite potentially existing name field
+                _key_name, no_overwrite_counter = "name", 0
+                while _key_name in samples['infos'].keys():
+                    no_overwrite_counter += 1
+                    _key_name = f"name{no_overwrite_counter}"
+                samples['infos'][_key_name] = [f"{_filename}_{line_i:03d}"]
+                assert samples["trajectory"][0].shape[1] == samples["infos"]["dimension"][0], \
+                    "Expected dimension does not match time series: " \
+                    f"{samples['info']['dimension']} vs {samples['trajectory'].shape}"
+                iterator.append((samples, None))
+            with open(path+".pkl", "wb") as fpickle:
+                pickle.dump(iterator, fpickle)
         else:
             # read text file where each line is assumed to be an equation
             if seed is not None:
                 np.random.seed(seed)
             iterator = []
-            with open(path) as f:
+            with open(path, "rb") as f:
                 for line_i, line in enumerate(f):
                     samples = defaultdict(list)
                     line = line.rstrip("\n")
@@ -420,8 +476,8 @@ class Evaluator(object):
                     samples['infos'] = {
                         'dimension': [2],
                         'n_unary_ops': [np.nan],
-                        'n_input_points': [len(times)],
-                        'name': [f"{_filename}_{line_i:03d}_{line}"],
+                        'n_points': [len(times)],
+                        'name': [f"{_filename}_{line_i:03d}"],
                     }
                     samples['times'].append(times)
                     samples["trajectory"].append(trajectory)
