@@ -84,7 +84,8 @@ class SympyMixin:
 
 class MultiDimMixin:
     """
-    Mixin for vector valued output. Each component of the output is fit individually.
+    Mixin for vector valued output. 
+    Each component of the output is fit individually.
     """
     def fit_components(
         self, 
@@ -105,7 +106,7 @@ class MultiDimMixin:
 
 class BatchMixin:
     """
-    This class lets models iteratively process a list of trajectories.
+    Process a list of trajectories.
     The base model needs to implement a fit() method.
     
     Methods
@@ -138,7 +139,7 @@ class BatchMixin:
 
 class FiniteDifferenceMixin:
     """
-    A class to approximate derivatives via pysindy's implementation.
+    Approximate derivatives via pysindy's implementation.
     
     Methods
     -------
@@ -180,7 +181,7 @@ class FiniteDifferenceMixin:
 
 class PredictionIntegrationMixin:
     """
-    Implements integration of a predicted function.
+    Simulate predicted function.
     
     Methods
     -------
