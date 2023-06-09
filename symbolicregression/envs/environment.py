@@ -440,11 +440,11 @@ class FunctionEnvironment(object):
         if tree is None:
             return {"tree": tree}, ["bad tree"]
 
-        effective_dimension = self.generator.relabel_variables(tree)
-        if dimension == 0 or (
-            self.params.enforce_dim and effective_dimension < dimension
-        ):
-            return {"tree": tree}, ["bad input dimension"]
+        # effective_dimension = self.generator.relabel_variables(tree)
+        # if dimension == 0 or (
+        #     self.params.enforce_dim and effective_dimension < dimension
+        # ):
+        #     return {"tree": tree}, ["bad input dimension"]
 
         for op in self.params.operators_to_not_repeat.split(","):
             if op and tree.prefix().count(op) > 1:

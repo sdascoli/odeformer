@@ -488,17 +488,17 @@ class RandomFunctions(Generator):
         elif rng.rand() < self.prob_t:
             return "t"
         else:
-            if self.n_used_dims < dimension:
-                dimension = self.n_used_dims
-                self.n_used_dims += 1
-                return f"x_{dimension}"
+            # if self.n_used_dims < dimension:
+            #     dimension = self.n_used_dims
+            #     self.n_used_dims += 1
+            #     return f"x_{dimension}"
+            # else:
+            draw = rng.rand()
+            if draw < self.prob_const:
+                return self.generate_int(rng)
             else:
-                draw = rng.rand()
-                if draw < self.prob_const:
-                    return self.generate_int(rng)
-                else:
-                    dimension = rng.randint(0, dimension)
-                    return f"x_{dimension}"
+                dimension = rng.randint(0, dimension)
+                return f"x_{dimension}"
 
     def generate_ops(self, rng, arity):
         if arity == 1:
