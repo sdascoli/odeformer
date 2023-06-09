@@ -15,10 +15,13 @@ def format_and_save(params, scores, batch_results, name):
     if subsample_ratio is None:
         subsample_ratio = "None"
     scores = pd.DataFrame(scores, index=[0]).T
-    scores.to_csv(
-        path_or_buf=Path(params.eval_dump_path) / f"{params.baseline_model}_{name}_{gamma}_{subsample_ratio}.csv"
-    )
-    batch_results.to_csv(path_or_buf=Path(params.eval_dump_path) / f"{params.baseline_model}_{name}_{gamma}_{subsample_ratio}_batch_results.csv")
+    if hasattr(params, "reload_size") and params.reload_size is not None:
+        fname = f"{params.baseline_model}_{name}_n_{params.reload_size}_gamma_{gamma}_subsample_{subsample_ratio}.csv"
+    else:
+        fname = f"{params.baseline_model}_{name}_gamma_{gamma}_subsample_{subsample_ratio}.csv"
+    scores.to_csv(path_or_buf=Path(params.eval_dump_path) / fname)
+    fname = fname[:-4]+"_batch_results.csv"
+    batch_results.to_csv(path_or_buf=Path(params.eval_dump_path) / fname)
     print(f"Saving results for {params.baseline_model} under:\n{params.eval_dump_path}")
 
 def main(params):
@@ -27,10 +30,10 @@ def main(params):
     env.rng = np.random.RandomState(0)
     modules = build_modules(env, params)
     trainer = Trainer(modules, env, params)
-
+    feature_names = [f"x_{k}" for k in range(params.expexted_num_ode_components)]
     if params.baseline_model == "sindy":
         model = SINDyWrapper(
-            feature_names=["x_0", "x_1"],
+            feature_names=feature_names,
             optimizer_alpha=0.05,
             optimizer_threshold=0.04,
             polynomial_degree=2,
@@ -38,14 +41,16 @@ def main(params):
         )
     elif params.baseline_model == "sindy_poly3":    
         model = SINDyWrapper(
-            feature_names=["x_0", "x_1"],
+            feature_names=feature_names,
+            optimizer_alpha=0.05,
+            optimizer_threshold=0.04,
             polynomial_degree=3,
             functions=[], # only polynomials
         )
     elif params.baseline_model == "pysr":
-        model = PySRWrapper(feature_names=["x_0", "x_1"])
+        model = PySRWrapper(feature_names=feature_names)
     elif params.baseline_model == "proged":
-        model = ProGEDWrapper(feature_names=["x_0", "x_1"])
+        model = ProGEDWrapper(feature_names=feature_names)
     elif params.baseline_model == "afp":
         model = AFPWrapper(time_limit=60)
     elif params.baseline_model == "ehc":
@@ -64,7 +69,7 @@ def main(params):
         
     if params.eval_on_file is not None:
         scores, batch_results = evaluator_default.evaluate_on_file(
-            path=params.eval_on_file, save=params.save_results, seed=13,
+            path=params.eval_on_file, save=params.save_results, seed=13, params=params
         )
         _name = Path(params.eval_on_file).name
         format_and_save(params, scores, batch_results, str(_name))
@@ -76,7 +81,7 @@ if __name__ == "__main__":
     parser = get_parser()
     
     parser.add_argument("--baseline_model", 
-        type=str, default="sindy_poly3",
+        type=str, default="proged",
         choices=["proged", "pysr", "sindy_poly3", "sindy", "afp", "feafp", "eplex", "ehc", "ffx",]
     )
     
@@ -95,11 +100,17 @@ if __name__ == "__main__":
     params.eval_only = True
     params.cpu = True
     
-    params.eval_noise_gamma = 0.02
-    params.subsample_ratio = 0.2
+    params.eval_noise_gamma = 0
+    params.subsample_ratio = 0
     
     params.eval_on_pmlb = False
-    params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/polynomial_2d.txt.pkl"
+    if False:
+        params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/polynomial_2d.txt.pkl"
+        params.expexted_num_ode_components = 2
+    elif True:
+        params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/data.prefix.test"
+        params.reload_size = None
+        params.expexted_num_ode_components = 6
     
     symbolicregression.utils.CUDA = not params.cpu
     if params.batch_size_eval is None:
