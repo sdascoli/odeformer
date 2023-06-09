@@ -878,7 +878,6 @@ def _integrate_ode(
             def func(t,y):
                 return tree([y],[t])[0]
             try: 
-                # print("start solving")
                 trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times, method='RK23', rtol=1e-2, atol=1e-6)
                 solved_times = trajectory.t
                 trajectory = trajectory.y.T
