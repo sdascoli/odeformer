@@ -8,6 +8,7 @@ from typing import Dict, List, Union
 import copy
 import json
 import argparse
+from timeit import default_timer as timer
 
 from pathlib import Path
 
@@ -141,7 +142,12 @@ class Evaluator(object):
         save_file: str,
         gamma: Union[None, float] = None,
         subsample_ratio: Union[None, float] = None,
+        nan_check_metric: Union[None, str] = "r2_zero",
     ):
+        if nan_check_metric is not None:
+            assert nan_check_metric in self.params.validation_metrics, \
+                "nan_check_metric must be in metrics to evaluate but is not: " \
+                f"{nan_check_metric} vs {self.params.validation_metrics}"
         if gamma is None:
             if hasattr(self.params, "eval_noise_gamma"):
                 gamma = self.params.eval_noise_gamma
@@ -193,10 +199,11 @@ class Evaluator(object):
                     times, trajectories = self.env._subsample_trajectory(
                         times=times, trajectory=trajectories, subsample_ratio=subsample_ratio,
                     )
-
+            start_time_fit = timer()
             all_candidates: Dict[int, List[str]] = self.model.fit(
                 times, trajectories, verbose=False, sort_candidates=True
             )
+            duration_fit = timer() - start_time_fit
             best_results = {metric:[] for metric in self.params.validation_metrics.split(',')}
             best_candidates = []
             for candidate_i, (time, trajectory, candidates) in enumerate(
@@ -246,7 +253,7 @@ class Evaluator(object):
                 batch_results["info_" + k].extend(v)
             for k, v in best_results.items():
                 batch_results[k ].extend(v)
-
+            batch_results["time_to_fit"].append(duration_fit)
         batch_results = pd.DataFrame.from_dict(batch_results)
         batch_results.to_csv(save_file, index=False)
         self.trainer.logger.info("Saved {} equations to {}".format(len(batch_results), save_file))
@@ -275,6 +282,9 @@ class Evaluator(object):
                 for k, v in avg_scores_ablation.items():
                     scores[k + "_{}_{}".format(ablation, val)] = v
                     
+        scores["time_to_fit"] = df.time_to_fit.mean()
+        if nan_check_metric is not None:
+            scores["time_to_fit_no_nans"] = df.loc[~df[nan_check_metric].isna(), "time_to_fit"].mean()
         return scores, batch_results
         
     def evaluate_in_domain(
@@ -417,6 +427,7 @@ class Evaluator(object):
                 n_gpu_per_node=n_gpu_per_node,
                 local_rank=local_rank,
             )
+            lines = lines[:reload_size]
             iterator = []
             for line_i, line in enumerate(lines):
                 samples = defaultdict(list)
