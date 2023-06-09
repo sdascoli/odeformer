@@ -7,7 +7,7 @@
 from logging import getLogger
 
 # from .generators import operators_conv, Node
-from .environment import FunctionEnvironment
+from .environment import FunctionEnvironment, load_jsons
 
 logger = getLogger()
 
