@@ -926,8 +926,7 @@ def tree_to_numexpr_fn(tree):
         #t, x = np.array(t), np.array(x)
         local_dict = {}
         dimension = len(x[0])
-        for d in range(dimension): 
-            local_dict["x_{}".format(d)] = np.array(x)[:, d]
+        for d in range(dimension): local_dict["x_{}".format(d)] = np.array(x)[:, d]
 
         local_dict["t"] = t[:]
         local_dict.update(extra_local_dict)
