@@ -60,6 +60,23 @@ logger = getLogger()
 
 SKIP_ITEM = "SKIP_ITEM"
 
+def load_jsons(path, train, reload_size, n_gpu_per_node, local_rank):
+    with io.open(path, mode="r", encoding="utf-8") as f:
+        # either reload the entire file, or the first N lines
+        # (for the training set)
+        if not train:
+            lines = []
+            for i, line in enumerate(f):
+                lines.append(json.loads(line.rstrip()))
+        else:
+            lines = []
+            for i, line in enumerate(f):
+                if i == reload_size:
+                    break
+                if i % n_gpu_per_node == local_rank:
+                    # lines.append(line.rstrip())
+                    lines.append(json.loads(line.rstrip()))
+    return lines
 
 class FunctionEnvironment(object):
 
@@ -979,21 +996,9 @@ class EnvDataset(Dataset):
                 self.load_chunk()
             else:
                 logger.info(f"Loading data from {path} ...")
-                with io.open(path, mode="r", encoding="utf-8") as f:
-                    # either reload the entire file, or the first N lines
-                    # (for the training set)
-                    if not train:
-                        lines = []
-                        for i, line in enumerate(f):
-                            lines.append(json.loads(line.rstrip()))
-                    else:
-                        lines = []
-                        for i, line in enumerate(f):
-                            if i == params.reload_size:
-                                break
-                            if i % params.n_gpu_per_node == params.local_rank:
-                                # lines.append(line.rstrip())
-                                lines.append(json.loads(line.rstrip()))
+                lines = load_jsons(
+                    path, train, params.reload_size, params.n_gpu_per_node, params.local_rank
+                )
                 # self.data = [xy.split("=") for xy in lines]
                 # self.data = [xy for xy in self.data if len(xy) == 3]
                 self.data = lines
