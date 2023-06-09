@@ -800,8 +800,14 @@ class RandomFunctions(Generator):
         return tree, (times, trajectory)
 
 @timeout(10)
-def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', debug=False, allow_warnings=False,):
-
+def _integrate_ode(
+    y0,
+    times,
+    tree,
+    ode_integrator='solve_ivp',
+    debug=False,
+    allow_warnings=False
+):
     with warnings.catch_warnings(record=True) as caught_warnings:
 
         if ode_integrator == 'jax':
@@ -928,16 +934,15 @@ def tree_to_numexpr_fn(tree):
 
         local_dict["t"] = t[:]
         local_dict.update(extra_local_dict)
-        # predicted_dim = len(infix.split('|'))
         try:
-            if '|' in infix:    
+            if '|' in infix:
                 vals = np.concatenate([ne.evaluate(node, local_dict=local_dict).reshape(-1,1) for node in infix.split('|')], axis=1)
             else:
                 vals = ne.evaluate(infix, local_dict=local_dict).reshape(-1,1)
         except Exception as e:
-            # print(e)
-            # print("problem with tree", infix)
-            # print(traceback.format_exc())
+            #print(e)
+            #print("problem with tree", infix)
+            #print(traceback.format_exc())
             vals = np.array([np.nan for _ in range(x.shape[0])])#.reshape(-1, 1).repeat(predicted_dim, axis=1)
         return vals
 
