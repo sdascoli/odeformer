@@ -56,6 +56,7 @@ class Scaler(ABC):
             return tree
         for dim, node in enumerate(nodes):
             nodes[dim] = f"mul,{1/scale[dim]},"+nodes[dim].lstrip(',').rstrip(',')
+            nodes[dim] = f"mul,{a_t},"+nodes[dim].lstrip(',').rstrip(',')
         prefix = ",|,".join(nodes).split(",")
         idx = 0
         while idx < len(prefix):

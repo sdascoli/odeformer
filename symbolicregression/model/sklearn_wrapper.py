@@ -57,7 +57,7 @@ class SymbolicTransformerRegressor(BaseEstimator):
         times,
         trajectories,
         sort_candidates=True,
-        sort_metric="snmse",
+        sort_metric="r2",
         average_trajectories=None,
         rescale=None,
         verbose=False,
@@ -147,11 +147,11 @@ class SymbolicTransformerRegressor(BaseEstimator):
         return metrics[metric][0]
 
     @torch.no_grad()
-    def sort_candidates(self, times, trajectory, candidates, metric="snmse"):
+    def sort_candidates(self, times, trajectory, candidates, metric="r2"):
         if "r2" in metric: 
-            descending = True
-        else: 
             descending = False
+        else: 
+            descending = True
         scores = []
         for candidate in candidates:
             score = self.evaluate_tree(candidate, times, trajectory, metric)

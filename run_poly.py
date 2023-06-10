@@ -9,7 +9,7 @@ import shutil
 from distutils import dir_util
 #user = os.getlogin()
 
-exp_folder = 'poly_big'
+exp_folder = 'poly_new'
 
 #dump_path = f'/home/{user}/odeformer/experiments'
 dump_path = f'/sb_u0621_liac_scratch/odeformer/experiments'
@@ -27,13 +27,15 @@ extra_args = {
     'max_dimension':6,
     #'sign_as_token':True,
     'reload_data':dump_path + "/datagen_poly/datagen_use_sympy_True",
-    'float_descriptor_length':3
+    'float_descriptor_length':3,
+    'enc_emb_dim':256,
+    'dec_emb_dim':512
     }
 
 grid = {
     #"max_masked_variables":[2],
-    "enc_emb_dim":[256,512],
-    "dec_emb_dim":[256,512],
+    "n_enc_layers":[4,8],
+    "n_dec_layers":[12,16],
     #"float_descriptor_length":[3]
     #'use_sympy':[True],
     #"masked_output":[0,0.3,0.6],

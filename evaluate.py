@@ -364,7 +364,7 @@ if __name__ == "__main__":
     pk = pickle.load(open(params.reload_checkpoint + "/params.pkl", "rb"))
     pickled_args = pk.__dict__
     for p in params.__dict__:
-        if p in pickled_args and p not in ["dump_path", "reload_checkpoint", "rescale", "validation_metrics", "eval_in_domain", "eval_on_pmlb", "batch_size_eval", "beam_size", "beam_selection_metric", "subsample_prob", "eval_noise_gamma", "eval_noise_type", "use_wandb", "eval_size"]:
+        if p in pickled_args and p not in ["dump_path", "reload_checkpoint", "rescale", "validation_metrics", "eval_in_domain", "eval_on_pmlb", "batch_size_eval", "beam_size", "beam_selection_metric", "subsample_prob", "eval_noise_gamma", "eval_noise_type", "use_wandb", "eval_size", "reload_data"]:
             params.__dict__[p] = pickled_args[p]
 
     params.is_slurm_job = False

@@ -7,25 +7,32 @@ import itertools
 from pathlib import Path
 import shutil
 from distutils import dir_util
-user = os.getlogin()
+#user = os.getlogin()
 
-exp_folder = 'large'
+exp_folder = 'poly_multinode'
 
 #dump_path = f'/home/{user}/odeformer/experiments'
-dump_path = f'/scratch/{user}/odeformer/experiments'
+#dump_path = f'/scratch/{user}/odeformer/experiments'
+dump_path = f'/sb_u0621_liac_scratch/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
 
 extra_args = {
-    'ngpu':4
-    'use_wandb':True
+    'use_wandb':True,
     'collate_queue_size': 1000,
+    #'n_steps_per_epoch':1000,
+    'print_freq': 30,
+    'ode_integrator':'solve_ivp',
     'num_workers':1,
-    'print_freq': 100,
     'tokens_per_batch':10000,
-    'reload_data':dump_path + "/datagen/datagen_use_sympy_True",
+    'min_dimension':1,
+    'max_dimension':6,
+    #'sign_as_token':True,
+    'reload_data':dump_path + "/datagen_poly/datagen_use_sympy_True",
+    'float_descriptor_length':3
     }
 
 grid = {
+    "ngpu":[4]
     #"use_sympy":[True],
     #"masked_output":[0, .3, .6],
     #"sign_as_token":[False],
@@ -67,7 +74,7 @@ pytorch_script = "train.py"
 def run_experiment(gpu_id, args, logfile):
     env_vars = os.environ.copy()
     env_vars["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-    command = ["torchrun", "--n_proc_per_node", str(args['ngpu']), pytorch_script]
+    command = ["torchrun", "--nproc-per-node", str(args['ngpu']), pytorch_script]
     for arg, value in args.items():
         command.append(f"--{arg}")
         command.append(str(value))
