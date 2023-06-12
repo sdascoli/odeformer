@@ -145,13 +145,10 @@ class LinearPointEmbedder(Embedder):
 class TwoHotEmbedder():
     # TODO: support masked-language-modeling
     # TODO: check if compatible with old two-hot-encoding
-    # TODO: add scaling function
     def __init__(
         self, 
-        num_embeddings: Union[None, int], # if None, you must supply min_value and max_value
-        embedding_dim: int,
-        min_value: Union[None, int] = None, # min is included, ignored if num_embeddings is not None
-        max_value: Union[None, int] = None, # min is excluded, ignored if num_embeddings is not None
+        params, 
+        env,# ignored, just for compatibility
         init_from_arange: bool = False, # useful for debugging
         scale_inputs: bool = True
     ):
@@ -166,37 +163,45 @@ class TwoHotEmbedder():
             an input of 1 gets an embedding vector of ones, etc.
         
         """
-        self.scale_inputs = scale_inputs
-        self.max_dimension = 1 #TODO
-        self.float_scalar_descriptor_len = 1
-        self.total_dimension = 1 + self.max_dimension
-        self.float_vector_descriptor_len = self.float_scalar_descriptor_len * self.total_dimension
-        self.embedding_dim = embedding_dim
-        self._min_value = min_value
-        self._max_value = max_value
-        if num_embeddings is None:
-            assert max_value > min_value, \
-                f"max_value must be larger than min_value but found {max_value} vs {min_value}."
-            num_embeddings = max_value - min_value + 2
-        elif min_value is not None or max_value is not None:
-            print("min_value and max_value will be ignored since num_embeddings is not None.")
-        self.num_embeddings = num_embeddings
-        self.pad_embedding_value = self.num_embeddings
         self.init_from_arange = init_from_arange
+        self.scale_inputs = scale_inputs
+        self.embedding_dim = params.emb_emb_dim
+        self.max_dimension = params.max_dimension
+        self.embedding_dim_per_component = self.embedding_dim // (self.max_dimension + 1)
+        if self.embedding_dim_per_component * (self.max_dimension + 1)!= self.embedding_dim:
+            print(
+                f"Warning: embedding_dim ({self.embedding_dim}) is not divisible by max_dimension + 1"\
+                f"({self.max_dimension} + 1). This will waste some of the embedding capacity."
+            )
+        
+        self.total_dimension = 1 + self.max_dimension
+        self.float_scalar_descriptor_len = 1
+        self.float_vector_descriptor_len = self.float_scalar_descriptor_len * self.total_dimension
+        sign = 1
+        mantissa = float(10 ** params.float_precision)
+        max_power = (params.max_exponent_prefactor - (params.float_precision + 1) // 2)
+        max_magnitude = int(np.ceil(sign * (mantissa * 10 ** max_power)))
+        if self.scale_inputs:
+            with torch.no_grad():
+                max_magnitude = self._log_scale(torch.Tensor([max_magnitude])).item()
+        self.min_value = int(np.floor(-max_magnitude))
+        self.max_value = int(np.max(max_magnitude))
+        self.num_embeddings = self.max_value - self.min_value + 2
         if init_from_arange:
             self.embd_bag = torch.nn.EmbeddingBag.from_pretrained(
-                embeddings=torch.arange(
-                    min_value, max_value+2, dtype=torch.float32
-                ).reshape(-1, 1).repeat(1, self.embedding_dim),
-                padding_idx=self.num_embeddings-1,
-                mode="sum",
+                embeddings = torch.arange(
+                    self.min_value, self.max_value + 2, dtype=torch.float32
+                ).reshape(-1, 1).repeat(1, self.embedding_dim_per_component),
+                padding_idx = self.num_embeddings - 1,
+                mode = "sum",
             )
+            self.pad_embedding_value = self.num_embeddings
         else:
             self.embd_bag = torch.nn.EmbeddingBag(
-                num_embeddings=self.num_embeddings,
-                embedding_dim=self.embedding_dim,
-                padding_idx=self.num_embeddings-1,
-                mode="sum",
+                num_embeddings = self.num_embeddings,
+                embedding_dim = self.embedding_dim_per_component,
+                padding_idx = self.num_embeddings - 1,
+                mode = "sum",
             )
     
     def __call__(self, inputs: List[Sequence]) -> Tuple[torch.Tensor, torch.LongTensor]:
@@ -204,14 +209,8 @@ class TwoHotEmbedder():
     
     def forward(self, inputs: List[Sequence]) -> Tuple[torch.Tensor, torch.LongTensor]:
         inputs = self.encode(inputs)
-        if isinstance(inputs, List):
-            inputs, sequences_len = self.batch(inputs)
-        else:
-            sequences_len = torch.LongTensor(
-                [inputs.shape[0]] * (1 if len(inputs.shape) == 1 else inputs.shape[1])
-            )
+        inputs, sequences_len = self.batch(inputs)
         return self.embed(inputs), sequences_len
-        
     
     def encode(self, sequences = List[Sequence]) -> List[torch.Tensor]:
         res = []
@@ -221,34 +220,38 @@ class TwoHotEmbedder():
                 if isinstance(x_toks, (float, int)):
                     x_toks = [x_toks]
                 system_dim = len(y_toks)
+                pad_dim = (self.max_dimension - system_dim) * self.float_scalar_descriptor_len
                 x_toks = [*x_toks,]
-                y_toks = [
-                    *y_toks,
-                    *[
-                        self.embd_bag.padding_idx
-                        for _ in range(
-                            (self.max_dimension - system_dim)
-                            * self.float_scalar_descriptor_len
-                        )
-                    ],
-                ]
+                y_toks = [*y_toks, *[self.embd_bag.padding_idx for _ in range(pad_dim)]]
                 seq_toks.append([*x_toks, *y_toks])
             res.append(torch.DoubleTensor(seq_toks))
         return res
     
-    def _scale_func(self, inputs):
-        """sign(x) * log(sign(x) * (x+1))"""
-        signs = torch.sign(inputs)
+    def batch(self, seqs: List[torch.Tensor]) -> Tuple[torch.Tensor, torch.LongTensor]:
+        lengths = [len(x) for x in seqs]
+        bs, slen = len(lengths), max(lengths)
+        sent = torch.DoubleTensor(slen, bs, self.float_vector_descriptor_len).fill_(self.embd_bag.padding_idx)
+        for i, seq in enumerate(seqs):
+            sent[0 : len(seq), i, :] = seq
+        return sent, torch.LongTensor(lengths)
+    
+    def _log_scale(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Applies sign(x) * log(sign(x) * (x+1)) to inputs."""
+        signs = -1 * (inputs < 0) + 1 * (inputs >= 0)
         return signs * torch.log(signs * (inputs + 1))
     
     def embed(self, inputs: torch.Tensor) -> torch.Tensor:
+        """
+        Cast float in their floor and ceil integer and return weighted average of their embeddings.
+        The two-hot representation requires:
+        - the neighboring bins that support the distribution (=support_idcs)
+        - the probability mass that is assigned to each bin (=support_weights)
+        """
         seq_len, batch_size, system_dims = inputs.shape
-        # for the two-hot representation we need to specify:
-        # - the neighboring bins that support the distribution (=support_idcs)
-        # - the probability mass that is assigned to each of the bins (=support_weights)
         support_idcs = torch.stack((inputs.reshape(-1), inputs.reshape(-1))).T
         if self.scale_inputs:
-            support_idcs = self._scale_func(support_idcs, compact=False)
+            mask = support_idcs != self.embd_bag.padding_idx
+            support_idcs[mask] = self._log_scale(support_idcs[mask])
         # right bins contains the decimal value, e.g. 0.6 for input 1.6
         support_weights = support_idcs % 1
         # left bin contains 1 minus decimal value, e.g. 0.4 for input 1.6
@@ -257,22 +260,14 @@ class TwoHotEmbedder():
         support_idcs[:, 0] = torch.floor(support_idcs[:, 0])
         support_idcs[:, 1] = torch.ceil(support_idcs[:, 1])
         support_idcs = support_idcs.to(torch.int64)
-        support_idcs[support_idcs != self.embd_bag.padding_idx] -= self._min_value
+        support_idcs[support_idcs != self.embd_bag.padding_idx] -= self.min_value
         embedding = self.embd_bag(
             input=support_idcs, per_sample_weights=support_weights,
         )
         if self.init_from_arange:
-            embedding[support_idcs[:,0]==self.embd_bag.padding_idx] = self.pad_embedding_value
+            embedding[support_idcs[:,0] == self.embd_bag.padding_idx] = self.pad_embedding_value
         # concat embeddings per dimension
-        return embedding.reshape(seq_len, batch_size, -1)
-        
-    def batch(self, seqs: List[torch.Tensor]) -> Tuple[torch.Tensor, torch.LongTensor]:
-        pad_id = self.embd_bag.padding_idx
-        lengths = [len(x) for x in seqs]
-        bs, slen = len(lengths), max(lengths)
-        sent = torch.DoubleTensor(slen, bs, self.float_vector_descriptor_len).fill_(pad_id)
-        for i, seq in enumerate(seqs):
-            sent[0 : len(seq), i, :] = seq
-        return sent, torch.LongTensor(lengths)
-    
-    
+        embedding = embedding.reshape(seq_len, batch_size, -1)
+        if self.embedding_dim > embedding.shape[2]:
+            embedding = F.pad(embedding, (0, self.embedding_dim - embedding.shape[2]), "constant", 0)
+        return embedding
