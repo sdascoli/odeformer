@@ -13,6 +13,9 @@ from .embedders import LinearPointEmbedder, TwoHotEmbedder
 from .transformer import TransformerModel
 from .sklearn_wrapper import SymbolicTransformerRegressor
 from .model_wrapper import ModelWrapper
+from .mixins import (
+    BatchMixin, FiniteDifferenceMixin, PredictionIntegrationMixin
+)
 import torch.nn as nn
 
 logger = getLogger()

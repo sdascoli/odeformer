@@ -81,6 +81,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     results[metric].append(0)
                 else:
                     try:
+                        # print("predicted[i], true[i]", predicted[i], true[i])
                         is_close = np.isclose(predicted[i], true[i], atol=atol, rtol=rtol)
                         results[metric].append(float(is_close.mean()>=tolerance_point))
                     except Exception as e:
@@ -162,7 +163,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     except Exception as e:
                         results[metric].append(np.nan)
 
-        elif metric == "complexity":
+        elif False:# metric == "complexity":
             if not predicted_tree: 
                 results[metric].extend([np.nan for _ in range(len(true))])
                 continue

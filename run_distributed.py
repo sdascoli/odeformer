@@ -23,7 +23,7 @@ extra_args = {
     'print_freq': 30,
     'ode_integrator':'solve_ivp',
     'num_workers':1,
-    'tokens_per_batch':10000,
+    'tokens_per_batch':2000,
     'min_dimension':1,
     'max_dimension':6,
     #'sign_as_token':True,
@@ -74,7 +74,7 @@ pytorch_script = "train.py"
 def run_experiment(gpu_id, args, logfile):
     env_vars = os.environ.copy()
     env_vars["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-    command = ["torchrun", "--nproc-per-node", str(args['ngpu']), pytorch_script]
+    command = ["torchrun", "--nproc_per_qnode", str(args['ngpu']), pytorch_script]
     for arg, value in args.items():
         command.append(f"--{arg}")
         command.append(str(value))

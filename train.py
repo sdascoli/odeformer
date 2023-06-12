@@ -21,7 +21,7 @@ from symbolicregression.utils import bool_flag, initialize_exp
 from symbolicregression.model import check_model_params, build_modules
 from symbolicregression.envs import build_env
 from symbolicregression.trainer import Trainer
-from evaluate import Evaluator
+from evaluate import Evaluator, setup_odeformer
 from parsers import get_parser
 import setproctitle
 
@@ -66,7 +66,8 @@ def main(params):
 
     modules = build_modules(env, params)
     trainer = Trainer(modules, env, params)
-    evaluator = Evaluator(trainer)
+    model = setup_odeformer(trainer)
+    evaluator = Evaluator(trainer, model)
 
     # evaluation
     if params.eval_only:

@@ -11,6 +11,7 @@ from collections import defaultdict
 from symbolicregression.metrics import compute_metrics
 from sklearn.base import BaseEstimator
 import symbolicregression.model.utils_wrapper as utils_wrapper
+from symbolicregression.model.mixins import PredictionIntegrationMixin
 import traceback
 from sklearn import feature_selection 
 from symbolicregression.envs.generators import integrate_ode
@@ -24,7 +25,7 @@ def exchange_node_values(tree, dico):
         new_tree.replace_node_value(old, new)
     return new_tree
 
-class SymbolicTransformerRegressor(BaseEstimator):
+class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
 
     def __init__(self,
                 model=None,
@@ -142,7 +143,7 @@ class SymbolicTransformerRegressor(BaseEstimator):
     @torch.no_grad()
     def evaluate_tree(self, tree, times, trajectory, metric):
         earliest = np.argmin(times)
-        pred_trajectory = self.predict(times, trajectory[earliest], tree=tree)
+        pred_trajectory = self.integrate_prediction(times, trajectory[earliest], prediction=tree)
         metrics = compute_metrics(pred_trajectory, trajectory, predicted_tree=tree, metrics=metric)
         return metrics[metric][0]
 
@@ -163,18 +164,3 @@ class SymbolicTransformerRegressor(BaseEstimator):
         candidates = [candidates[i] for i in sorted_idx]
 
         return candidates
-
-    @torch.no_grad()
-    def predict(self, times, y0, tree=None):   
-
-        if tree is None:
-            return None
-
-        # integrate the ODE
-        if self.params:
-            ode_integrator = self.params.ode_integrator
-        else:
-            ode_integrator = "solve_ivp"
-        trajectory = integrate_ode(y0, times, tree, ode_integrator=ode_integrator)
-        
-        return trajectory

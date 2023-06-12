@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+from typing import Dict, List, Union
 import copy
 import json
 
@@ -19,6 +20,7 @@ from copy import deepcopy
 from symbolicregression.utils import to_cuda
 import glob
 import scipy
+import sympy
 import pickle
 import wandb
 
@@ -39,6 +41,45 @@ from tqdm import tqdm
 import time
 
 np.seterr(all="raise")
+
+
+def setup_odeformer(trainer) -> SymbolicTransformerRegressor:
+    embedder = (
+        trainer.modules["embedder"].module
+        if trainer.params.multi_gpu
+        else trainer.modules["embedder"]
+    )
+    encoder = (
+        trainer.modules["encoder"].module
+        if trainer.params.multi_gpu
+        else trainer.modules["encoder"]
+    )
+    decoder = (
+        trainer.modules["decoder"].module
+        if trainer.params.multi_gpu
+        else trainer.modules["decoder"]
+    )
+    embedder.eval()
+    encoder.eval()
+    decoder.eval()
+    mw = ModelWrapper(
+        env=trainer.env,
+        embedder=embedder,
+        encoder=encoder,
+        decoder=decoder,
+        beam_length_penalty=trainer.params.beam_length_penalty,
+        beam_size=trainer.params.beam_size,
+        max_generated_output_len=trainer.params.max_generated_output_len,
+        beam_early_stopping=trainer.params.beam_early_stopping,
+        beam_temperature=trainer.params.beam_temperature,
+        beam_type=trainer.params.beam_type,
+    )
+    return SymbolicTransformerRegressor(
+        model=mw,
+        max_input_points=int(trainer.params.max_points*trainer.params.subsample_ratio),
+        rescale=trainer.params.rescale,
+        params=trainer.params
+    )
 
 
 def read_file(filename, label="target", sep=None):
@@ -70,80 +111,47 @@ class Evaluator(object):
 
     ENV = None
 
-    def __init__(self, trainer):
+    def __init__(self, trainer, model):
         """
         Initialize evaluator.
         """
         self.trainer = trainer
-        self.modules = trainer.modules
+        self.model = model
+        # self.modules = trainer.modules
         self.params = trainer.params
         self.env = trainer.env
-        params = self.params
-        Evaluator.ENV = trainer.env
-        embedder = (
-            self.modules["embedder"].module
-            if params.multi_gpu
-            else self.modules["embedder"]
-        )
-        encoder = (
-            self.modules["encoder"].module
-            if params.multi_gpu
-            else self.modules["encoder"]
-        )
-        decoder = (
-            self.modules["decoder"].module
-            if params.multi_gpu
-            else self.modules["decoder"]
-        )
-        embedder.eval()
-        encoder.eval()
-        decoder.eval()
-        mw = ModelWrapper(
-            env=self.env,
-            embedder=embedder,
-            encoder=encoder,
-            decoder=decoder,
-            beam_length_penalty=params.beam_length_penalty,
-            beam_size=params.beam_size,
-            max_generated_output_len=params.max_generated_output_len,
-            beam_early_stopping=params.beam_early_stopping,
-            beam_temperature=params.beam_temperature,
-            beam_type=params.beam_type,
-        )
-        self.dstr = SymbolicTransformerRegressor(
-            model=mw,
-            max_input_points=int(params.max_points*params.subsample_ratio),
-            rescale=params.rescale,
-            params=params
-        )
-
+        # params = self.params
+        # Evaluator.ENV = trainer.env
         self.save_path = (
-                    self.params.eval_dump_path
-                    if self.params.eval_dump_path
-                    else self.params.dump_path
-                    if self.params.dump_path
-                    else self.params.reload_checkpoint
-                )
+            self.params.eval_dump_path
+            if self.params.eval_dump_path
+            else self.params.dump_path
+            if self.params.dump_path
+            else self.params.reload_checkpoint
+        )
         if not os.path.exists(self.save_path): os.makedirs(self.save_path)
 
-        self.ablation_to_keep = list(map(lambda x: "info_" + x, params.ablation_to_keep.split(",")))
+        self.ablation_to_keep = list(
+            map(lambda x: "info_" + x, self.params.ablation_to_keep.split(","))
+        )
 
     def evaluate_on_iterator(self,iterator,save_file,):
-        
+        self.trainer.logger.info("evaluate_on_iterator")
         scores = OrderedDict({"epoch": self.trainer.epoch})
         batch_results = defaultdict(list)
-        for samples, _ in tqdm(iterator):
-
+        for samples_i, (samples, _) in enumerate(tqdm(iterator)):
             times = samples["times"]
             trajectories = samples["trajectory"]
             infos = samples["infos"]
 
             if "tree" in samples.keys():
                 trees = [self.env.simplifier.simplify_tree(tree, expand=True) for tree in samples["tree"]]
-                batch_results["trees"].extend([None if tree is None else tree.infix() for tree in trees])
+                batch_results["trees"].extend(
+                    [None if tree is None else tree.infix() for tree in trees]
+                )
             else:
                 trees = [None]*len(times)
-
+            
             if self.params.max_masked_variables:  # randomly mask some variables
                 masked_trajectories = copy.deepcopy(trajectories)
                 n_masked_variables_arr = []
@@ -152,9 +160,9 @@ class Evaluator(object):
                     masked_trajectories[seq_id][:, -n_masked_variables:] = np.nan
                     n_masked_variables_arr.append(n_masked_variables)
                 infos['n_masked_variables'] = np.array(n_masked_variables_arr)
-                all_candidates = self.dstr.fit(times, masked_trajectories, verbose=False, sort_candidates=True)
+                all_candidates: Dict[int, List[str]] = self.model.fit(times, masked_trajectories, verbose=False, sort_candidates=True)
             else:
-                all_candidates = self.dstr.fit(times, trajectories, verbose=False, sort_candidates=True)
+                all_candidates: Dict[int, List[str]] = self.model.fit(times, trajectories, verbose=False, sort_candidates=True)
 
             best_results = {metric:[] for metric in self.params.validation_metrics.split(',')}
             best_candidates = []
@@ -167,21 +175,42 @@ class Evaluator(object):
                 time, idx = sorted(time), np.argsort(time)
                 trajectory = trajectory[idx]
                 best_candidate = candidates[0] # candidates are sorted
-                pred_trajectory = self.dstr.predict(time, y0=trajectory[0], tree=best_candidate) 
-                best_candidate = self.env.simplifier.simplify_tree(best_candidate, expand=True)
+                # TODO: check dim
+                pred_trajectory = self.model.integrate_prediction(
+                    time, y0=trajectory[0], prediction=best_candidate
+                )
+                best_result = compute_metrics(
+                    pred_trajectory, 
+                    trajectory, 
+                    predicted_tree=best_candidate, 
+                    tree = tree,
+                    metrics=self.params.validation_metrics
+                )
+                pred_trajectory = self.model.integrate_prediction(time, y0=trajectory[0], prediction=best_candidate) 
+                try: best_candidate = self.env.simplifier.simplify_tree(best_candidate, expand=True)
+                except: pass
                 best_result = compute_metrics(pred_trajectory, trajectory, predicted_tree=best_candidate, tree=tree, metrics=self.params.validation_metrics)
                 for k, v in best_result.items():
                     best_results[k].append(v[0])
                 best_candidates.append(best_candidate)
  
-            batch_results["predicted_trees"].extend([None if tree is None else tree.infix() for tree in best_candidates])
+            batch_results["predicted_trees"].extend([tree.infix() if hasattr(tree, 'infix') else tree for tree in best_candidates])
 
             for k, v in infos.items():
-                infos[k] = v.tolist()
-                batch_results["info_" + k].extend(infos[k])        
+                if isinstance(v, np.ndarray) or isinstance(v, torch.Tensor):
+                    infos[k] = v.tolist()
+                elif isinstance(v, List):
+                    infos[k] = v
+                else:
+                    raise TypeError(
+                        f"v should be of type List of np.ndarray but has type: {type(v)}"
+                    )
+
+            for k, v in infos.items():
+                batch_results["info_" + k].extend(v)
             for k, v in best_results.items():
                 batch_results[k ].extend(v)
-            
+
         batch_results = pd.DataFrame.from_dict(batch_results)
         batch_results.to_csv(save_file, index=False)
         self.trainer.logger.info("Saved {} equations to {}".format(len(batch_results), save_file))
@@ -192,7 +221,7 @@ class Evaluator(object):
             self.trainer.logger.info("WARNING: no results")
             return
 
-        info_columns = filter(lambda x: x.startswith("info_"), df.columns)
+        info_columns = [x for x in list(df.columns) if x.startswith("info_")]
         df = df.drop(columns=filter(lambda x: x not in self.ablation_to_keep, info_columns))
         df = df.drop(columns=["predicted_trees"])
         if "trees" in df: df = df.drop(columns=["trees"])
@@ -200,6 +229,10 @@ class Evaluator(object):
 
         for metric in self.params.validation_metrics.split(','):
             scores[metric] = df[metric].mean()
+            #scores[metric+"_num_nans"] = df[metric].isna().sum()
+            
+        scores["num_samples"] = df.shape[0]
+            
         for ablation in self.ablation_to_keep:
             for val, df_ablation in df.groupby(ablation):
                 avg_scores_ablation = df_ablation.mean()
@@ -207,7 +240,7 @@ class Evaluator(object):
                     if k not in info_columns:
                         scores[k + "_{}_{}".format(ablation, val)] = v
                             
-        return scores
+        return scores, batch_results
         
     def evaluate_in_domain(
         self,
@@ -215,8 +248,12 @@ class Evaluator(object):
         save=True,
     ):
 
-        self.dstr.rescale = False
-        self.trainer.logger.info("====== STARTING EVALUATION IN DOMAIN (multi-gpu: {}) =======".format(self.params.multi_gpu))
+        self.model.rescale = False
+        self.trainer.logger.info(
+            "====== STARTING EVALUATION IN DOMAIN (multi-gpu: {}) =======".format(
+                self.params.multi_gpu
+            )
+        )
 
         iterator = self.env.create_test_iterator(
             task,
@@ -230,21 +267,23 @@ class Evaluator(object):
         if save:
             save_file = os.path.join(self.save_path, "eval_in_domain.csv")
 
-        scores = self.evaluate_on_iterator(iterator,
+        scores, batch_results = self.evaluate_on_iterator(iterator,
                                            save_file)
         
         if self.params.use_wandb:
             wandb.log({'in_domain_'+metric: scores[metric] for metric in self.params.validation_metrics.split(',')})
 
-        return scores
+        return scores, batch_results
 
     def evaluate_on_pmlb(
         self,
         save=True,
     ):
         
-        self.dstr.rescale = self.params.rescale
-        self.trainer.logger.info("====== STARTING EVALUATION PMLB (multi-gpu: {}) =======".format(self.params.multi_gpu))
+        self.model.rescale = self.params.rescale
+        self.trainer.logger.info(
+            "====== STARTING EVALUATION PMLB (multi-gpu: {}) =======".format(self.params.multi_gpu)
+        )
 
         iterator = []
         from pmlb import fetch_data, dataset_names
@@ -261,27 +300,33 @@ class Evaluator(object):
             for j in range(4):
                 start = j * len(times)
                 stop = (j+1) * len(times)
-                samples['times'].append(times)
-                samples['trajectory'].append(np.concatenate((x[start:stop], y[start:stop]),axis=1))
+                trajectory = np.concatenate((x[start:stop], y[start:stop]),axis=1)
+                times_, trajectory_ = self.env.generator._subsample_trajectory(times, trajectory, subsample_ratio=self.params.subsample_ratio)
+                samples['times'].append(times_)
+                samples['trajectory'].append(trajectory_)
             iterator.append((samples, None))
 
         if save:
             save_file = os.path.join(self.save_path, "eval_pmlb.csv")
 
-        scores = self.evaluate_on_iterator(iterator,save_file)
+        scores, batch_results = self.evaluate_on_iterator(iterator,save_file)
 
         if self.params.use_wandb:
             wandb.log({'pmlb_'+metric: scores[metric] for metric in self.params.validation_metrics.split(',')})
 
-        return scores
+        return scores, batch_results
     
     def evaluate_on_oscillators(
         self,
         save=True,
     ):
         
-        self.dstr.rescale = self.params.rescale
-        self.trainer.logger.info("====== STARTING EVALUATION OSCILLATORS (multi-gpu: {}) =======".format(self.params.multi_gpu))
+        self.model.rescale = self.params.rescale
+        self.trainer.logger.info(
+            "====== STARTING EVALUATION OSCILLATORS (multi-gpu: {}) =======".format(
+                self.params.multi_gpu
+            )
+        )
 
         iterator = []
         datasets = {}
@@ -302,8 +347,9 @@ class Evaluator(object):
             x = data[:,2].reshape(-1,1)
             y = data[:,3].reshape(-1,1)
             # shuffle times and trajectories
-            idx = np.random.permutation(len(times))
-            times, x, y = times[idx], x[idx], y[idx]
+            #idx = np.linspace(0, len(x)-1, self.dstr.max_input_points).astype(int)
+            #idx = np.random.permutation(len(times))
+            #times, x, y = times[idx], x[idx], y[idx]
             
             samples['times'].append(times)
             samples['trajectory'].append(np.concatenate((x,y),axis=1))
@@ -312,13 +358,66 @@ class Evaluator(object):
         if save:
             save_file = os.path.join(self.save_path, "eval_oscillators.csv")
 
-        scores = self.evaluate_on_iterator(iterator,save_file)
+        scores, batch_results = self.evaluate_on_iterator(iterator,save_file)
 
         if self.params.use_wandb:
             wandb.log({'oscillators_'+metric: scores[metric] for metric in self.params.validation_metrics.split(',')})
 
-        return scores
-
+        return scores, batch_results
+    
+    def evaluate_on_file(self, path: str, save: bool, seed: Union[None, int]):
+        _filename = Path(path).name
+        if path.endswith(".pkl"):
+            # read pickle file which is assumed to have correct format
+            with open(path, "rb") as fpickle:
+                iterator = pickle.load(fpickle)
+        else:
+            # read text file where each line is assumed to be an equation
+            if seed is not None:
+                np.random.seed(seed)
+            iterator = []
+            with open(path) as f:
+                for line_i, line in enumerate(f):
+                    samples = defaultdict(list)
+                    line = line.rstrip("\n")
+                    eqs = line.split("|")
+                    dim = len(eqs)
+                    var_names = [f"x_{k}" for k in range(dim)]
+                    # eqs = [sympy.parse_expr(eq) for eq in eqs]
+                    # component_funcs = [sympy.lambdify(",".join(var_names), eq) for eq in eqs]
+                    # def ode_func(*args):
+                    #     outputs = []
+                    #     for cf in component_funcs:
+                    #         outputs.append(cf(*args))
+                    #     return np.array(outputs).squeeze()
+                    y0 = np.ones(len(var_names))
+                    times = np.linspace(0, 5, 256)
+                    trajectory = self.model.integrate_prediction(
+                        times, y0=y0, prediction=line
+                    )
+                    if np.nan in trajectory:
+                        self.trainer.logger.info(
+                            f"NaN detected in solution trajectory of {line}. Excluding this equation."
+                        )
+                        continue
+                    samples['infos'] = {
+                        'dimension': [2],
+                        'n_unary_ops': [np.nan],
+                        'n_input_points': [len(times)],
+                        'name': [f"{_filename}_{line_i:03d}_{line}"],
+                    }
+                    samples['times'].append(times)
+                    samples["trajectory"].append(trajectory)
+                    iterator.append((samples, None))
+            with open(path+".pkl", "wb") as fpickle:
+                pickle.dump(iterator, fpickle)
+                
+        if save:
+            save_file = os.path.join(self.save_path, f"eval_{_filename}.csv")
+        else:
+            save_file = None
+        return self.evaluate_on_iterator(iterator,save_file)
+                    
 
 def main(params):
 
@@ -343,18 +442,22 @@ def main(params):
     env.rng = np.random.RandomState(0)
     modules = build_modules(env, params)
     trainer = Trainer(modules, env, params)
-    evaluator = Evaluator(trainer)
+    model = setup_odeformer(trainer)
+    evaluator = Evaluator(trainer, model)
     save = params.save_results
 
     if params.eval_in_domain:
-      scores = evaluator.evaluate_in_domain("functions",save=save,)
+      scores, batch_results = evaluator.evaluate_in_domain("functions",save=save,)
       logger.info("__log__:%s" % json.dumps(scores))
 
     if params.eval_on_pmlb:
-        pmlb_scores = evaluator.evaluate_on_pmlb(save=save)
-        logger.info("__pmlb__:%s" % json.dumps(pmlb_scores))
-        osc_scores = evaluator.evaluate_on_oscillators(save=save)
-        logger.info("__oscillators__:%s" % json.dumps(osc_scores))
+        scores, batch_results = evaluator.evaluate_on_pmlb(save=save)
+        logger.info("__pmlb__:%s" % json.dumps(scores))
+        scores, batch_results = evaluator.evaluate_on_oscillators(save=save)
+        logger.info("__oscillators__:%s" % json.dumps(scores))
+    
+    if params.eval_on_file is not None:
+        evaluator.evaluate_on_file(path=params.eval_on_file, seed=params.random_seed)
 
 
 if __name__ == "__main__":
@@ -371,5 +474,6 @@ if __name__ == "__main__":
     params.local_rank = -1
     params.master_port = -1
     params.use_cross_attention = True
+    params.eval_on_file = None #"/p/project/hai_microbio/sb/repos/odeformer/datasets/polynomial_2d.txt.pkl"
 
     main(params)

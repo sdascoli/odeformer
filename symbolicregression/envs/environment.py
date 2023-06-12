@@ -416,6 +416,18 @@ class FunctionEnvironment(object):
                     print(traceback.format_exc())
                 continue
 
+    def _create_noise(self, train: bool, trajectory: np.ndarray, gamma: Union[None, float] = None):
+        if gamma is None:
+            gamma = (
+                self.rng.uniform(0, self.params.train_noise_gamma)
+                if train
+                else self.params.eval_noise_gamma
+            )
+        norm = scipy.linalg.norm(
+            (np.abs(trajectory) + 1e-100) / np.sqrt(trajectory.shape[0])
+        )
+        return gamma * norm * np.random.randn(*trajectory.shape)
+
     @timeout(TIMEOUT)
     def _gen_expr(
         self,
@@ -480,16 +492,7 @@ class FunctionEnvironment(object):
         ##output noise added to trajectory
         if self.params.train_noise_gamma > 0 or self.params.eval_noise_gamma > 0:
             try:
-                gamma = (
-                    self.rng.uniform(0, self.params.train_noise_gamma)
-                    if train
-                    else self.params.eval_noise_gamma
-                )
-                norm = scipy.linalg.norm(
-                    (np.abs(trajectory) + 1e-100) / np.sqrt(trajectory.shape[0])
-                )
-                noise = gamma * norm * np.random.randn(*trajectory.shape)
-                trajectory += noise
+                trajectory += self._create_noise()
             except Exception as e:
                 print(e, "norm computation error")
                 return {"tree": tree}, ["norm computation error"]
@@ -1270,6 +1273,8 @@ class EnvDataset(Dataset):
         x["infos"] = infos
         for k in infos.keys():
             del x[k]
+        
+        assert infos["dimension"] <= self.params.max_dimension
 
         x["infos"]["input_sequence_length"] = self.env.get_length_after_batching([x['times'], x['trajectory']])[0].item()
         if x["infos"]["input_sequence_length"] > self.params.tokens_per_batch:

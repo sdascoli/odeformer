@@ -7,7 +7,7 @@
 from abc import ABC, abstractmethod
 from ast import parse
 from operator import length_hint, xor
-
+from typing import Union
 # from turtle import degrees
 import numpy as np
 import scipy.special
@@ -780,6 +780,26 @@ class RandomFunctions(Generator):
         tree_with_constants = env.word_to_infix(prefix, is_float=False, str_array=False)
         return tree_with_constants
 
+    def _subsample_trajectory(
+        self, 
+        times: np.ndarray, 
+        trajectory: np.ndarray, 
+        rng=None,
+        subsample_ratio: Union[None, float]=None,
+    ):
+        if subsample_ratio is None:
+            subsample_ratio = self.params.subsample_ratio
+        if rng is None:
+            rng = np.random.RandomState(0)
+        indices_to_remove = rng.choice(
+            trajectory.shape[0], 
+            int(trajectory.shape[0] * subsample_ratio), 
+            replace=False,
+        )
+        trajectory = np.delete(trajectory, indices_to_remove, axis=0)
+        times = np.delete(times, indices_to_remove, axis=0)
+        return times, trajectory
+
     def generate_datapoints(
         self,
         tree,
@@ -817,15 +837,13 @@ class RandomFunctions(Generator):
 
         
         #trajectory = np.concatenate((t.reshape(-1,1),trajectory), axis=-1)
-        if self.params.subsample_ratio:
-            indices_to_remove = rng.choice(trajectory.shape[0], int(trajectory.shape[0] * self.params.subsample_ratio), replace=False)
-            trajectory = np.delete(trajectory, indices_to_remove, axis=0)
-            times = np.delete(times, indices_to_remove, axis=0)
+        times, trajectory = self._subsample_trajectory(times, trajectory, rng=rng, subsample_ratio=self.params.subsample_ratio)
 
         # take finite differences
         if self.params.differentiate:
             trajectory = np.diff(trajectory, axis=0)
             times = times[1:]
+        
         
         return tree, (times, trajectory)
 
@@ -900,7 +918,8 @@ def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', events=None, d
             #@njit
             times = np.array(times)+1
             def func(t,y):
-                return tree([y],[t])[0]
+                ret = tree([y],[t])
+                return ret[0]
             try: 
                 trajectory = scipy.integrate.solve_ivp(func, (min(times), max(times)), y0, t_eval=times, events=events)#, method='RK23', rtol=1e-2, atol=1e-6)
                 events = trajectory.t_events
@@ -932,7 +951,11 @@ def integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', events=None, de
         return [np.nan for _ in range(len(times))]
 
 def tree_to_numexpr_fn(tree):
-    infix = tree.infix()
+    if not isinstance(tree, str):
+        infix = tree.infix()
+    else:
+        infix = tree
+        
     numexpr_equivalence = {
         "add": "+",
         "sub": "-",
@@ -950,20 +973,22 @@ def tree_to_numexpr_fn(tree):
         #t, x = np.array(t), np.array(x)
         local_dict = {}
         dimension = len(x[0])
-        for d in range(dimension): local_dict["x_{}".format(d)] = np.array(x)[:, d]
+        for d in range(dimension): 
+            local_dict["x_{}".format(d)] = np.array(x)[:, d]
+
         local_dict["t"] = t[:]
         local_dict.update(extra_local_dict)
-
+        # predicted_dim = len(infix.split('|'))
         try:
-            if '|' in infix:
+            if '|' in infix:    
                 vals = np.concatenate([ne.evaluate(node, local_dict=local_dict).reshape(-1,1) for node in infix.split('|')], axis=1)
             else:
                 vals = ne.evaluate(infix, local_dict=local_dict).reshape(-1,1)
         except Exception as e:
-            #print(e)
-            #print("problem with tree", infix)
-            #print(traceback.format_exc())
-            vals = [np.nan for _ in range(x.shape[0])]
+            # print(e)
+            # print("problem with tree", infix)
+            # print(traceback.format_exc())
+            vals = np.array([np.nan for _ in range(x.shape[0])])#.reshape(-1, 1).repeat(predicted_dim, axis=1)
         return vals
 
     return wrapped_numexpr_fn
