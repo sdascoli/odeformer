@@ -16,6 +16,9 @@ MultiDimensionalFloat = List[float]
 XYPair = Tuple[MultiDimensionalFloat, MultiDimensionalFloat]
 Sequence = List[XYPair]
 
+__all__ = ("LinearPointEmbedder", "TwoHotEmbedder", "TwoHotTrajectoryEmbedder",)
+
+# TODO: merge TwoHotEmbedder and TwoHotTrajectoryEmbedder
     
 class Embedder(ABC, nn.Module):
     """
@@ -142,9 +145,36 @@ class LinearPointEmbedder(Embedder):
         return lengths
     
 
-class TwoHotEmbedder():
-    # TODO: support masked-language-modeling
-    # TODO: check if compatible with old two-hot-encoding
+class TwoHotEmbedder(nn.EmbeddingBag):
+    
+    def __init__(self, num_embeddings: int, embedding_dim: int, padding_idx: Optional[int] = None):
+        super().__init__(
+            num_embeddings=num_embeddings, 
+            embedding_dim=embedding_dim,
+            padding_idx=padding_idx,
+            mode="sum"
+        )
+    
+    def forward(self, idx: torch.Tensor) -> torch.Tensor:
+        # inp has shape = (seq_len, batch size)
+        shape_output = list(idx.shape)
+        shape_output.append(self.embedding_dim)
+        # for the two-hot representation we need to specify:
+        # - the neighboring bins that support the distribution (=support_idcs)
+        # - the probability mass that is assigned to each of the bins (=support_weights)
+        support_idcs = torch.stack((idx.reshape(-1), idx.reshape(-1))).T # shape=(seq_len * batch size, 2)
+        # the right bins contains the decimal value, the left bin contains 1-decimal value
+        support_weights = support_idcs % 1
+        support_weights[:, 0] = 1 - support_weights[:, 1]
+        support_weights = support_weights.to(torch.float32) # TODO: which dtype to use? needs to be consistent with self.weight
+        support_idcs[:, 0] = torch.floor(support_idcs[:, 0])
+        support_idcs[:, 1] = torch.ceil(support_idcs[:, 1])
+        support_idcs= support_idcs.to(torch.int64)
+        return super().forward(input=support_idcs, per_sample_weights=support_weights).reshape(shape_output)
+    
+
+class TwoHotTrajectoryEmbedder():
+    
     def __init__(
         self, 
         params, 

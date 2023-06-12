@@ -2,7 +2,7 @@ import argparse
 import pickle
 import torch
 import numpy as np
-from symbolicregression.model.embedders import TwoHotEmbedder
+from symbolicregression.model.embedders import TwoHotTrajectoryEmbedder
 from parsers import get_parser
 
 def main(args):
@@ -13,7 +13,7 @@ def main(args):
     params.float_precision = 3
     params.max_exponent_prefactor = 2
     
-    embedder = TwoHotEmbedder(params=params, env=None, init_from_arange=True, scale_inputs=False)
+    embedder = TwoHotTrajectoryEmbedder(params=params, env=None, init_from_arange=True, scale_inputs=False)
     # with open("/p/project/hai_microbio/sb/repos/odeformer/encoder_test_input.pkl", "rb") as fin:
     #     x1 = pickle.load(fin)
     # embd, seq_len = embedder(x1[:2])
@@ -51,7 +51,7 @@ def main(args):
     print(f"values:\n{embd}")
     
     # two trajectories, positive and negative values with log_scaling
-    embedder = TwoHotEmbedder(params=params, env=None, init_from_arange=True, scale_inputs=True)
+    embedder = TwoHotTrajectoryEmbedder(params=params, env=None, init_from_arange=True, scale_inputs=True)
     sample = []
     _trajectory = np.arange(10) + np.arange(10)/10
     for i, t in enumerate(_trajectory):
