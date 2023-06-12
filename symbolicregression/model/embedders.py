@@ -207,9 +207,15 @@ class TwoHotEmbedder():
     def __call__(self, inputs: List[Sequence]) -> Tuple[torch.Tensor, torch.LongTensor]:
         return self.forward(inputs)
     
-    def forward(self, inputs: List[Sequence]) -> Tuple[torch.Tensor, torch.LongTensor]:
-        inputs = self.encode(inputs)
-        inputs, sequences_len = self.batch(inputs)
+    def forward(
+        self, inputs: List[Sequence], 
+        return_before_embed: bool=False
+    ) -> Tuple[torch.Tensor, torch.LongTensor]:
+        sequences = self.encode(sequences)
+        sequences, sequences_len = self.batch(sequences)
+        sequences, sequences_len = to_cuda(sequences, sequences_len, use_cpu=self.fc.weight.device.type=="cpu")
+        if return_before_embed:
+            return sequences, sequences_len
         return self.embed(inputs), sequences_len
     
     def encode(self, sequences = List[Sequence]) -> List[torch.Tensor]:
