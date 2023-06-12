@@ -1,10 +1,11 @@
 import argparse
+import pickle
 import torch
 import numpy as np
 from symbolicregression.model.embedders import TwoHotEmbedder
 
 def main(args):
-    MIN_VALUE, MAX_VALUE = -10, 10
+    MIN_VALUE, MAX_VALUE = -100, 100
     EMBD_DIM = 3
     embedder = TwoHotEmbedder(
         num_embeddings=None, # supply min_value, max_value instead
@@ -12,10 +13,21 @@ def main(args):
         min_value=MIN_VALUE,
         max_value=MAX_VALUE,
         init_from_arange=True,
-        require_grad=False
     )
+    # with open("/p/project/hai_microbio/sb/repos/odeformer/encoder_test_input.pkl", "rb") as fin:
+    #     x1 = pickle.load(fin)
+    
+    # embd, seq_len = embedder(x1[:2])
+    
+    
+    
+    
     # single trajectory, only positive values
-    trajectory = torch.arange(10) + torch.arange(10)/10
+    trajectory = np.arange(10) + np.arange(10)/10
+    sample = []
+    for i, t in enumerate(trajectory):
+        sample.append([float(i), np.array([t])])
+    trajectory = [sample]
     embd, seq_len = embedder(trajectory)
     print(f"shape:\n{embd.shape}")
     print(f"values:\n{embd}")

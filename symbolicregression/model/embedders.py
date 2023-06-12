@@ -153,6 +153,7 @@ class TwoHotEmbedder():
         min_value: Union[None, int] = None, # min is included, ignored if num_embeddings is not None
         max_value: Union[None, int] = None, # min is excluded, ignored if num_embeddings is not None
         init_from_arange: bool = False, # useful for debugging
+        scale_inputs: bool = True
     ):
         """
         Arguments:
@@ -161,10 +162,11 @@ class TwoHotEmbedder():
         - embedding_dim: dimension of embeddings.
         - min_value: smallest value to be represented (min is included).
         - max_value: supremum, this is the first value outside the represented range of values.
-        -init_from_arange: If True, initialize embeddings such that an input of 0 gets an embedding vector of zeros, 
+        - init_from_arange: If True, initialize embeddings such that an input of 0 gets an embedding vector of zeros, 
             an input of 1 gets an embedding vector of ones, etc.
         
         """
+        self.scale_inputs = scale_inputs
         self.max_dimension = 1 #TODO
         self.float_scalar_descriptor_len = 1
         self.total_dimension = 1 + self.max_dimension
@@ -234,12 +236,19 @@ class TwoHotEmbedder():
             res.append(torch.DoubleTensor(seq_toks))
         return res
     
+    def _scale_func(self, inputs):
+        """sign(x) * log(sign(x) * (x+1))"""
+        signs = torch.sign(inputs)
+        return signs * torch.log(signs * (inputs + 1))
+    
     def embed(self, inputs: torch.Tensor) -> torch.Tensor:
         seq_len, batch_size, system_dims = inputs.shape
         # for the two-hot representation we need to specify:
         # - the neighboring bins that support the distribution (=support_idcs)
         # - the probability mass that is assigned to each of the bins (=support_weights)
         support_idcs = torch.stack((inputs.reshape(-1), inputs.reshape(-1))).T
+        if self.scale_inputs:
+            support_idcs = self._scale_func(support_idcs, compact=False)
         # right bins contains the decimal value, e.g. 0.6 for input 1.6
         support_weights = support_idcs % 1
         # left bin contains 1 minus decimal value, e.g. 0.4 for input 1.6
