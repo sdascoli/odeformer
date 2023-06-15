@@ -62,15 +62,15 @@ def main(params):
     evaluator_default = Evaluator(trainer, model)
 
     if params.eval_in_domain:
-      scores, batch_results = evaluator_default.evaluate_in_domain("functions",save=params.save_results)
+      scores = evaluator_default.evaluate_in_domain("functions",save=params.save_results)
       logger.info("__log__:%s" % json.dumps(scores))
 
     if params.eval_on_pmlb:
-        scores, batch_results = evaluator_default.evaluate_on_pmlb(save=params.save_results)
+        scores = evaluator_default.evaluate_on_pmlb(save=params.save_results)
         logger.info("__pmlb__:%s" % json.dumps(scores))
-        scores, batch_results = evaluator_default.evaluate_on_oscillators(save=params.save_results)
+        scores = evaluator_default.evaluate_on_oscillators(save=params.save_results)
         logger.info("__oscillators__:%s" % json.dumps(scores))
-        format_and_save(params, scores, batch_results, "pmlb")
+        #format_and_save(params, scores, batch_results, "pmlb")
 
     exit()
         
@@ -79,7 +79,7 @@ def main(params):
             path=params.eval_on_file, save=params.save_results, seed=13,
         )
         _name = Path(params.eval_on_file).name
-        format_and_save(params, scores, batch_results, str(_name))
+        #format_and_save(params, scores, batch_results, str(_name))
     
     
     

@@ -7,31 +7,33 @@ import itertools
 from pathlib import Path
 import shutil
 from distutils import dir_util
-user = os.getlogin()
+#user = os.getlogin()
 
-exp_folder = 'bounded'
+exp_folder = 'general'
 
 #dump_path = f'/home/{user}/odeformer/experiments'
-dump_path = f'/scratch/{user}/odeformer/experiments'
+dump_path = f'/sb_u0621_liac_scratch/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
 
 extra_args = {
+    'reload_data':dump_path + "/datagen_general/datagen_use_sympy_True",
     'use_wandb':True,
     'collate_queue_size': 1000,
     #'n_steps_per_epoch':1000,
     'print_freq': 30,
     'ode_integrator':'solve_ivp',
     'num_workers':1,
-    'tokens_per_batch':5000,
-    'min_dimension':2,
-    'max_dimension':2,
-    #'sign_as_token':True,
-    'reload_data':dump_path + "/datagen_bounded/datagen_subsample_ratio_0",
+    'tokens_per_batch':10000,
+    'min_dimension':1,
+    'max_dimension':6,
+    'float_descriptor_length':3,
+    'enc_emb_dim':256,
+    'dec_emb_dim':512
     }
 
 grid = {
     #'float_descriptor_length':[1,2,3],
-    "masked_output":[0,0.5],
+    "train_noise_gamma":[0,1],
     #"sign_as_token":[False],
     #"use_two_hot":[False]
     #"fixed_init_scale":[True,False],

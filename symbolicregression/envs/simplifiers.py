@@ -244,6 +244,8 @@ class Simplifier(ABC):
             return f"({args[0]})%({args[1]})"
         elif token == "abs":
             return f"Abs({args[0]})"
+        elif token == "id":
+            return f"{args[0]}"
         elif token == "inv":
             return f"1/({args[0]})"
         elif token == "pow2":

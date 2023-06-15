@@ -375,9 +375,9 @@ class Trainer(object):
         """
         Print statistics about the training.
         """
-        if self.params.use_wandb:
+        if self.params.use_wandb and self.params.is_master:
             if self.stats["functions"]:
-                wandb.log({'loss':self.stats["functions"][0],
+                wandb.log({'loss':self.stats["functions"][-1],
                    'lr': self.optimizer.param_groups[0]["lr"],
                    })
         if self.n_total_iter % self.params.print_freq != 0:

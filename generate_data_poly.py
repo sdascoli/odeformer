@@ -8,7 +8,7 @@ from pathlib import Path
 import shutil
 from distutils import dir_util
 
-exp_folder = 'datagen_poly'
+exp_folder = 'datagen_div'
 
 dump_path = f'/sb_u0621_liac_scratch/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
@@ -27,7 +27,7 @@ extra_args = {
     "use_wandb":False,
     "cpu":True,
     
-    "operators_to_use":'add:3,mul:1'
+    "operators_to_use":'add:4,mul:2,div:1'
      }
 
 grid = {

@@ -16,6 +16,7 @@ dump_path = f'/sb_u0621_liac_scratch/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
 
 extra_args = {
+    'reload_data':dump_path + "/datagen_poly/datagen_use_sympy_True",
     'use_wandb':True,
     'collate_queue_size': 1000,
     #'n_steps_per_epoch':1000,
@@ -26,7 +27,6 @@ extra_args = {
     'min_dimension':1,
     'max_dimension':6,
     #'sign_as_token':True,
-    'reload_data':dump_path + "/datagen_poly/datagen_use_sympy_True",
     'float_descriptor_length':3,
     'enc_emb_dim':256,
     'dec_emb_dim':512

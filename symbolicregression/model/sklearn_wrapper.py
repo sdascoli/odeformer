@@ -150,9 +150,9 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
     @torch.no_grad()
     def sort_candidates(self, times, trajectory, candidates, metric="r2"):
         if "r2" in metric: 
-            descending = False
-        else: 
             descending = True
+        else: 
+            descending = False
         scores = []
         for candidate in candidates:
             score = self.evaluate_tree(candidate, times, trajectory, metric)

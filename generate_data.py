@@ -7,32 +7,31 @@ import itertools
 from pathlib import Path
 import shutil
 from distutils import dir_util
-user = os.getlogin()
 
+exp_folder = 'datagen_general'
 
-exp_folder = 'datagen_bounded'
-
-dump_path = f'/scratch/{user}/odeformer/experiments'
+dump_path = f'/sb_u0621_liac_scratch/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
 
 extra_args = {
     'n_steps_per_epoch':1000,
     'max_epoch':100,
     'ode_integrator':'solve_ivp',
-    'num_workers':40,
+    'num_workers':60,
     'use_queue':False,
     'batch_size':10,
-    'min_dimension':2,
-    'max_dimension':2,
+    'min_dimension':1,
+    'max_dimension':6,
     'print_freq':100,
     "export_data":True,
     "use_wandb":False,
     "cpu":True,
-    "max_points":150,
+    
+    "operators_to_use":"add:3,mul:1,inv:1,sin:1,id:3"
      }
 
 grid = {
-    'subsample_ratio':[0],
+    'use_sympy':[True],
 }
 
 # Path to your PyTorch script

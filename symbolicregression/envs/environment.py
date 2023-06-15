@@ -663,7 +663,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--max_unary_depth",
             type=int,
-            default=5,
+            default=6,
             help="Max number of operators inside unary",
         )
         parser.add_argument(

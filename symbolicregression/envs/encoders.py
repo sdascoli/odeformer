@@ -163,8 +163,9 @@ class FloatSequences(Encoder):
                 mant = int(mant)
                 value = sign * float(f"{mant}e{exp}")
             except Exception:
-                import traceback
-                print(traceback.format_exc())
+                #import traceback
+                #print(traceback.format_exc())
+                #print(val)
                 value = np.nan
             seq.append(value)
         return seq

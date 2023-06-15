@@ -229,10 +229,7 @@ class Evaluator(object):
 
         for metric in self.params.validation_metrics.split(','):
             scores[metric] = df[metric].mean()
-            #scores[metric+"_num_nans"] = df[metric].isna().sum()
-            
-        scores["num_samples"] = df.shape[0]
-            
+                        
         for ablation in self.ablation_to_keep:
             for val, df_ablation in df.groupby(ablation):
                 avg_scores_ablation = df_ablation.mean()
@@ -240,7 +237,7 @@ class Evaluator(object):
                     if k not in info_columns:
                         scores[k + "_{}_{}".format(ablation, val)] = v
                             
-        return scores, batch_results
+        return scores
         
     def evaluate_in_domain(
         self,
@@ -267,13 +264,13 @@ class Evaluator(object):
         if save:
             save_file = os.path.join(self.save_path, "eval_in_domain.csv")
 
-        scores, batch_results = self.evaluate_on_iterator(iterator,
+        scores = self.evaluate_on_iterator(iterator,
                                            save_file)
         
         if self.params.use_wandb:
             wandb.log({'in_domain_'+metric: scores[metric] for metric in self.params.validation_metrics.split(',')})
 
-        return scores, batch_results
+        return scores
 
     def evaluate_on_pmlb(
         self,
@@ -309,12 +306,12 @@ class Evaluator(object):
         if save:
             save_file = os.path.join(self.save_path, "eval_pmlb.csv")
 
-        scores, batch_results = self.evaluate_on_iterator(iterator,save_file)
+        scores = self.evaluate_on_iterator(iterator,save_file)
 
         if self.params.use_wandb:
             wandb.log({'pmlb_'+metric: scores[metric] for metric in self.params.validation_metrics.split(',')})
 
-        return scores, batch_results
+        return scores
     
     def evaluate_on_oscillators(
         self,
@@ -347,9 +344,9 @@ class Evaluator(object):
             x = data[:,2].reshape(-1,1)
             y = data[:,3].reshape(-1,1)
             # shuffle times and trajectories
-            #idx = np.linspace(0, len(x)-1, self.dstr.max_input_points).astype(int)
-            #idx = np.random.permutation(len(times))
-            #times, x, y = times[idx], x[idx], y[idx]
+            idx = np.linspace(0, len(x)-1, self.dstr.max_input_points).astype(int)
+            idx = np.random.permutation(len(times))
+            times, x, y = times[idx], x[idx], y[idx]
             
             samples['times'].append(times)
             samples['trajectory'].append(np.concatenate((x,y),axis=1))
@@ -358,12 +355,12 @@ class Evaluator(object):
         if save:
             save_file = os.path.join(self.save_path, "eval_oscillators.csv")
 
-        scores, batch_results = self.evaluate_on_iterator(iterator,save_file)
+        scores = self.evaluate_on_iterator(iterator,save_file)
 
         if self.params.use_wandb:
             wandb.log({'oscillators_'+metric: scores[metric] for metric in self.params.validation_metrics.split(',')})
 
-        return scores, batch_results
+        return scores
     
     def evaluate_on_file(self, path: str, save: bool, seed: Union[None, int]):
         _filename = Path(path).name
@@ -447,13 +444,13 @@ def main(params):
     save = params.save_results
 
     if params.eval_in_domain:
-      scores, batch_results = evaluator.evaluate_in_domain("functions",save=save,)
+      scores = evaluator.evaluate_in_domain("functions",save=save,)
       logger.info("__log__:%s" % json.dumps(scores))
 
     if params.eval_on_pmlb:
-        scores, batch_results = evaluator.evaluate_on_pmlb(save=save)
+        scores = evaluator.evaluate_on_pmlb(save=save)
         logger.info("__pmlb__:%s" % json.dumps(scores))
-        scores, batch_results = evaluator.evaluate_on_oscillators(save=save)
+        scores = evaluator.evaluate_on_oscillators(save=save)
         logger.info("__oscillators__:%s" % json.dumps(scores))
     
     if params.eval_on_file is not None:

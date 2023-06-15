@@ -847,7 +847,7 @@ class RandomFunctions(Generator):
         
         return tree, (times, trajectory)
 
-@timeout(10)
+@timeout(1)
 def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', events=None, debug=False, allow_warnings=False):
 
     with warnings.catch_warnings(record=True) as caught_warnings:
