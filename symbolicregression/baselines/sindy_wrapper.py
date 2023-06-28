@@ -1,4 +1,5 @@
-from typing import Dict, List, Union
+from typing import Any, Callable, Dict, List, Union
+from sklearn.metrics import r2_score
 import re
 import traceback
 import numpy as np
@@ -16,9 +17,6 @@ class SINDyWrapper(SINDy, BatchMixin, FiniteDifferenceMixin, PredictionIntegrati
     def __init__(
         self, 
         feature_names: List[str], 
-        feature_library = None, # The default library consists of polynomials of degree 2
-        optimizer = None,
-        differentiation_method = None,
         polynomial_degree: Union[None, int] = None,
         functions: Union[None, List[str]] = None,
         optimizer_threshold: Union[None, float] = None,
@@ -27,43 +25,38 @@ class SINDyWrapper(SINDy, BatchMixin, FiniteDifferenceMixin, PredictionIntegrati
         finite_difference_order: Union[None, int] = None,
         smoother_window_length: Union[None, int] = None,
         debug: bool = False,
-        *args,
-        **kwargs,
     ):
-        if feature_library is not None:
-            assert functions is None, \
-                "You can only supply feature library or functinos, not both."
-            assert polynomial_degree is None, \
-                "You can only supply feature library or degree, not both."
-        if (functions is not None) or (polynomial_degree is not None):
-            feature_library = create_library(
-                degree=polynomial_degree, functions=functions,
-            )
-        if differentiation_method is None:
-            differentiation_method = self.get_differentiation_method(
-                finite_difference_order=finite_difference_order, 
-                smoother_window_length=smoother_window_length,
-            )
-        if optimizer is None:
-            optim_kwargs = {}
-            if optimizer_threshold is not None:
-                optim_kwargs["threshold"] = optimizer_threshold
-            if optimizer_alpha is not None:
-                optim_kwargs["alpha"] = optimizer_alpha
-            if optimizer_max_iter is not None:
-                optim_kwargs["max_iter"] = optimizer_max_iter
-            optimizer = optimizers.STLSQ(**optim_kwargs)
+        fd_kwargs = {"smoother_window_length": smoother_window_length}
+        if finite_difference_order is not None:
+            fd_kwargs["finite_difference_order"] = finite_difference_order
+        FiniteDifferenceMixin.__init__(self, **fd_kwargs)
+        self.feature_names = feature_names
+        self.polynomial_degree = polynomial_degree
+        self.functions = functions
+        self.optimizer_threshold = optimizer_threshold
+        self.optimizer_alpha = optimizer_alpha
+        self.optimizer_max_iter = optimizer_max_iter
+        self.debug = debug
+        
+        feature_library = create_library(
+            degree=self.polynomial_degree, functions=self.functions,
+        )
+        optim_kwargs = {}
+        if optimizer_threshold is not None:
+            optim_kwargs["threshold"] = self.optimizer_threshold
+        if optimizer_alpha is not None:
+            optim_kwargs["alpha"] = self.optimizer_alpha
+        if optimizer_max_iter is not None:
+            optim_kwargs["max_iter"] = self.optimizer_max_iter
+        optimizer = optimizers.STLSQ(**optim_kwargs)
         super().__init__(
             feature_names=feature_names,
             feature_library=feature_library,
             optimizer=optimizer,
-            differentiation_method=differentiation_method,
-            *args, 
-            **kwargs,
+            differentiation_method=self.get_differentiation_method(),
         )
-        self.debug = debug
     
-    def _format_equation(self, expr: str):
+    def _format_equation(self, expr: str) -> str:
         expr = re.sub(r"(\d+\.?\d*) (1)", repl=r"\1 * \2", string=expr)
         for var_name in self.feature_names:
             expr = re.sub(fr"(\d+\.?\d*) ({var_name})", repl=r"\1 * \2", string=expr)
@@ -71,12 +64,10 @@ class SINDyWrapper(SINDy, BatchMixin, FiniteDifferenceMixin, PredictionIntegrati
         return expr
     
     def fit(
-        self, 
-        times: Union[List, np.ndarray], 
-        trajectories: Union[List, np.ndarray], 
-        average_trajectories: bool = False, 
-        *args, 
-        **kwargs,
+        self,
+        times: Union[List, np.ndarray],
+        trajectories: Union[List, np.ndarray],
+        average_trajectories: bool = False,
     ) -> Dict[int, Union[None, List[str]]]:
         
         if isinstance(trajectories, List) and not average_trajectories:
@@ -84,10 +75,27 @@ class SINDyWrapper(SINDy, BatchMixin, FiniteDifferenceMixin, PredictionIntegrati
             return super().fit_all(times, trajectories, average_trajectories=False)
         try:
             super().fit(trajectories, t=times, multiple_trajectories=average_trajectories, quiet=not self.debug)
-            return {0: [" | ".join([self._format_equation(eq) for eq in self.equations()])]}
+            return self._get_equations()
         except Exception as e:
             print(traceback.format_exc())
             return {0: [None]}
+        
+    def _get_equations(self) -> Dict[int, List[Union[None, str]]]:
+        return {0: [" | ".join([self._format_equation(eq) for eq in self.equations()])]}
+    
+    def score(self, times, trajectories, metric: Callable=r2_score) -> float:
+        return super().score(x=trajectories, t=times, metric=metric)
+    
+    def get_hyper_grid(self) -> Dict[str, List[Any]]:
+        return {
+            "optimizer_threshold": [0.01, 0.05, 0.1, 0.15, 0.2],
+            "optimizer_alpha": [0.025, 0.05, 0.075, 0.1],
+            "optimizer_max_iter": [20, 100],
+            "finite_difference_order": [2, 3, 4, 5],
+            "smoother_window_length": [None, 9],
+        }
+    
+    
         
         
 def _logarithm_with_error(x):
