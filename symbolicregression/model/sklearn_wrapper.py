@@ -58,7 +58,7 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
         times,
         trajectories,
         sort_candidates=True,
-        sort_metric="r2",
+        sort_metric="snmse",
         average_trajectories=None,
         rescale=None,
         verbose=False,
@@ -128,13 +128,14 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
             if not candidates: all_candidates[input_id].append(None)
             for candidate in candidates:
                 if scaler is not None:
-                    candidate = scaler.rescale_function(self.model.env, candidate, *scale_params[input_id])                    
+                    candidate = scaler.rescale_function(self.model.env, candidate, *scale_params[input_id])   
+                    candidate = self.model.env.simplifier.simplify_tree(candidate)
                 all_candidates[input_id].append(candidate)
         #assert len(all_candidates.keys())==n_datasets
 
         if sort_candidates:
             for input_id in all_candidates.keys():
-                all_candidates[input_id] = self.sort_candidates(scaled_times[input_id], scaled_trajectories[input_id], all_candidates[input_id], metric=sort_metric)
+                all_candidates[input_id] = self.sort_candidates(times[input_id], trajectories[input_id], all_candidates[input_id], metric=sort_metric)
             
         self.trees = all_candidates
 
@@ -148,7 +149,7 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
         return metrics[metric][0]
 
     @torch.no_grad()
-    def sort_candidates(self, times, trajectory, candidates, metric="r2"):
+    def sort_candidates(self, times, trajectory, candidates, metric="snmse"):
         if "r2" in metric: 
             descending = True
         else: 
@@ -160,6 +161,7 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
                 score = -np.infty if descending else np.infty
             scores.append(score)
         sorted_idx = np.argsort(scores)  
+
         if descending: sorted_idx= reversed(sorted_idx)
         candidates = [candidates[i] for i in sorted_idx]
 

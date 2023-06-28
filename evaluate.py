@@ -175,7 +175,7 @@ class Evaluator(object):
                 time, idx = sorted(time), np.argsort(time)
                 trajectory = trajectory[idx]
                 best_candidate = candidates[0] # candidates are sorted
-                # TODO: check dim
+
                 pred_trajectory = self.model.integrate_prediction(
                     time, y0=trajectory[0], prediction=best_candidate
                 )
@@ -344,9 +344,10 @@ class Evaluator(object):
             x = data[:,2].reshape(-1,1)
             y = data[:,3].reshape(-1,1)
             # shuffle times and trajectories
-            idx = np.linspace(0, len(x)-1, self.dstr.max_input_points).astype(int)
-            idx = np.random.permutation(len(times))
-            times, x, y = times[idx], x[idx], y[idx]
+            #idx = np.linspace(0, len(x)-1, self.dstr.max_input_points).astype(int)
+            if hasattr(self.model, "max_input_points"):
+                idx = np.random.permutation(len(times))
+                times, x, y = times[idx], x[idx], y[idx]
             
             samples['times'].append(times)
             samples['trajectory'].append(np.concatenate((x,y),axis=1))

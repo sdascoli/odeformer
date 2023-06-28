@@ -196,6 +196,11 @@ class PredictionIntegrationMixin:
         ode_integrator: Union[None, str] = None,
     ) -> np.ndarray:
         
+        times = np.array(times)
+        sort_idx = np.argsort(times)
+        unsort_idx = np.argsort(sort_idx) 
+        sorted_times = times[sort_idx]
+        
         _default_ode_integrator = "solve_ivp"
         if prediction is None:
             return None
@@ -213,4 +218,10 @@ class PredictionIntegrationMixin:
                 ode_integrator = _default_ode_integrator
         else:
             ode_integrator = _default_ode_integrator
-        return integrate_ode(y0, times, prediction, ode_integrator=ode_integrator)
+        trajectory = integrate_ode(y0, sorted_times, prediction, ode_integrator=ode_integrator)
+
+        if trajectory is not None:
+            trajectory = np.array(trajectory)
+            trajectory = trajectory[unsort_idx]
+
+        return trajectory

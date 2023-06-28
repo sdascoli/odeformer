@@ -26,7 +26,6 @@ extra_args = {
     'tokens_per_batch':10000,
     'min_dimension':1,
     'max_dimension':6,
-    #'sign_as_token':True,
     'float_descriptor_length':3,
     'enc_emb_dim':256,
     'dec_emb_dim':512
