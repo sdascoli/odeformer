@@ -17,6 +17,7 @@ import os
 import torch
 import numpy as np
 from copy import deepcopy
+from sklearn.model_selection import GridSearchCV
 from symbolicregression.utils import to_cuda
 import glob
 import scipy
@@ -40,7 +41,7 @@ import pandas as pd
 from tqdm import tqdm
 import time
 
-np.seterr(all="raise")
+# np.seterr(all="raise")
 
 
 def setup_odeformer(trainer) -> SymbolicTransformerRegressor:
@@ -130,16 +131,25 @@ class Evaluator(object):
             else self.params.reload_checkpoint
         )
         if not os.path.exists(self.save_path): os.makedirs(self.save_path)
+        
+        if hasattr(self.params, "eval_max_samples"):
+            self.eval_max_samples = self.params.eval_max_samples
+        else:
+            self.eval_max_samples = -1
 
         self.ablation_to_keep = list(
             map(lambda x: "info_" + x, self.params.ablation_to_keep.split(","))
         )
 
-    def evaluate_on_iterator(self,iterator,save_file,):
+    def evaluate_on_iterator(self, iterator, save_file,):
         self.trainer.logger.info("evaluate_on_iterator")
         scores = OrderedDict({"epoch": self.trainer.epoch})
         batch_results = defaultdict(list)
-        for samples_i, (samples, _) in enumerate(tqdm(iterator)):
+        for samples_i, (samples, _) in enumerate(
+            tqdm(iterator, total=(self.eval_max_samples if self.eval_max_samples != -1 else len(iterator)))
+        ):
+            if samples_i == self.eval_max_samples:
+                break
             times = samples["times"]
             trajectories = samples["trajectory"]
             infos = samples["infos"]
@@ -162,7 +172,19 @@ class Evaluator(object):
                 infos['n_masked_variables'] = np.array(n_masked_variables_arr)
                 all_candidates: Dict[int, List[str]] = self.model.fit(times, masked_trajectories, verbose=False, sort_candidates=True)
             else:
-                all_candidates: Dict[int, List[str]] = self.model.fit(times, trajectories, verbose=False, sort_candidates=True)
+                # if isinstance(self.model, GridSearchCV):
+                if hasattr(self.params, "baseline_hyper_opt") and self.params.baseline_hyper_opt:
+                    if isinstance(times, List):
+                        train_idcs = np.arange(int(np.floor(0.5*len(times[0]))))
+                        test_idcs = np.arange(int(np.floor(0.5*len(times[0]))), len(times[0]))
+                    else:
+                        train_idcs = np.arange(int(np.floor(0.5*len(times))))
+                        test_idcs = np.arange(int(np.floor(0.5*len(times))), len(times))
+                    _model = self.model.get_grid_search(train_idcs, test_idcs)
+                    _model.fit(times[0], trajectories[0])
+                    all_candidates = _model.best_estimator_._get_equations()
+                else:
+                    all_candidates: Dict[int, List[str]] = self.model.fit(times, trajectories, verbose=False, sort_candidates=True)
 
             best_results = {metric:[] for metric in self.params.validation_metrics.split(',')}
             best_candidates = []
@@ -175,6 +197,8 @@ class Evaluator(object):
                 time, idx = sorted(time), np.argsort(time)
                 trajectory = trajectory[idx]
                 best_candidate = candidates[0] # candidates are sorted
+                try: best_candidate = self.env.simplifier.simplify_tree(best_candidate, expand=True)
+                except: pass
                 # TODO: check dim
                 pred_trajectory = self.model.integrate_prediction(
                     time, y0=trajectory[0], prediction=best_candidate
@@ -186,15 +210,16 @@ class Evaluator(object):
                     tree = tree,
                     metrics=self.params.validation_metrics
                 )
-                pred_trajectory = self.model.integrate_prediction(time, y0=trajectory[0], prediction=best_candidate) 
-                try: best_candidate = self.env.simplifier.simplify_tree(best_candidate, expand=True)
-                except: pass
-                best_result = compute_metrics(pred_trajectory, trajectory, predicted_tree=best_candidate, tree=tree, metrics=self.params.validation_metrics)
                 for k, v in best_result.items():
                     best_results[k].append(v[0])
                 best_candidates.append(best_candidate)
  
-            batch_results["predicted_trees"].extend([tree.infix() if hasattr(tree, 'infix') else tree for tree in best_candidates])
+            batch_results["predicted_trees"].extend(
+                [
+                    tree.infix() if hasattr(tree, 'infix') else tree 
+                    for tree in best_candidates
+                ]
+            )
 
             for k, v in infos.items():
                 if isinstance(v, np.ndarray) or isinstance(v, torch.Tensor):

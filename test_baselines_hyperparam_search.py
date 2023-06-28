@@ -66,50 +66,63 @@ def main(params):
     param_grid = model.get_hyper_grid()
     train_idcs = np.arange(int(np.floor(0.5*len(times))))
     test_idcs = np.arange(int(np.floor(0.5*len(times))), len(times))
-    gscv = GridSearchCV(
-        estimator=model,
-        param_grid=param_grid,
-        refit = True,
-        cv=[(train_idcs, test_idcs)],
-        verbose=4,
-        error_score=np.nan,
-        n_jobs=None,
-    )
-    gscv.fit(times, trajectory)
-    model = gscv.best_estimator_
-    candidates = model._get_equations()
-    print(candidates)
-    print("Done.")
+    # gscv = GridSearchCV(
+    #     estimator=model,
+    #     param_grid=param_grid,
+    #     refit = True,
+    #     cv=[(train_idcs, test_idcs)],
+    #     verbose=4,
+    #     error_score=np.nan,
+    #     n_jobs=None,
+    # )
+    # gscv.fit(times, trajectory)
+    # model = gscv.best_estimator_
+    # candidates = model._get_equations()
+    # print(candidates)
+    # print("Done.")
     
+    evaluator_default = Evaluator(trainer, model)
+    
+    if params.eval_on_file is not None:
+        scores = evaluator_default.evaluate_on_file(
+            path=params.eval_on_file, save=params.save_results, seed=13,
+        )
+        _name = Path(params.eval_on_file).name
+        # format_and_save(params, scores, batch_results, str(_name))
     
 if __name__ == "__main__":
     BASE = "experiments/baselines"
     parser = get_parser()
     
     parser.add_argument("--baseline_model", 
-        type=str, default="pysr",
+        type=str, default="sindy_poly3",
         choices=["proged", "pysr", "sindy_poly3", "sindy_poly2", "sindy", "afp", "feafp", "eplex", "ehc", "ffx",]
     )
     
     params = parser.parse_args()
     params.eval_size = 100
-    params.max_dimension = 2
+    params.max_dimension = 6
     params.num_workers = 1
     params.is_slurm_job = False
     params.local_rank = -1
     params.master_port = -1
     params.debug_slurm=True
     params.use_cross_attention = True
-    params.dump_path = f"{BASE}/nb_model_generic_evaluation/{params.baseline_model}"
-    params.eval_dump_path = f"{BASE}/nb_model_generic_evaluation/{params.baseline_model}"
+    
     #params.use_two_hot=True
     params.debug = True
     params.validation_metrics = 'r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio'
     params.eval_only = True
     params.cpu = True
-    
+    params.baseline_hyper_opt = True
     params.eval_on_pmlb = True
-    params.eval_on_file = "experiments/datagen_poly/datagen_use_sympy_True/data.prefix.test"
+    # params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/data.prefix.test.pkl"
+    params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/polynomial_2d.txt.pkl"
+    params.eval_max_samples = 20
+    # params.eval_on_file = "experiments/datagen_poly/datagen_use_sympy_True/data.prefix.test"
+    
+    params.dump_path = f"{BASE}/nb_model_generic_evaluation/{params.baseline_model}"
+    params.eval_dump_path = f"{BASE}/nb_model_generic_evaluation/{params.baseline_model}/hyper_opt_{params.baseline_hyper_opt}"
     
     symbolicregression.utils.CUDA = not params.cpu
     if params.batch_size_eval is None:
@@ -124,3 +137,5 @@ if __name__ == "__main__":
     main(params)
     
     # TODO: how to deal with batches
+    # TODO: adjust evaluate.py
+    # TODO: test all models
