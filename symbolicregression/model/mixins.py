@@ -91,14 +91,12 @@ class MultiDimMixin:
         times: np.ndarray, 
         trajectories: np.ndarray, 
         derivatives: np.ndarray, 
-        *args, 
-        **kwargs,
     ) -> Dict[int, List[str]]:
         assert len(trajectories.shape) == 2, f"len(trajectories.shape) == {len(trajectories.shape)}"
         predictions_per_component: List[List[str]] = []
         for _deriv in derivatives.T:
             # supply all trajectories as input but only single output component to learn a func R^n -> R
-            predictions_per_component.append(self.fit(times, trajectories, _deriv, args, kwargs,)[0])
+            predictions_per_component.append(self.fit(times, trajectories, _deriv)[0])
         return {0: list(" | ".join(vs) for vs in itertools.product(*predictions_per_component))}
         
 
@@ -140,6 +138,14 @@ class FiniteDifferenceMixin:
     """
     A class to approximate derivatives via pysindy's implementation.
     
+    Arguments:
+    ----------
+    finite_difference_order: int:
+        Approximation order.
+    
+    smoother_window_length: Union[None, int]:
+        Ignored if 'None'. Else, window length for smoothing the trajectory before estimating the derivative.
+    
     Methods
     -------
     approximate_derivative(trajectory, times, finite_difference_order, smoother_window_length):
@@ -148,34 +154,33 @@ class FiniteDifferenceMixin:
     get_differentiation_method(finite_difference_order, smoother_window_length):
         Create differentiation method instance.
     """
+    def __init__(
+        self, 
+        finite_difference_order: int = 2,
+        smoother_window_length: Union[None, int] = None,
+    ):
+        if hasattr(self, "finite_difference_order"):
+            # constructur has already been called before
+            # https://stackoverflow.com/questions/34884567/python-multiple-inheritance-passing-arguments-to-constructors-using-super
+            return
+        self.finite_difference_order = finite_difference_order
+        self.smoother_window_length = smoother_window_length
+    
     def approximate_derivative(
         self,
         trajectory: np.ndarray,
         times: np.ndarray,
-        finite_difference_order: Union[None, int] = 2,
-        smoother_window_length: Union[None, int] = None,
     ) -> np.ndarray:
         times = times.squeeze()
         assert len(times.shape) == 1 or np.all(times.shape == trajectory.shape), f"{times.shape} vs {trajectory.shape}"
-        
-        fd = self.get_differentiation_method(
-            finite_difference_order = finite_difference_order, 
-            smoother_window_length = smoother_window_length,
-        )
-        return fd._differentiate(trajectory, times)
+        return self.get_differentiation_method()._differentiate(trajectory, times)
     
-    def get_differentiation_method(
-        self, 
-        finite_difference_order: Union[None, int] = None, 
-        smoother_window_length: Union[None, int] = None,
-    ):
-        if finite_difference_order is None:
-            finite_difference_order = 2
-        if smoother_window_length is None:
-            return FiniteDifference(order=finite_difference_order)
+    def get_differentiation_method(self):
+        if self.smoother_window_length is None:
+            return FiniteDifference(order=self.finite_difference_order)
         return SmoothedFiniteDifference(
-            order=finite_difference_order,
-            smoother_kws={'window_length': smoother_window_length},
+            order=self.finite_difference_order,
+            smoother_kws={'window_length': self.smoother_window_length},
         )
 
 class PredictionIntegrationMixin:

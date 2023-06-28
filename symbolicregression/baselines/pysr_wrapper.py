@@ -1,4 +1,5 @@
-from typing import Dict, List, Union
+from typing import Callable, Dict, List, Union
+from sklearn.metrics import r2_score
 import numpy as np
 import pandas as pd
 import itertools
@@ -16,15 +17,15 @@ class PySRWrapper(PySRRegressor, BatchMixin, PredictionIntegrationMixin, FiniteD
 
     def __init__(
         self, 
-        feature_names: Union[None, List[str]] = None, 
+        feature_names: Union[None, List[str]] = None,
+        finite_difference_order: Union[None, int] = None,
+        smoother_window_length: Union[None, int] = None,
         niterations: int = 40,
         binary_operators: Union[None, List[str]] = None,
         unary_operators: Union[None, List[str]] = None,
         loss: str = "loss(x, y) = (x - y)^2",
         procs: int = 1,
         equation_file: Union[None, str] = "./pysr_hof.csv",
-        *args, 
-        **kwargs,
     ):
         if binary_operators is None:
             binary_operators = ["plus", "sub", "mult", "pow", "div"] 
@@ -37,58 +38,63 @@ class PySRWrapper(PySRRegressor, BatchMixin, PredictionIntegrationMixin, FiniteD
             loss=loss,
             procs=procs,
             equation_file=equation_file,
-            *args, 
-            **kwargs,
         )
         self.feature_names = feature_names
+        self.finite_difference_order = finite_difference_order
+        self.smoother_window_length = smoother_window_length
+        
+    def get_hyper_grid(self) -> Dict:
+        return {
+            "finite_difference_order": [3],
+            "smoother_window_length": [None],
+        }
+        
+    def score(self, times, trajectories, metric: Callable = r2_score) -> float:
+        try:
+            candidates = self._get_equations()
+            assert len(candidates) > 0, candidates
+            pred_trajectory = self.integrate_prediction(
+                times, y0=trajectories[0], prediction=candidates[0][0]
+            )
+            assert pred_trajectory is not None, f"pred_trajectory is None."
+            return metric(trajectories, pred_trajectory)
+        except AssertionError as e:
+            return np.nan
         
     def fit(
         self, 
         times: Union[List[np.ndarray], np.ndarray], 
         trajectories: Union[List[np.ndarray], np.ndarray],
-        finite_difference_order: Union[None, int] = None,
-        smoother_window_length: Union[None, int] = None,
-        *args, # ignored
-        **kwargs, # ignored
     ) -> Dict[int, Union[None, List[str]]]:
         if isinstance(trajectories, List):
-            return self.fit_all(
-                times=times, 
-                trajectories=trajectories,
-                finite_difference_order=finite_difference_order,
-                smoother_window_length=smoother_window_length,
-                *args, **kwargs,
-            )
-        # if self.feature_names is None:
-        #     feature_names = [f"x_{i}" for i in range(trajectories.shape[1])]
-        # else:
-        #     feature_names = self.feature_names
-        feature_names = [f"x_{i}" for i in range(trajectories.shape[1])]
-        
+            return self.fit_all(times=times, trajectories=trajectories)
+        if self.feature_names is None:
+            feature_names = [f"x_{i}" for i in range(trajectories.shape[1])]
+        else:
+            feature_names = self.feature_names
         super().fit(
             X=trajectories, 
             y=self.approximate_derivative(
                 trajectory=trajectories, 
-                times=times,
-                finite_difference_order=finite_difference_order,
-                smoother_window_length=smoother_window_length,
+                times=times
             ).squeeze(),
             variable_names=feature_names,
         )
-        return self._hof_to_equations(self.get_hof())
+        return self._get_equations()
         
-    def _hof_to_equations(
+    def _get_equations(
         self,
-        hof: Union[List[pd.DataFrame], pd.DataFrame],
-        by: str = "score",
-    ) -> Dict[int, Union[str, List[str]]]:
-        
+        hof: Union[None, pd.DataFrame] = None,
+        by: str = "score"
+    ) -> Dict[int, List[str]]:
+        if hof is None:
+            hof = self.get_hof()
         if isinstance(hof, List):
             # We have a list of candidates per dimension and combine them via a Cartesian product.
             # The first returned equation in the result correspond to the pair of best 
             # equations per dimension, for subsequent returned equations the order is arbitrary.
             eqs = []
             for hof_i in hof: # iter across dimensions of ODE system
-                eqs.append(list(self._hof_to_equations(hof_i).values())[0]) # List[List[str]]
+                eqs.append(list(self._get_equations(hof_i).values())[0]) # List[List[str]]
             return {0: list(" | ".join(vs) for vs in itertools.product(*eqs))}
         return {0: hof.sort_values(by=by, ascending=False).sympy_format.apply(str).values.tolist()}
