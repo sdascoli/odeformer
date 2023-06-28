@@ -1,7 +1,9 @@
+from abc import ABC, abstractmethod
 from typing import Dict, List, Union
 from typing_extensions import Literal
 from tqdm.auto import tqdm
 from collections import defaultdict
+from sklearn.model_selection import GridSearchCV
 import sympy
 import torch
 import numpy as np
@@ -12,11 +14,38 @@ from symbolicregression.envs.generators import integrate_ode
 
 __all__ = (
     "BatchMixin", 
+    "GridSearchMixin",
     "FiniteDifferenceMixin", 
     "MultiDimMixin", 
     "PredictionIntegrationMixin", 
     "SympyMixin",
 )
+
+class GridSearchMixin(ABC):
+    
+    @abstractmethod
+    def get_hyper_grid(self) -> Dict:
+        ...
+    
+    def get_n_jobs(self) -> Union[None, int]:
+        return None
+    
+    def get_grid_search(
+        self, 
+        train_idcs: np.ndarray, 
+        test_idcs: np.ndarray,
+        n_jobs: int = None,
+        verbose: int = 1,
+    ) -> GridSearchCV:
+        return GridSearchCV(
+            estimator=self,
+            param_grid=self.get_hyper_grid(),
+            refit = True,
+            cv=[(train_idcs, test_idcs)],
+            verbose=verbose,
+            error_score=np.nan,
+            n_jobs=(self.get_n_jobs() if n_jobs is None else n_jobs),
+        )
 
 class SympyMixin:
     def to_sympy(
@@ -82,10 +111,15 @@ class SympyMixin:
     ):
         return self.to_sympy(eqs=eqs, var_names=var_names, return_type="func", evaluate=evaluate)        
 
-class MultiDimMixin:
+class MultiDimMixin(ABC):
     """
     Mixin for vector valued output. Each component of the output is fit individually.
     """
+    
+    @abstractmethod
+    def fit(self, times: np.ndarray, trajectories: np.ndarray, derivatives: np.ndarray) -> Dict:
+        ...
+    
     def fit_components(
         self, 
         times: np.ndarray, 
@@ -101,7 +135,7 @@ class MultiDimMixin:
         
 
 
-class BatchMixin:
+class BatchMixin(ABC):
     """
     This class lets models iteratively process a list of trajectories.
     The base model needs to implement a fit() method.
@@ -111,6 +145,11 @@ class BatchMixin:
     fit_all(times, trajectories):
         Calls model.fit for every element in times and trajectories.
     """
+    
+    @abstractmethod
+    def fit(self, times: np.ndarray, trajectories: np.ndarray, derivatives: np.ndarray) -> Dict:
+        ...
+    
     def fit_all(
         self,
         times: np.ndarray,
