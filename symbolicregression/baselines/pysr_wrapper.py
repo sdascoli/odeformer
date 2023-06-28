@@ -6,12 +6,16 @@ import itertools
 import tempfile
 from pysr import PySRRegressor
 from symbolicregression.model.mixins import (
+    GridSearchMixin,
     BatchMixin, 
     PredictionIntegrationMixin, 
     FiniteDifferenceMixin,
 )
+from symbolicregression.baselines.baseline_utils import variance_weighted_r2_score
 
-class PySRWrapper(PySRRegressor, BatchMixin, PredictionIntegrationMixin, FiniteDifferenceMixin):
+class PySRWrapper(
+    PySRRegressor, BatchMixin, PredictionIntegrationMixin, FiniteDifferenceMixin, GridSearchMixin,
+):
 
     """Documentation of PySR: https://astroautomata.com/PySR/api/"""
 
@@ -49,7 +53,12 @@ class PySRWrapper(PySRRegressor, BatchMixin, PredictionIntegrationMixin, FiniteD
             "smoother_window_length": [None],
         }
         
-    def score(self, times, trajectories, metric: Callable = r2_score) -> float:
+    def score(
+        self,
+        times: np.ndarray,
+        trajectories: np.ndarray,
+        metric: Callable = variance_weighted_r2_score
+    ) -> float:
         try:
             candidates = self._get_equations()
             assert len(candidates) > 0, candidates

@@ -3,14 +3,19 @@ from multiprocessing import Pool
 from sklearn.base import BaseEstimator
 from sklearn.metrics import r2_score
 from ProGED.equation_discoverer import EqDisco
-from symbolicregression.model.mixins import PredictionIntegrationMixin, BatchMixin
+from symbolicregression.model.mixins import (
+    PredictionIntegrationMixin,
+    BatchMixin,
+    GridSearchMixin,
+)
+from symbolicregression.baselines.baseline_utils import variance_weighted_r2_score
 import re
 import numpy as np
 import pandas as pd
 
 __all__ = ("ProGEDWrapper")
 
-class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin):
+class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin, GridSearchMixin):
     
     def __init__(
         self, 
@@ -43,7 +48,7 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin):
         self,
         times: np.ndarray,
         trajectories: np.ndarray,
-        metric: Callable = r2_score,
+        metric: Callable = variance_weighted_r2_score,
     ) -> float:
         try:
             candidates = self._get_equations()

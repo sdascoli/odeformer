@@ -5,12 +5,15 @@ import traceback
 import numpy as np
 from pysindy import ConcatLibrary, CustomLibrary, PolynomialLibrary, SINDy, optimizers
 from symbolicregression.model.mixins import (
-    BatchMixin, FiniteDifferenceMixin, PredictionIntegrationMixin,
+    GridSearchMixin, BatchMixin, FiniteDifferenceMixin, PredictionIntegrationMixin,
 )
+from symbolicregression.baselines.baseline_utils import variance_weighted_r2_score
 
 __all__ = ("SINDyWrapper", "create_library")
 
-class SINDyWrapper(SINDy, BatchMixin, FiniteDifferenceMixin, PredictionIntegrationMixin):
+class SINDyWrapper(
+    SINDy, BatchMixin, FiniteDifferenceMixin, PredictionIntegrationMixin, GridSearchMixin
+):
     
     """SINDy with default values. You only need to set the names of variables."""
     
@@ -83,7 +86,12 @@ class SINDyWrapper(SINDy, BatchMixin, FiniteDifferenceMixin, PredictionIntegrati
     def _get_equations(self) -> Dict[int, List[Union[None, str]]]:
         return {0: [" | ".join([self._format_equation(eq) for eq in self.equations()])]}
     
-    def score(self, times, trajectories, metric: Callable=r2_score) -> float:
+    def score(
+        self,
+        times: np.ndarray,
+        trajectories: np.ndarray,
+        metric: Callable = variance_weighted_r2_score,
+    ) -> float:
         return super().score(x=trajectories, t=times, metric=metric)
     
     def get_hyper_grid(self) -> Dict[str, List[Any]]:
@@ -95,8 +103,9 @@ class SINDyWrapper(SINDy, BatchMixin, FiniteDifferenceMixin, PredictionIntegrati
             "smoother_window_length": [None, 9],
         }
     
-    
-        
+    def get_n_jobs(self) -> Union[int, None]:
+        return 24
+
         
 def _logarithm_with_error(x):
     y = np.log(x)

@@ -2,8 +2,14 @@ from typing import Any, Callable, Dict, List, Union
 from sklearn.metrics import r2_score
 from ffx import FFXRegressor
 from symbolicregression.model.mixins import (
-    BatchMixin, PredictionIntegrationMixin, FiniteDifferenceMixin, MultiDimMixin, SympyMixin,
+    GridSearchMixin,
+    BatchMixin,
+    PredictionIntegrationMixin,
+    FiniteDifferenceMixin,
+    MultiDimMixin,
+    SympyMixin,
 )
+from symbolicregression.baselines.baseline_utils import variance_weighted_r2_score
 import re
 import numpy as np
 
@@ -16,6 +22,7 @@ class FFXWrapper(
     MultiDimMixin, 
     PredictionIntegrationMixin, 
     SympyMixin,
+    GridSearchMixin,
 ):
     def __init__(
         self, 
@@ -34,7 +41,12 @@ class FFXWrapper(
             "smoother_window_length": [None, 9],
         }
     
-    def score(self, times, trajectories, metric: Callable=r2_score) -> float:
+    def score(
+        self, 
+        times: np.ndarray, 
+        trajectories: np.ndarray, 
+        metric: Callable = variance_weighted_r2_score
+    ) -> float:
         try:
             candidates = self._get_equations()
             assert len(candidates) > 0, candidates

@@ -2,12 +2,14 @@ from typing import Any, Callable, Dict, List, Union
 from sklearn.metrics import r2_score
 from ellyn import ellyn
 from symbolicregression.model.mixins import (
+    GridSearchMixin,
     BatchMixin, 
     FiniteDifferenceMixin,
     PredictionIntegrationMixin,
     MultiDimMixin,
     SympyMixin,
 )
+from symbolicregression.baselines.baseline_utils import variance_weighted_r2_score
 import sympy
 import numpy as np
 
@@ -22,6 +24,7 @@ class EllynMixin(
     MultiDimMixin, 
     PredictionIntegrationMixin, 
     SympyMixin,
+    GridSearchMixin,
 ):
     def __init__(self, **kwargs):
         fd_kwargs = {}
@@ -52,7 +55,7 @@ class EllynMixin(
         self,
         times: np.ndarray,
         trajectories: np.ndarray,
-        metric: Callable = r2_score
+        metric: Callable = variance_weighted_r2_score
     ) -> float:
         try:
             candidates = self._get_equations()
