@@ -1,7 +1,9 @@
+from abc import ABC, abstractmethod
 from typing import Dict, List, Union
 from typing_extensions import Literal
 from tqdm.auto import tqdm
 from collections import defaultdict
+from sklearn.model_selection import GridSearchCV
 import sympy
 import torch
 import numpy as np
@@ -12,11 +14,38 @@ from symbolicregression.envs.generators import integrate_ode
 
 __all__ = (
     "BatchMixin", 
+    "GridSearchMixin",
     "FiniteDifferenceMixin", 
     "MultiDimMixin", 
     "PredictionIntegrationMixin", 
     "SympyMixin",
 )
+
+class GridSearchMixin(ABC):
+    
+    @abstractmethod
+    def get_hyper_grid(self) -> Dict:
+        ...
+    
+    def get_n_jobs(self) -> Union[None, int]:
+        return None
+    
+    def get_grid_search(
+        self, 
+        train_idcs: np.ndarray, 
+        test_idcs: np.ndarray,
+        n_jobs: int = None,
+        verbose: int = 4,
+    ) -> GridSearchCV:
+        return GridSearchCV(
+            estimator=self,
+            param_grid=self.get_hyper_grid(),
+            refit = True,
+            cv=[(train_idcs, test_idcs)],
+            verbose=verbose,
+            error_score=np.nan,
+            n_jobs=(self.get_n_jobs() if n_jobs is None else n_jobs),
+        )
 
 class SympyMixin:
     def to_sympy(
@@ -82,28 +111,31 @@ class SympyMixin:
     ):
         return self.to_sympy(eqs=eqs, var_names=var_names, return_type="func", evaluate=evaluate)        
 
-class MultiDimMixin:
+class MultiDimMixin(ABC):
     """
     Mixin for vector valued output. Each component of the output is fit individually.
     """
+    
+    @abstractmethod
+    def fit(self, times: np.ndarray, trajectories: np.ndarray, derivatives: np.ndarray) -> Dict:
+        ...
+    
     def fit_components(
         self, 
         times: np.ndarray, 
         trajectories: np.ndarray, 
         derivatives: np.ndarray, 
-        *args, 
-        **kwargs,
     ) -> Dict[int, List[str]]:
         assert len(trajectories.shape) == 2, f"len(trajectories.shape) == {len(trajectories.shape)}"
         predictions_per_component: List[List[str]] = []
         for _deriv in derivatives.T:
             # supply all trajectories as input but only single output component to learn a func R^n -> R
-            predictions_per_component.append(self.fit(times, trajectories, _deriv, args, kwargs,)[0])
+            predictions_per_component.append(self.fit(times, trajectories, _deriv)[0])
         return {0: list(" | ".join(vs) for vs in itertools.product(*predictions_per_component))}
         
 
 
-class BatchMixin:
+class BatchMixin(ABC):
     """
     This class lets models iteratively process a list of trajectories.
     The base model needs to implement a fit() method.
@@ -113,6 +145,11 @@ class BatchMixin:
     fit_all(times, trajectories):
         Calls model.fit for every element in times and trajectories.
     """
+    
+    @abstractmethod
+    def fit(self, times: np.ndarray, trajectories: np.ndarray, derivatives: np.ndarray) -> Dict:
+        ...
+    
     def fit_all(
         self,
         times: np.ndarray,
@@ -140,6 +177,14 @@ class FiniteDifferenceMixin:
     """
     A class to approximate derivatives via pysindy's implementation.
     
+    Arguments:
+    ----------
+    finite_difference_order: int:
+        Approximation order.
+    
+    smoother_window_length: Union[None, int]:
+        Ignored if 'None'. Else, window length for smoothing the trajectory before estimating the derivative.
+    
     Methods
     -------
     approximate_derivative(trajectory, times, finite_difference_order, smoother_window_length):
@@ -148,34 +193,33 @@ class FiniteDifferenceMixin:
     get_differentiation_method(finite_difference_order, smoother_window_length):
         Create differentiation method instance.
     """
+    def __init__(
+        self, 
+        finite_difference_order: int = 2,
+        smoother_window_length: Union[None, int] = None,
+    ):
+        if hasattr(self, "finite_difference_order"):
+            # constructur has already been called before
+            # https://stackoverflow.com/questions/34884567/python-multiple-inheritance-passing-arguments-to-constructors-using-super
+            return
+        self.finite_difference_order = finite_difference_order
+        self.smoother_window_length = smoother_window_length
+    
     def approximate_derivative(
         self,
         trajectory: np.ndarray,
         times: np.ndarray,
-        finite_difference_order: Union[None, int] = 2,
-        smoother_window_length: Union[None, int] = None,
     ) -> np.ndarray:
         times = times.squeeze()
         assert len(times.shape) == 1 or np.all(times.shape == trajectory.shape), f"{times.shape} vs {trajectory.shape}"
-        
-        fd = self.get_differentiation_method(
-            finite_difference_order = finite_difference_order, 
-            smoother_window_length = smoother_window_length,
-        )
-        return fd._differentiate(trajectory, times)
+        return self.get_differentiation_method()._differentiate(trajectory, times)
     
-    def get_differentiation_method(
-        self, 
-        finite_difference_order: Union[None, int] = None, 
-        smoother_window_length: Union[None, int] = None,
-    ):
-        if finite_difference_order is None:
-            finite_difference_order = 2
-        if smoother_window_length is None:
-            return FiniteDifference(order=finite_difference_order)
+    def get_differentiation_method(self):
+        if self.smoother_window_length is None:
+            return FiniteDifference(order=self.finite_difference_order)
         return SmoothedFiniteDifference(
-            order=finite_difference_order,
-            smoother_kws={'window_length': smoother_window_length},
+            order=self.finite_difference_order,
+            smoother_kws={'window_length': self.smoother_window_length},
         )
 
 class PredictionIntegrationMixin:
