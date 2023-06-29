@@ -110,19 +110,14 @@ def read_file(filename, label="target", sep=None):
 
 class Evaluator(object):
 
-    ENV = None
-
     def __init__(self, trainer, model):
         """
         Initialize evaluator.
         """
         self.trainer = trainer
         self.model = model
-        # self.modules = trainer.modules
         self.params = trainer.params
         self.env = trainer.env
-        # params = self.params
-        # Evaluator.ENV = trainer.env
         self.save_path = (
             self.params.eval_dump_path
             if self.params.eval_dump_path
@@ -132,10 +127,10 @@ class Evaluator(object):
         )
         if not os.path.exists(self.save_path): os.makedirs(self.save_path)
         
-        if hasattr(self.params, "eval_max_samples"):
-            self.eval_max_samples = self.params.eval_max_samples
+        if hasattr(self.params, "eval_size"):
+            self.eval_size = self.params.eval_size
         else:
-            self.eval_max_samples = -1
+            self.eval_size = -1
 
         self.ablation_to_keep = list(
             map(lambda x: "info_" + x, self.params.ablation_to_keep.split(","))
@@ -145,15 +140,16 @@ class Evaluator(object):
         self.trainer.logger.info("evaluate_on_iterator")
         scores = OrderedDict({"epoch": self.trainer.epoch})
         batch_results = defaultdict(list)
-        for samples_i, (samples, _) in enumerate(
-            tqdm(iterator, total=(self.eval_max_samples if self.eval_max_samples != -1 else len(iterator)))
-        ):
-            if samples_i == self.eval_max_samples:
+        _total = min(self.eval_size, len(iterator)) if self.eval_size > 0 else len(iterator)
+        for samples_i, (samples, _) in enumerate(tqdm(iterator, total=_total)):
+            if samples_i == self.eval_size:
                 break
             times = samples["times"]
             trajectories = samples["trajectory"]
+            assert isinstance(times, List), type(times)
+            assert isinstance(trajectories, List), type(trajectories)
             infos = samples["infos"]
-
+            
             if "tree" in samples.keys():
                 trees = [self.env.simplifier.simplify_tree(tree, expand=True) for tree in samples["tree"]]
                 batch_results["trees"].extend(
@@ -172,19 +168,27 @@ class Evaluator(object):
                 infos['n_masked_variables'] = np.array(n_masked_variables_arr)
                 all_candidates: Dict[int, List[str]] = self.model.fit(times, masked_trajectories, verbose=False, sort_candidates=True)
             else:
-                # if isinstance(self.model, GridSearchCV):
                 if hasattr(self.params, "baseline_hyper_opt") and self.params.baseline_hyper_opt:
-                    if isinstance(times, List):
-                        train_idcs = np.arange(int(np.floor(0.5*len(times[0]))))
-                        test_idcs = np.arange(int(np.floor(0.5*len(times[0]))), len(times[0]))
-                    else:
-                        train_idcs = np.arange(int(np.floor(0.5*len(times))))
-                        test_idcs = np.arange(int(np.floor(0.5*len(times))), len(times))
-                    _model = self.model.get_grid_search(train_idcs, test_idcs)
-                    _model.fit(times[0], trajectories[0])
-                    all_candidates = _model.best_estimator_._get_equations()
+                    all_candidates: Dict[int, List[str]] = {}
+                    for _trajectory_i, (_times, _trajectory) in enumerate(zip(times, trajectories)):
+                        if hasattr(self.params, "baseline_hyper_opt_eval_fraction"):
+                            baseline_hyper_opt_eval_fraction = self.params.baseline_hyper_opt_eval_fraction
+                        if baseline_hyper_opt_eval_fraction is None:
+                            baseline_hyper_opt_eval_fraction = 0.5
+                            logger.warning(
+                                "baseline_hyper_opt_eval_fraction is None. "\
+                                f"Using baseline_hyper_opt_eval_fraction = {baseline_hyper_opt_eval_fraction} instead."
+                            )
+                        train_idcs = np.arange(int(np.floor(baseline_hyper_opt_eval_fraction*len(_times))))
+                        test_idcs = np.arange(int(np.floor(baseline_hyper_opt_eval_fraction*len(_times))), len(_times))
+                        _model = self.model.get_grid_search(train_idcs, test_idcs)
+                        _model.fit(_times, _trajectory)
+                        _all_candidates = _model.best_estimator_._get_equations()
+                        all_candidates[_trajectory_i] = _all_candidates[0]
                 else:
-                    all_candidates: Dict[int, List[str]] = self.model.fit(times, trajectories, verbose=False, sort_candidates=True)
+                    all_candidates: Dict[int, List[str]] = self.model.fit(
+                        times, trajectories, verbose=False, sort_candidates=True
+                    )
 
             best_results = {metric:[] for metric in self.params.validation_metrics.split(',')}
             best_candidates = []
@@ -269,14 +273,12 @@ class Evaluator(object):
         task,
         save=True,
     ):
-
         self.model.rescale = False
         self.trainer.logger.info(
             "====== STARTING EVALUATION IN DOMAIN (multi-gpu: {}) =======".format(
                 self.params.multi_gpu
             )
         )
-
         iterator = self.env.create_test_iterator(
             task,
             data_path=self.trainer.data_path,
@@ -285,28 +287,22 @@ class Evaluator(object):
             size=self.params.eval_size,
             test_env_seed=self.params.test_env_seed,
         )
-
         if save:
             save_file = os.path.join(self.save_path, "eval_in_domain.csv")
-
         scores = self.evaluate_on_iterator(iterator,
                                            save_file)
-        
         if self.params.use_wandb:
             wandb.log({'in_domain_'+metric: scores[metric] for metric in self.params.validation_metrics.split(',')})
-
         return scores
 
     def evaluate_on_pmlb(
         self,
         save=True,
     ):
-        
         self.model.rescale = self.params.rescale
         self.trainer.logger.info(
             "====== STARTING EVALUATION PMLB (multi-gpu: {}) =======".format(self.params.multi_gpu)
         )
-
         iterator = []
         from pmlb import fetch_data, dataset_names
         strogatz_names = [name for name in dataset_names if "strogatz" in name and "2" not in name]
