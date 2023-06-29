@@ -175,12 +175,12 @@ class Evaluator(object):
                             baseline_hyper_opt_eval_fraction = self.params.baseline_hyper_opt_eval_fraction
                         if baseline_hyper_opt_eval_fraction is None:
                             baseline_hyper_opt_eval_fraction = 0.5
-                            logger.warning(
+                            self.trainer.logger.warning(
                                 "baseline_hyper_opt_eval_fraction is None. "\
                                 f"Using baseline_hyper_opt_eval_fraction = {baseline_hyper_opt_eval_fraction} instead."
                             )
-                        train_idcs = np.arange(int(np.floor(baseline_hyper_opt_eval_fraction*len(_times))))
-                        test_idcs = np.arange(int(np.floor(baseline_hyper_opt_eval_fraction*len(_times))), len(_times))
+                        train_idcs = np.arange(int(np.floor(1-baseline_hyper_opt_eval_fraction*len(_times))))
+                        test_idcs = np.arange(int(np.floor(1-baseline_hyper_opt_eval_fraction*len(_times))), len(_times))
                         _model = self.model.get_grid_search(train_idcs, test_idcs)
                         _model.fit(_times, _trajectory)
                         _all_candidates = _model.best_estimator_._get_equations()
