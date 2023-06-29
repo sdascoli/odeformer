@@ -24,32 +24,37 @@ def main(params):
     modules = build_modules(env, params)
     trainer = Trainer(modules, env, params)
 
-    feature_names = [f"x_{i}" for i in range(params.max_dimension)]
-
     if params.baseline_model == "sindy":
         model = SINDyWrapper(
-            feature_names=feature_names,
             optimizer_alpha=0.05,
             optimizer_threshold=0.04,
-            polynomial_degree=2,
+            polynomial_degree=6,
             functions=None, # None means all
+            grid_search_polynomial_degree=True,
         )
-    elif params.baseline_model == "sindy_poly2":    
+    if params.baseline_model == "sindy_save":
         model = SINDyWrapper(
-            feature_names=feature_names,
-            polynomial_degree=2,
+            optimizer_alpha=0.05,
+            optimizer_threshold=0.04,
+            polynomial_degree=6,
+            functions=["sin", "cos", "exp"],
+            grid_search_polynomial_degree=True,
+        )
+    elif params.baseline_model == "sindy_poly":    
+        model = SINDyWrapper(
+            polynomial_degree=6,
             functions=[], # only polynomials
+            grid_search_polynomial_degree=True,
         )
     elif params.baseline_model == "sindy_poly3":    
         model = SINDyWrapper(
-            feature_names=feature_names,
             polynomial_degree=3,
             functions=[], # only polynomials
         )
     elif params.baseline_model == "pysr":
-        model = PySRWrapper(feature_names=feature_names)
+        model = PySRWrapper()
     elif params.baseline_model == "proged":
-        model = ProGEDWrapper(feature_names=feature_names)
+        model = ProGEDWrapper()
     elif params.baseline_model == "afp":
         model = AFPWrapper()
     elif params.baseline_model == "ehc":
@@ -60,35 +65,18 @@ def main(params):
         model = FEAFPWrapper()
     elif params.baseline_model == "ffx":
         model = FFXWrapper()
-    
-    times = np.linspace(1, 3, 256, endpoint=True)
-    trajectory = np.exp(times).reshape(-1, 1).repeat(repeats=2, axis=1)
-    param_grid = model.get_hyper_grid()
-    train_idcs = np.arange(int(np.floor(0.5*len(times))))
-    test_idcs = np.arange(int(np.floor(0.5*len(times))), len(times))
-    # gscv = GridSearchCV(
-    #     estimator=model,
-    #     param_grid=param_grid,
-    #     refit = True,
-    #     cv=[(train_idcs, test_idcs)],
-    #     verbose=4,
-    #     error_score=np.nan,
-    #     n_jobs=None,
-    # )
-    # gscv.fit(times, trajectory)
-    # model = gscv.best_estimator_
-    # candidates = model._get_equations()
-    # print(candidates)
-    # print("Done.")
-    
+        
     evaluator_default = Evaluator(trainer, model)
     
-    if params.eval_on_file is not None:
+    if params.eval_on_file:
         scores = evaluator_default.evaluate_on_file(
             path=params.eval_on_file, save=params.save_results, seed=13,
         )
         _name = Path(params.eval_on_file).name
         # format_and_save(params, scores, batch_results, str(_name))
+        
+    if params.eval_on_pmlb:
+        scores = evaluator_default.evaluate_on_pmlb(save=params.save_results)
     
 if __name__ == "__main__":
     BASE = "experiments/baselines"
@@ -96,12 +84,12 @@ if __name__ == "__main__":
     
     parser.add_argument("--baseline_model", 
         type=str, default="sindy_poly3",
-        choices=["proged", "pysr", "sindy_poly3", "sindy_poly2", "sindy", "afp", "feafp", "eplex", "ehc", "ffx",]
+        choices=["afp", "feafp", "ffx", "eplex", "ehc", "proged", "pysr", "sindy", "sindy_save", "sindy_poly", "sindy_poly3",]
     )
     
     params = parser.parse_args()
-    params.eval_size = 100
-    params.max_dimension = 6
+    params.eval_size = 1
+    params.max_dimension = 2
     params.num_workers = 1
     params.is_slurm_job = False
     params.local_rank = -1
@@ -111,17 +99,19 @@ if __name__ == "__main__":
     
     #params.use_two_hot=True
     params.debug = True
-    params.validation_metrics = 'r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio'
+    params.validation_metrics = 'r2,r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio'
     params.eval_only = True
     params.cpu = True
     params.baseline_hyper_opt = True
+    params.baseline_hyper_opt_eval_fraction = 0.25
     params.eval_on_pmlb = True
+    # params.eval_on_file = False
     # params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/data.prefix.test.pkl"
     params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/polynomial_2d.txt.pkl"
-    params.eval_max_samples = 20
+    # params.eval_on_pmlb = True
     # params.eval_on_file = "experiments/datagen_poly/datagen_use_sympy_True/data.prefix.test"
     
-    params.dump_path = f"{BASE}/nb_model_generic_evaluation/{params.baseline_model}"
+    params.dump_path = f"{BASE}/baseline_results/{params.baseline_model}"
     params.eval_dump_path = f"{BASE}/nb_model_generic_evaluation/{params.baseline_model}/hyper_opt_{params.baseline_hyper_opt}"
     
     symbolicregression.utils.CUDA = not params.cpu
@@ -134,8 +124,9 @@ if __name__ == "__main__":
     if not params.cpu:
         assert torch.cuda.is_available()
     
+    print(params)
+    
     main(params)
     
-    # TODO: how to deal with batches
-    # TODO: adjust evaluate.py
     # TODO: test all models
+    # TODO: add install instructions
