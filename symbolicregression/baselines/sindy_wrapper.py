@@ -64,12 +64,16 @@ class SINDyWrapper(
         # <coef> <space> 1 -> <coef> * 1
         expr = re.sub(r"(\d+\.?\d*) (1)", repl=r"\1 * \2", string=expr)
         # <coef> <space> <var> -> <coef> * <var>
-        for var_name in self.get_feature_names():
-            expr = re.sub(fr"(\d+\.?\d*) ({var_name})", repl=r"\1 * \2", string=expr)
+        expr = re.sub(r"(\d+\.?\d*) (x_\d+)", repl=r"\1 * \2", string=expr)
+        # <var> <space> <var> -> <coef> * <var>
+        expr = re.sub(r"(x_\d+) (x_\d+)", repl=r"\1 * \2", string=expr)
         # python power symbol
         expr = expr.replace("^", "**")
         return expr
     
+    def get_feature_names(self) -> List[str]:
+        return [re.sub(fr"(x)(\d)", repl=r"\1_\2", string=name) for name in self.feature_names]
+
     def fit(
         self,
         times: Union[List, np.ndarray],
