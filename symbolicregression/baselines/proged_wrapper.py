@@ -1,4 +1,4 @@
-from typing import Callable, Dict, List, Literal, Union
+from typing import Any, Callable, Dict, List, Literal, Union, get_args
 from multiprocessing import Pool
 from sklearn.base import BaseEstimator
 from sklearn.metrics import r2_score
@@ -15,26 +15,30 @@ import pandas as pd
 
 __all__ = ("ProGEDWrapper")
 
+# https://github.com/brencej/ProGED/blob/main/ProGED/generators/grammar_construction.py#L308
+GRAMMARS = Literal["universal", "rational", "simplerational", "trigonometric", "polynomial"]
+
 class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin, GridSearchMixin):
     
     def __init__(
         self, 
-        feature_names: List[str],
         num_candidates: int = 16, 
         verbosity: int = 1, 
         num_workers: int = 1,
         debug: bool = True,
-        generator_template_name: Literal["polynomial",] = "polynomial"
+        generator_template_name: GRAMMARS = "polynomial"
     ):
-        self.feature_names = feature_names
         self.num_candidates = num_candidates
         self.verbosity = verbosity
         self.num_workers = num_workers
         self.debug = debug
         self.generator_template_name = generator_template_name
         
-    def get_hyper_grid(self) -> Dict:
-        return {}
+    def get_hyper_grid(self) -> Dict[str, Any]:
+        return {"generator_template_name": list(get_args(GRAMMARS))}
+    
+    def get_n_jobs(self) -> int:
+        return None
         
     def set_params(self, **params: Dict):
         for key, value in params.items():
@@ -76,17 +80,18 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin, GridS
             f"{times.shape[0]} vs {trajectories.shape[0]}"
         if generator_template_name is None:
             generator_template_name = self.generator_template_name
+        feature_names = [f"x_{i}" for i in range(trajectories.shape[1])]
         data = pd.DataFrame(
             np.hstack((times.reshape(-1,1), trajectories)), 
-            columns=['t']+self.feature_names,
+            columns=['t']+feature_names,
         )
         self.ED = EqDisco(
             data = data,
             task_type="differential", 
-            lhs_vars = self.feature_names,
-            rhs_vars = ["t"] + self.feature_names,
+            lhs_vars = feature_names,
+            rhs_vars = ["t"] + feature_names,
             sample_size = self.num_candidates,
-            system_size = len(self.feature_names),
+            system_size = len(feature_names),
             generator_template_name = generator_template_name,
             strategy_settings = {"max_repeat": 100},
             verbosity=verbose if verbose is not None else self.verbosity,
