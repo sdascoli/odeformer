@@ -7,8 +7,6 @@ from symbolicregression.baselines.ellyn_wrapper import (
 from symbolicregression.baselines.proged_wrapper import ProGEDWrapper
 from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
 
-from sklearn.model_selection import GridSearchCV
-
 def format_and_save(params, scores, batch_results, name):
     scores = pd.DataFrame(scores, index=[0]).T
     scores.to_csv(
@@ -99,15 +97,16 @@ if __name__ == "__main__":
     
     #params.use_two_hot=True
     params.debug = True
-    params.validation_metrics = 'r2,r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio'
+    params.validation_metrics = 'r2,r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio,complexity,term_difference,is_valid'
     params.eval_only = True
     params.cpu = True
     params.baseline_hyper_opt = True
     params.baseline_hyper_opt_eval_fraction = 0.25
+    params.baseline_to_sympy = True
     params.eval_on_pmlb = True
-    # params.eval_on_file = False
+    params.eval_on_file = False
     # params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/data.prefix.test.pkl"
-    params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/polynomial_2d.txt.pkl"
+    # params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/polynomial_2d.txt.pkl"
     # params.eval_on_pmlb = True
     # params.eval_on_file = "experiments/datagen_poly/datagen_use_sympy_True/data.prefix.test"
     
