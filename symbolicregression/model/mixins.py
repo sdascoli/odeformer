@@ -35,7 +35,7 @@ class GridSearchMixin(ABC):
         train_idcs: np.ndarray, 
         test_idcs: np.ndarray,
         n_jobs: int = None,
-        verbose: int = 1,
+        verbose: int = 4,
     ) -> GridSearchCV:
         return GridSearchCV(
             estimator=self,
