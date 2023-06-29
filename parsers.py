@@ -291,7 +291,7 @@ def get_parser():
     )
     parser.add_argument(
         "--beam_temperature",
-        type=int,
+        type=float,
         default=0.1,
         help="Beam temperature for sampling",
     )

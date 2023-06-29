@@ -75,7 +75,7 @@ def main(params):
     exit()
         
     if params.eval_on_file is not None:
-        scores, batch_results = evaluator_default.evaluate_on_file(
+        scores = evaluator_default.evaluate_on_file(
             path=params.eval_on_file, save=params.save_results, seed=13,
         )
         _name = Path(params.eval_on_file).name
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     parser = get_parser()
     
     parser.add_argument("--baseline_model", 
-        type=str, default="sindy_poly3",
+        type=str, default="sindy",
         choices=["proged", "pysr", "sindy_poly3", "sindy_poly2", "sindy", "afp", "feafp", "eplex", "ehc", "ffx",]
     )
     
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     params.cpu = True
     
     params.eval_on_pmlb = True
-    params.eval_on_file = "experiments/datagen_poly/datagen_use_sympy_True/data.prefix.test"
+    #params.eval_on_file = "experiments/datagen_general/datagen_use_sympy_True/data.prefix.test"
     
     symbolicregression.utils.CUDA = not params.cpu
     if params.batch_size_eval is None:
