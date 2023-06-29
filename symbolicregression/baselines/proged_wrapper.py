@@ -71,6 +71,7 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin, GridS
         trajectories: Union[List[np.ndarray], np.ndarray],
         verbose: Union[None, bool] = None,
         generator_template_name: Union[None, Literal["polynomial",]] = None,
+        *args, **kwargs, # ignored, for compatibility only
     ) -> Dict[int, List[Union[None, str]]]:
         if isinstance(trajectories, List):
             return self.fit_all(times=times, trajectories=trajectories)

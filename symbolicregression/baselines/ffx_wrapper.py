@@ -63,6 +63,7 @@ class FFXWrapper(
         times: Union[List[np.ndarray], np.ndarray], 
         trajectories: Union[List, np.ndarray],
         derivatives: Union[None, np.ndarray] = None,
+        *args, **kwargs, # ignored, for compatibility only
     ) -> Dict[int, List[str]]:
         if isinstance(trajectories, List):
             self.final_equations = self.fit_all(times=times, trajectories=trajectories)

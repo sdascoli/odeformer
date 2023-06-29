@@ -79,6 +79,7 @@ class SINDyWrapper(
         times: Union[List, np.ndarray],
         trajectories: Union[List, np.ndarray],
         average_trajectories: bool = False,
+        *args, **kwargs, # ignored, for compatibility only
     ) -> Dict[int, Union[None, List[str]]]:
         
         if isinstance(trajectories, List) and not average_trajectories:

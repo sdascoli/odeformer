@@ -73,6 +73,7 @@ class EllynMixin(
         times: Union[List[np.ndarray], np.ndarray],
         trajectories: Union[List[np.ndarray], np.ndarray],
         derivatives: Union[None, np.ndarray] = None,
+        *args, **kwargs, # ignored, for compatibility only
     ) -> Dict[int, List[str]]:
 
         if isinstance(trajectories, List):

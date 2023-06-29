@@ -77,6 +77,7 @@ class PySRWrapper(
         self, 
         times: Union[List[np.ndarray], np.ndarray], 
         trajectories: Union[List[np.ndarray], np.ndarray],
+        *args, **kwargs, # ignored, for compatibility only
     ) -> Dict[int, Union[None, List[str]]]:
         if isinstance(trajectories, List):
             return self.fit_all(times=times, trajectories=trajectories)
