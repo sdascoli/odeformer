@@ -19,10 +19,10 @@ __all__ = ("AFPWrapper", "EHCWrapper", "EPLEXWrapper", "FEAFPWrapper",)
 # https://github.com/cavalab/ellyn/blob/master/environment.yml"""
 
 class EllynMixin(
-    BatchMixin, 
-    FiniteDifferenceMixin, 
-    MultiDimMixin, 
-    PredictionIntegrationMixin, 
+    BatchMixin,
+    FiniteDifferenceMixin,
+    MultiDimMixin,
+    PredictionIntegrationMixin,
     SympyMixin,
     GridSearchMixin,
 ):
@@ -122,6 +122,9 @@ class EllynMixin(
                 eqs.append(self._parse_sympy(e))
             return eqs
         return str(sympy.parse_expr(eq))    
+    
+    def get_n_jobs(self) -> int:
+        return 24
 
 
 class AFPWrapper(EllynMixin):
