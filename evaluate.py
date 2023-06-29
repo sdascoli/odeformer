@@ -180,6 +180,7 @@ class Evaluator(object):
                             len(_times),
                             dtype=int
                         )
+                        assert len(set(train_idcs).intersection(test_idcs)) == 0, "`train_idcs` and `test_idcs` overlap."
                         _model = self.model.get_grid_search(train_idcs, test_idcs)
                         _model.fit(_times, _trajectory)
                         _all_candidates = _model.best_estimator_._get_equations()
