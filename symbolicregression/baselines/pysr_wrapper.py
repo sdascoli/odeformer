@@ -21,7 +21,6 @@ class PySRWrapper(
 
     def __init__(
         self, 
-        feature_names: Union[None, List[str]] = None,
         finite_difference_order: Union[None, int] = None,
         smoother_window_length: Union[None, int] = None,
         niterations: int = 40,
@@ -43,14 +42,18 @@ class PySRWrapper(
             procs=procs,
             equation_file=equation_file,
         )
-        self.feature_names = feature_names
         self.finite_difference_order = finite_difference_order
         self.smoother_window_length = smoother_window_length
         
     def get_hyper_grid(self) -> Dict:
         return {
-            "finite_difference_order": [3],
-            "smoother_window_length": [None],
+            "unary_operators": [
+                ["cos", "exp", "sin", "neg", "log", "sqrt",], 
+                ["cos", "exp", "sin", "neg",]
+            ],
+            "niterations": [40, 100],
+            # "finite_difference_order": [3],
+            # "smoother_window_length": [None],
         }
         
     def score(
@@ -77,10 +80,7 @@ class PySRWrapper(
     ) -> Dict[int, Union[None, List[str]]]:
         if isinstance(trajectories, List):
             return self.fit_all(times=times, trajectories=trajectories)
-        if self.feature_names is None:
-            feature_names = [f"x_{i}" for i in range(trajectories.shape[1])]
-        else:
-            feature_names = self.feature_names
+        feature_names = [f"x_{i}" for i in range(trajectories.shape[1])]
         super().fit(
             X=trajectories, 
             y=self.approximate_derivative(
