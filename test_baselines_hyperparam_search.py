@@ -111,8 +111,8 @@ if __name__ == "__main__":
     # params.eval_on_pmlb = True
     # params.eval_on_file = "experiments/datagen_poly/datagen_use_sympy_True/data.prefix.test"
     
-    params.dump_path = f"{BASE}/baseline_results/{params.baseline_model}"
-    params.eval_dump_path = f"{BASE}/nb_model_generic_evaluation/{params.baseline_model}/hyper_opt_{params.baseline_hyper_opt}"
+    params.dump_path = f"{BASE}/baseline_results/{params.baseline_model}/hyper_opt_{params.baseline_hyper_opt}"
+    params.eval_dump_path = f"{BASE}/baseline_results/{params.baseline_model}/hyper_opt_{params.baseline_hyper_opt}"
     
     symbolicregression.utils.CUDA = not params.cpu
     if params.batch_size_eval is None:
