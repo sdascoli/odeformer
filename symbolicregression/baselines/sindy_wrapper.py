@@ -19,7 +19,6 @@ class SINDyWrapper(
     
     def __init__(
         self, 
-        feature_names: List[str], 
         polynomial_degree: Union[None, int] = None,
         functions: Union[None, List[str]] = None,
         optimizer_threshold: Union[None, float] = None,
@@ -28,18 +27,19 @@ class SINDyWrapper(
         finite_difference_order: Union[None, int] = None,
         smoother_window_length: Union[None, int] = None,
         debug: bool = False,
+        grid_search_polynomial_degree: bool = False,
     ):
         fd_kwargs = {"smoother_window_length": smoother_window_length}
         if finite_difference_order is not None:
             fd_kwargs["finite_difference_order"] = finite_difference_order
         FiniteDifferenceMixin.__init__(self, **fd_kwargs)
-        self.feature_names = feature_names
         self.polynomial_degree = polynomial_degree
         self.functions = functions
         self.optimizer_threshold = optimizer_threshold
         self.optimizer_alpha = optimizer_alpha
         self.optimizer_max_iter = optimizer_max_iter
         self.debug = debug
+        self.grid_search_polynomial_degree = grid_search_polynomial_degree
         
         feature_library = create_library(
             degree=self.polynomial_degree, functions=self.functions,
@@ -53,16 +53,20 @@ class SINDyWrapper(
             optim_kwargs["max_iter"] = self.optimizer_max_iter
         optimizer = optimizers.STLSQ(**optim_kwargs)
         super().__init__(
-            feature_names=feature_names,
             feature_library=feature_library,
             optimizer=optimizer,
             differentiation_method=self.get_differentiation_method(),
         )
     
     def _format_equation(self, expr: str) -> str:
+        # x0, x1, ... -> x_0, x_1, ...
+        expr = re.sub(fr"(x)(\d)", repl=r"\1_\2", string=expr)
+        # <coef> <space> 1 -> <coef> * 1
         expr = re.sub(r"(\d+\.?\d*) (1)", repl=r"\1 * \2", string=expr)
-        for var_name in self.feature_names:
+        # <coef> <space> <var> -> <coef> * <var>
+        for var_name in self.get_feature_names():
             expr = re.sub(fr"(\d+\.?\d*) ({var_name})", repl=r"\1 * \2", string=expr)
+        # python power symbol
         expr = expr.replace("^", "**")
         return expr
     
@@ -95,13 +99,16 @@ class SINDyWrapper(
         return super().score(x=trajectories, t=times, metric=metric)
     
     def get_hyper_grid(self) -> Dict[str, List[Any]]:
-        return {
-            "optimizer_threshold": [0.01, 0.05, 0.1, 0.15, 0.2],
-            "optimizer_alpha": [0.025, 0.05, 0.075, 0.1],
-            "optimizer_max_iter": [20, 100],
-            "finite_difference_order": [2, 3, 4, 5],
-            "smoother_window_length": [None, 9],
+        hparams = {
+            "optimizer_threshold": list(set([0.05, 0.1, 0.15, self.optimizer_threshold])),
+            "optimizer_alpha": list(set([0.025, 0.05, 0.075, self.optimizer_alpha])),
+            "optimizer_max_iter": list(set([20, 100, self.optimizer_max_iter])),
+            # "finite_difference_order": list(set([2, self.finite_difference_order])),
+            # "smoother_window_length": list(set([None, 9, self.smoother_window_length])),
         }
+        if self.grid_search_polynomial_degree:
+            hparams["polynomial_degree"] = np.arange(self.polynomial_degree+1, dtype=int)
+        return hparams
     
     def get_n_jobs(self) -> Union[int, None]:
         return 24
