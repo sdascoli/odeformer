@@ -17,7 +17,6 @@ import os
 import torch
 import numpy as np
 from copy import deepcopy
-from sklearn.model_selection import GridSearchCV
 from symbolicregression.utils import to_cuda
 import glob
 import scipy
@@ -31,6 +30,7 @@ from symbolicregression.slurm import init_signal_handler, init_distributed_mode
 from symbolicregression.utils import bool_flag, initialize_exp
 from symbolicregression.model import check_model_params, build_modules
 from symbolicregression.envs import build_env
+from symbolicregression.envs.generators import NodeList
 from symbolicregression.trainer import Trainer
 from symbolicregression.model.sklearn_wrapper import SymbolicTransformerRegressor
 from symbolicregression.model.model_wrapper import ModelWrapper
@@ -189,7 +189,17 @@ class Evaluator(object):
                     all_candidates: Dict[int, List[str]] = self.model.fit(
                         times, trajectories, verbose=False, sort_candidates=True
                     )
-
+            if hasattr(self.params, "to_sympy") and self.params.baseline_to_sympy:
+                try: 
+                    _all_candidates = self.model.to_sympy(
+                        eqs=_all_candidates, 
+                        var_names=[f"x_{i}" for i in range(self.params.max_dimension)],
+                        return_type=str,
+                        evaluate=True,
+                    )
+                except: 
+                    # e.g. model does not implement to_sympy()
+                    pass 
             best_results = {metric:[] for metric in self.params.validation_metrics.split(',')}
             best_candidates = []
             for time, trajectory, tree, candidates in zip(times, trajectories, trees, all_candidates.values()):
@@ -201,9 +211,11 @@ class Evaluator(object):
                 time, idx = sorted(time), np.argsort(time)
                 trajectory = trajectory[idx]
                 best_candidate = candidates[0] # candidates are sorted
+                if isinstance(best_candidate, str):
+                    best_candidate = self.str_to_tree(best_candidate)
                 try: best_candidate = self.env.simplifier.simplify_tree(best_candidate, expand=True)
                 except: pass
-                # TODO: check dim
+
                 pred_trajectory = self.model.integrate_prediction(
                     time, y0=trajectory[0], prediction=best_candidate
                 )
@@ -299,6 +311,27 @@ class Evaluator(object):
         self,
         save=True,
     ):
+        def format_strogatz_equation(eq):
+            return " | ".join(
+                [
+                    str(
+                        sympy.parse_expr(
+                            comp.replace("u(1)", "x_0").replace("u(2)", "x_1").replace("^", "**")
+                        )
+                    )
+                    for comp in eq.split("|")
+                ]
+            )
+        strogatz_equations = {
+            "strogatz_bacres1": '20-u(1) - (u(1)*u(2)/(1+0.5*u(1)^2)) | 10 - (u(1)*u(2)/(1+0.5*u(1)^2))',
+            "strogatz_barmag1": '0.5*sin(u(1)-u(2))-sin(u(1)) | 0.5*sin(u(2)-u(1)) - sin(u(2))',
+            "strogatz_glider1": '-0.05*u(1)^2-sin(u(2)) | u(1) - cos(u(2))/u(1)',
+            "strogatz_lv1": '3*u(1)-2*u(1)*u(2)-u(1)^2 | 2*u(2)-u(1)*u(2)-u(2)^2',
+            "strogatz_predprey1": 'u(1)*(4-u(1)-u(2)/(1+u(1))) | u(2)*(u(1)/(1+u(1))-0.075*u(2))',
+            "strogatz_shearflow1": '(cos(u(2))/sin(u(2)))*cos(u(1)) | (cos(u(2))^2+0.1*sin(u(2))^2)*sin(u(1))', # replaced cot(x) with cos(x) / sin(x)
+            "strogatz_vdp1": '10*(u(2)-(1/3*(u(1)^3-u(1)))) | -1/10*u(1)',
+        }
+        
         self.model.rescale = self.params.rescale
         self.trainer.logger.info(
             "====== STARTING EVALUATION PMLB (multi-gpu: {}) =======".format(self.params.multi_gpu)
@@ -312,7 +345,12 @@ class Evaluator(object):
             x = data['x'].values.reshape(-1,1)
             y = data['y'].values.reshape(-1,1)
             samples = defaultdict(list)
-            samples['infos'] = {'dimension':2, 'n_unary_ops':0, 'n_input_points':100, 'name':name}
+            samples['infos'] = {
+                'dimension': 2,
+                'n_unary_ops': 0,
+                'n_input_points': 100,
+                'name': name,
+            }
             for k,v in samples['infos'].items():
                 samples['infos'][k] = np.array([v]*4)
             for j in range(4):
@@ -322,11 +360,10 @@ class Evaluator(object):
                 times_, trajectory_ = self.env.generator._subsample_trajectory(times, trajectory, subsample_ratio=self.params.subsample_ratio)
                 samples['times'].append(times_)
                 samples['trajectory'].append(trajectory_)
+                samples['tree'].append(self.str_to_tree(format_strogatz_equation(strogatz_equations[name])))
             iterator.append((samples, None))
-
         if save:
             save_file = os.path.join(self.save_path, "eval_pmlb.csv")
-
         scores = self.evaluate_on_iterator(iterator,save_file)
 
         if self.params.use_wandb:
@@ -383,6 +420,11 @@ class Evaluator(object):
 
         return scores
     
+    def str_to_tree(self, expr: str):
+        exprs = [sympy.parse_expr(e) for e in expr.split("|")]
+        nodes = [self.env.simplifier.sympy_expr_to_tree(e) for e in exprs]
+        return NodeList(nodes)
+    
     def evaluate_on_file(self, path: str, save: bool, seed: Union[None, int]):
         _filename = Path(path).name
         if path.endswith(".pkl"):
@@ -398,16 +440,10 @@ class Evaluator(object):
                 for line_i, line in enumerate(f):
                     samples = defaultdict(list)
                     line = line.rstrip("\n")
+                    tree = self.str_to_tree(line)
                     eqs = line.split("|")
                     dim = len(eqs)
                     var_names = [f"x_{k}" for k in range(dim)]
-                    # eqs = [sympy.parse_expr(eq) for eq in eqs]
-                    # component_funcs = [sympy.lambdify(",".join(var_names), eq) for eq in eqs]
-                    # def ode_func(*args):
-                    #     outputs = []
-                    #     for cf in component_funcs:
-                    #         outputs.append(cf(*args))
-                    #     return np.array(outputs).squeeze()
                     y0 = np.ones(len(var_names))
                     times = np.linspace(0, 5, 256)
                     trajectory = self.model.integrate_prediction(
@@ -426,6 +462,7 @@ class Evaluator(object):
                     }
                     samples['times'].append(times)
                     samples["trajectory"].append(trajectory)
+                    samples['tree'].append(tree)
                     iterator.append((samples, None))
             with open(path+".pkl", "wb") as fpickle:
                 pickle.dump(iterator, fpickle)
