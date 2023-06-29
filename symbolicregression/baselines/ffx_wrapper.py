@@ -37,8 +37,8 @@ class FFXWrapper(
     
     def get_hyper_grid(self) -> Dict[str, List[Any]]:
         return {
-            "finite_difference_order": [2, 3, 4, 5],
-            "smoother_window_length": [None, 9],
+            #"finite_difference_order": [2, 3, 4, 5],
+            #"smoother_window_length": [None, 9],
         }
     
     def score(
