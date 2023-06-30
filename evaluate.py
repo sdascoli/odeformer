@@ -212,7 +212,8 @@ class Evaluator(object):
                 trajectory = trajectory[idx]
                 best_candidate = candidates[0] # candidates are sorted
                 if isinstance(best_candidate, str):
-                    best_candidate = self.str_to_tree(best_candidate)
+                    try: best_candidate = self.str_to_tree(best_candidate)
+                    except: pass
                 pred_trajectory = self.model.integrate_prediction(
                     time, y0=trajectory[0], prediction=best_candidate
                 )
@@ -309,79 +310,83 @@ class Evaluator(object):
     def evaluate_on_pmlb(
         self,
         save=True,
+        path_dataset=None,
     ):
-        def format_strogatz_equation(eq):
-            return " | ".join(
-                [
-                    str(
-                        sympy.parse_expr(
-                            comp.replace("u(1)", "x_0").replace("u(2)", "x_1").replace("^", "**")
+        if path_dataset is not None and os.path.exists(path_dataset):
+            iterator = pd.read_pickle(path_dataset)
+        else:
+            def format_strogatz_equation(eq):
+                return " | ".join(
+                    [
+                        str(
+                            sympy.parse_expr(
+                                comp.replace("u(1)", "x_0").replace("u(2)", "x_1").replace("^", "**")
+                            )
                         )
-                    )
-                    for comp in eq.split("|")
-                ]
-            )
-        strogatz_equations = {
-            "strogatz_bacres1": '20-u(1) - (u(1)*u(2)/(1+0.5*u(1)^2)) | 10 - (u(1)*u(2)/(1+0.5*u(1)^2))',
-            "strogatz_barmag1": '0.5*sin(u(1)-u(2))-sin(u(1)) | 0.5*sin(u(2)-u(1)) - sin(u(2))',
-            "strogatz_glider1": '-0.05*u(1)^2-sin(u(2)) | u(1) - cos(u(2))/u(1)',
-            "strogatz_lv1": '3*u(1)-2*u(1)*u(2)-u(1)^2 | 2*u(2)-u(1)*u(2)-u(2)^2',
-            "strogatz_predprey1": 'u(1)*(4-u(1)-u(2)/(1+u(1))) | u(2)*(u(1)/(1+u(1))-0.075*u(2))',
-            "strogatz_shearflow1": '(cos(u(2))/sin(u(2)))*cos(u(1)) | (cos(u(2))^2+0.1*sin(u(2))^2)*sin(u(1))', # replaced cot(x) with cos(x) / sin(x)
-            "strogatz_vdp1": '10*(u(2)-(1/3*(u(1)^3-u(1)))) | -1/10*u(1)',
-        }
-        
-        self.model.rescale = self.params.rescale
-        self.trainer.logger.info(
-            "====== STARTING EVALUATION PMLB (multi-gpu: {}) =======".format(self.params.multi_gpu)
-        )
-        iterator = []
-        from pmlb import fetch_data, dataset_names
-        strogatz_names = [name for name in dataset_names if "strogatz" in name and "2" not in name]
-        times = np.linspace(0, 10, 100)
-        for name in strogatz_names:
-            data = fetch_data(name)
-            x = data['x'].values.reshape(-1,1)
-            y = data['y'].values.reshape(-1,1)
-            samples = defaultdict(list)
-            samples['infos'] = {
-                'dimension': 2,
-                'n_unary_ops': 0,
-                'n_input_points': 100,
-                'name': name,
+                        for comp in eq.split("|")
+                    ]
+                )
+            strogatz_equations = {
+                "strogatz_bacres1": '20-u(1) - (u(1)*u(2)/(1+0.5*u(1)^2)) | 10 - (u(1)*u(2)/(1+0.5*u(1)^2))',
+                "strogatz_barmag1": '0.5*sin(u(1)-u(2))-sin(u(1)) | 0.5*sin(u(2)-u(1)) - sin(u(2))',
+                "strogatz_glider1": '-0.05*u(1)^2-sin(u(2)) | u(1) - cos(u(2))/u(1)',
+                "strogatz_lv1": '3*u(1)-2*u(1)*u(2)-u(1)^2 | 2*u(2)-u(1)*u(2)-u(2)^2',
+                "strogatz_predprey1": 'u(1)*(4-u(1)-u(2)/(1+u(1))) | u(2)*(u(1)/(1+u(1))-0.075*u(2))',
+                "strogatz_shearflow1": '(cos(u(2))/sin(u(2)))*cos(u(1)) | (cos(u(2))^2+0.1*sin(u(2))^2)*sin(u(1))', # replaced cot(x) with cos(x) / sin(x)
+                "strogatz_vdp1": '10*(u(2)-(1/3*(u(1)^3-u(1)))) | -1/10*u(1)',
             }
-            for k,v in samples['infos'].items():
-                samples['infos'][k] = np.array([v]*4)
-            for j in range(4):
-                start = j * len(times)
-                stop = (j+1) * len(times)
-                trajectory = np.concatenate((x[start:stop], y[start:stop]),axis=1)
-                times_, trajectory_ = self.env.generator._subsample_trajectory(times, trajectory, subsample_ratio=self.params.subsample_ratio)
-                samples['times'].append(times_)
-                samples['trajectory'].append(trajectory_)
-                samples['tree'].append(self.str_to_tree(format_strogatz_equation(strogatz_equations[name])))
-            iterator.append((samples, None))
+            
+            self.model.rescale = self.params.rescale
+            self.trainer.logger.info(
+                "====== STARTING EVALUATION PMLB (multi-gpu: {}) =======".format(self.params.multi_gpu)
+            )
+            iterator = []
+            from pmlb import fetch_data, dataset_names
+            strogatz_names = [name for name in dataset_names if "strogatz" in name and "2" not in name]
+            times = np.linspace(0, 10, 100)
+            for name in strogatz_names:
+                data = fetch_data(name)
+                x = data['x'].values.reshape(-1,1)
+                y = data['y'].values.reshape(-1,1)
+                samples = defaultdict(list)
+                samples['infos'] = {
+                    'dimension': 2,
+                    'n_unary_ops': 0,
+                    'n_input_points': 100,
+                    'name': name,
+                }
+                for k,v in samples['infos'].items():
+                    samples['infos'][k] = np.array([v]*4)
+                for j in range(4):
+                    start = j * len(times)
+                    stop = (j+1) * len(times)
+                    trajectory = np.concatenate((x[start:stop], y[start:stop]),axis=1)
+                    times_, trajectory_ = self.env.generator._subsample_trajectory(times, trajectory, subsample_ratio=self.params.subsample_ratio)
+                    samples['times'].append(times_)
+                    samples['trajectory'].append(trajectory_)
+                    samples['tree'].append(self.str_to_tree(format_strogatz_equation(strogatz_equations[name])))
+                iterator.append((samples, None))
+            with open(path_dataset, "wb") as fout:
+                self.trainer.logger.info(f"Saving dataset under:\n{path_dataset}")
+                pickle.dump(obj=iterator, file=fout)
+        
         if save:
             save_file = os.path.join(self.save_path, "eval_pmlb.csv")
         scores = self.evaluate_on_iterator(iterator,save_file)
-
         if self.params.use_wandb:
             wandb.log({'pmlb_'+metric: scores[metric] for metric in self.params.validation_metrics.split(',')})
-
         return scores
     
     def evaluate_on_oscillators(
         self,
         save=True,
     ):
-        
         self.model.rescale = self.params.rescale
         self.trainer.logger.info(
             "====== STARTING EVALUATION OSCILLATORS (multi-gpu: {}) =======".format(
                 self.params.multi_gpu
             )
         )
-
         iterator = []
         datasets = {}
         for file in glob.glob("invar_datasets/*"):
@@ -409,15 +414,11 @@ class Evaluator(object):
             samples['times'].append(times)
             samples['trajectory'].append(np.concatenate((x,y),axis=1))
             iterator.append((samples, None))
-
         if save:
             save_file = os.path.join(self.save_path, "eval_oscillators.csv")
-
         scores = self.evaluate_on_iterator(iterator,save_file)
-
         if self.params.use_wandb:
             wandb.log({'oscillators_'+metric: scores[metric] for metric in self.params.validation_metrics.split(',')})
-
         return scores
     
     def str_to_tree(self, expr: str):
