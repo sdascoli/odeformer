@@ -6,6 +6,7 @@ from symbolicregression.baselines.ellyn_wrapper import (
 )
 from symbolicregression.baselines.proged_wrapper import ProGEDWrapper
 from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
+import os
 
 def format_and_save(params, scores, batch_results, name):
     scores = pd.DataFrame(scores, index=[0]).T
@@ -38,13 +39,13 @@ def main(params):
             functions=["sin", "cos", "exp"],
             grid_search_polynomial_degree=True,
         )
-    elif params.baseline_model == "sindy_poly":    
+    elif params.baseline_model == "sindy_poly":
         model = SINDyWrapper(
             polynomial_degree=6,
             functions=[], # only polynomials
             grid_search_polynomial_degree=True,
         )
-    elif params.baseline_model == "sindy_poly3":    
+    elif params.baseline_model == "sindy_poly3":
         model = SINDyWrapper(
             polynomial_degree=3,
             functions=[], # only polynomials
@@ -74,44 +75,55 @@ def main(params):
         # format_and_save(params, scores, batch_results, str(_name))
         
     if params.eval_on_pmlb:
-        scores = evaluator_default.evaluate_on_pmlb(save=params.save_results)
+        scores = evaluator_default.evaluate_on_pmlb(
+            save=params.save_results, path_dataset=params.path_dataset
+        )
+    
+def str2bool(arg: Union[bool, str]):
+    if isinstance(arg, bool):
+        return arg
+    if arg.lower() in ["true", "yes", "t", "y"]:
+        return True
+    return False
     
 if __name__ == "__main__":
-    BASE = "experiments/baselines"
+    BASE = os.path.join(os.getcwd(), "experiments")
     parser = get_parser()
-    
-    parser.add_argument("--baseline_model", 
-        type=str, default="sindy_poly3",
+    parser.add_argument("--baseline_model", type=str, default="pysr",
         choices=["afp", "feafp", "ffx", "eplex", "ehc", "proged", "pysr", "sindy", "sindy_save", "sindy_poly", "sindy_poly3",]
     )
-    
+    parser.add_argument("--dataset", type=str, choices=["strogatz", "<path_to_dataset.pkl>"], default="strogatz")
+    parser.add_argument("--baseline_hyper_opt", type=str2bool, default=True, 
+        help="Do / Don't optimizer hyper parameters."
+    )
+    parser.add_argument("--baseline_hyper_opt_eval_fraction", type=float, default=0.3,
+        help="Fraction of trajectory length that is used to score hyper parameter optimization on."
+    )
+    parser.add_argument("--baseline_to_sympy", type=str2bool, default=True, 
+        help="Do / Don't parse predicted equation with sympy."                    
+    )
     params = parser.parse_args()
-    params.eval_size = 1
-    params.max_dimension = 2
-    params.num_workers = 1
-    params.is_slurm_job = False
-    params.local_rank = -1
-    params.master_port = -1
-    params.debug_slurm=True
-    params.use_cross_attention = True
-    
-    #params.use_two_hot=True
-    params.debug = True
-    params.validation_metrics = 'r2,r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio,complexity,term_difference,is_valid'
+    if params.dataset == "strogatz":
+        params.eval_on_pmlb = True
+        params.path_dataset = "/p/project/hai_microbio/sb/repos/odeformer/datasets/strogatz.pkl"
+        params.eval_on_file = False
+    else:
+        params.eval_on_pmlb = False
+        params.eval_on_file = params.dataset
+    params.validation_metrics = 'r2,r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio,is_valid' # complexity,term_difference,term_difference_sympy
     params.eval_only = True
     params.cpu = True
-    params.baseline_hyper_opt = True
-    params.baseline_hyper_opt_eval_fraction = 0.25
-    params.baseline_to_sympy = True
-    params.eval_on_pmlb = True
-    params.eval_on_file = False
-    # params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/data.prefix.test.pkl"
-    # params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/polynomial_2d.txt.pkl"
-    # params.eval_on_pmlb = True
-    # params.eval_on_file = "experiments/datagen_poly/datagen_use_sympy_True/data.prefix.test"
-    
-    params.dump_path = f"{BASE}/baseline_results/{params.baseline_model}/hyper_opt_{params.baseline_hyper_opt}"
-    params.eval_dump_path = f"{BASE}/baseline_results/{params.baseline_model}/hyper_opt_{params.baseline_hyper_opt}"
+    params.eval_size = 1
+    params.dump_path = os.path.join(
+        BASE, 
+        params.baseline_model,
+        params.dataset,
+        f"hyper_opt_{params.baseline_hyper_opt}",
+        f"baseline_hyper_opt_eval_fraction_{params.baseline_hyper_opt_eval_fraction}",
+        f"eval_size_{params.eval_size}",
+        f"baseline_to_sympy_{params.baseline_to_sympy}",
+    )
+    params.eval_dump_path = params.dump_path
     
     symbolicregression.utils.CUDA = not params.cpu
     if params.batch_size_eval is None:
@@ -122,10 +134,7 @@ if __name__ == "__main__":
     logger = initialize_exp(params, write_dump_path=False)
     if not params.cpu:
         assert torch.cuda.is_available()
-    
-    print(params)
-    
+    print(params)    
     main(params)
-    
-    # TODO: test all models
-    # TODO: add install instructions
+
+# assess hyper params

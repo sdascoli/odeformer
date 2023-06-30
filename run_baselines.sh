@@ -5,6 +5,10 @@ source $CONDA_BASE/etc/profile.d/conda.sh
 conda activate symbolicregression39
 
 MODELS=(
+    "sindy"
+    "sindy_save"
+    "sindy_poly"
+    "sindy_poly3"
     "afp"
     "feafp"
     "ffx"
@@ -12,10 +16,6 @@ MODELS=(
     "ehc"
     "proged"
     "pysr"
-    "sindy"
-    "sindy_save"
-    "sindy_poly"
-    "sindy_poly3"
 )
 
 for model in "${MODELS[@]}";
