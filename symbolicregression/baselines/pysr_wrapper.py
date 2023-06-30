@@ -42,19 +42,27 @@ class PySRWrapper(
             procs=procs,
             equation_file=equation_file,
         )
-        self.finite_difference_order = finite_difference_order
-        self.smoother_window_length = smoother_window_length
+        fd_kwargs = {}
+        if finite_difference_order is not None:
+            fd_kwargs["finite_difference_order"] = finite_difference_order
+        if smoother_window_length is not None:
+            fd_kwargs["smoother_window_length"] = smoother_window_length
+        FiniteDifferenceMixin.__init__(self, **fd_kwargs)
         
     def get_hyper_grid(self) -> Dict:
         return {
             "unary_operators": [
+                [],
+                ["cos", "exp", "sin", "neg",],
                 ["cos", "exp", "sin", "neg", "log", "sqrt",], 
-                ["cos", "exp", "sin", "neg",]
             ],
             "niterations": [40, 100],
             # "finite_difference_order": [3],
             # "smoother_window_length": [None],
         }
+        
+    def get_n_jobs(self) -> int:
+        return 12
         
     def score(
         self,
