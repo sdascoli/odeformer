@@ -30,9 +30,9 @@ class FFXWrapper(
         smoother_window_length: Union[None, int] = None,
     ):
         fd_kwargs = {}
-        if "finite_difference_order" is not None:
+        if finite_difference_order is not None:
             fd_kwargs["finite_difference_order"] = finite_difference_order
-        if "smoother_window_length" is not None:
+        if smoother_window_length is not None:
             fd_kwargs["smoother_window_length"] = smoother_window_length
         FiniteDifferenceMixin.__init__(self, **fd_kwargs)
     
