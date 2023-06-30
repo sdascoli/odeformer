@@ -4,10 +4,20 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+from typing import Literal, List, Union
 from sklearn.metrics import r2_score, mean_squared_error
 from collections import defaultdict
+from sympy import Add
+import regex
 import numpy as np
 import scipy
+import sympy
+from symbolicregression.envs.generators import Node, NodeList
+
+def is_valid_tree(tree):
+    if not tree:
+        return False
+    return isinstance(tree, (NodeList, Node))
 
 def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2"):
     results = defaultdict(list)
@@ -164,7 +174,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                         results[metric].append(np.nan)
 
         elif metric == "complexity":
-            if not predicted_tree: 
+            if not is_valid_tree(predicted_tree):
                 results[metric].extend([np.nan for _ in range(len(true))])
                 continue
             for i in range(len(predicted_tree)):
@@ -174,7 +184,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     results[metric].append(len(predicted_tree[i].prefix().split(",")))
                     
         elif metric == "relative_complexity":
-            if not predicted_tree: 
+            if not is_valid_tree(predicted_tree):
                 results[metric].extend([np.nan for _ in range(len(true))])
                 continue
             for i in range(len(predicted_tree)):
@@ -184,7 +194,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     results[metric].append(len(predicted_tree[i].prefix().split(",")) - len(tree[i].prefix().split(",")))
 
         elif metric == "edit_distance":
-            if not predicted_tree: 
+            if not is_valid_tree(predicted_tree):
                 results[metric].extend([np.nan for _ in range(len(true))])
                 continue
             for i in range(len(predicted_tree)):
@@ -195,7 +205,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     results[metric].append(distance)
 
         elif metric == "term_difference":
-            if not predicted_tree: 
+            if not is_valid_tree(predicted_tree): 
                 results[metric].extend([np.nan for _ in range(len(true))])
                 continue
             for i in range(len(predicted_tree)):
@@ -207,6 +217,44 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     for dim in range(dimension):
                         pred_terms = predicted_tree[i].nodes[dim].infix(skeleton=True).split(" + ")
                         terms = tree[i].nodes[dim].infix(skeleton=True).split(" + ")
+                        missing.append(sum([1 for term in terms if term not in pred_terms])/len(terms))
+                        extra.append(sum([1 for term in pred_terms if term not in terms])/len(terms))
+                    results[metric].append(np.mean(missing) + np.mean(extra))
+                    
+        elif metric == "term_difference_sympy":
+            
+            # If variables names contain indices, the index must be preceeded by "_", e.g. x_0, x_1
+            
+            def get_terms(eq: str, constant_token: Union[None, Literal["CONSTANT"]]=Literal["CONSTANT"]) -> List:
+                terms = [str(term) for term in list(Add.make_args(sympy.parse_expr(eq)))]
+                if constant_token is not None:
+                    terms = [
+                        regex.sub(
+                            pattern=r"(?<!_\d*)[-+]?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[Ee][+-]?\d+)?",
+                            repl=str(constant_token),
+                            string=term,
+                        ) for term in terms
+                    ]
+                return terms
+                
+            if not is_valid_tree(predicted_tree):
+                results[metric].extend([np.nan for _ in range(len(true))])
+                continue
+            for i in range(len(predicted_tree)):
+                if predicted_tree[i] is None or tree[i] is None or len(predicted_tree[i].nodes) != len(tree[i].nodes):
+                    results[metric].append(np.nan)
+                else:
+                    dimension = len(predicted_tree[i].nodes)
+                    extra, missing = [], []
+                    for dim in range(dimension):
+                        pred_terms = get_terms(
+                            eq=predicted_tree[i].nodes[dim].infix(skeleton=False), 
+                            constant_token="CONSTANT",
+                        )
+                        terms = get_terms(
+                            eq=tree[i].nodes[dim].infix(skeleton=False),
+                            constant_token="CONSTANT",
+                        )
                         missing.append(sum([1 for term in terms if term not in pred_terms])/len(terms))
                         extra.append(sum([1 for term in pred_terms if term not in terms])/len(terms))
                     results[metric].append(np.mean(missing) + np.mean(extra))
