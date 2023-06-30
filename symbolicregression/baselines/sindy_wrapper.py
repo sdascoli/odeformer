@@ -74,6 +74,9 @@ class SINDyWrapper(
     def get_feature_names(self) -> List[str]:
         return [re.sub(fr"(x)(\d)", repl=r"\1_\2", string=name) for name in self.feature_names]
 
+    def is_fitted(self):
+        return hasattr(self.optimizer, "coef_")
+
     def fit(
         self,
         times: Union[List, np.ndarray],
@@ -93,7 +96,9 @@ class SINDyWrapper(
             return {0: [None]}
         
     def _get_equations(self) -> Dict[int, List[Union[None, str]]]:
-        return {0: [" | ".join([self._format_equation(eq) for eq in self.equations()])]}
+        if self.is_fitted():
+            return {0: [" | ".join([self._format_equation(eq) for eq in self.equations()])]}
+        return {0: [None]}
     
     def score(
         self,
@@ -112,7 +117,7 @@ class SINDyWrapper(
             # "smoother_window_length": list(set([None, 9, self.smoother_window_length])),
         }
         if self.grid_search_polynomial_degree:
-            hparams["polynomial_degree"] = np.arange(self.polynomial_degree+1, dtype=int)
+            hparams["polynomial_degree"] = np.arange(1, self.polynomial_degree+1, dtype=int)
         return hparams
     
     def get_n_jobs(self) -> Union[int, None]:
@@ -173,7 +178,7 @@ def create_library(
     if degree:
         libs.append(
             PolynomialLibrary(
-                degree=degree, 
+                degree=int(degree), 
                 include_interaction=True, 
                 include_bias=True
             )
