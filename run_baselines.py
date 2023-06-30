@@ -113,7 +113,7 @@ if __name__ == "__main__":
     params.validation_metrics = 'r2,r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio,is_valid' # complexity,term_difference,term_difference_sympy
     params.eval_only = True
     params.cpu = True
-    params.eval_size = 1
+    
     params.dump_path = os.path.join(
         BASE, 
         params.baseline_model,
