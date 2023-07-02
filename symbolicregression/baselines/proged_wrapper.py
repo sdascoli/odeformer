@@ -27,13 +27,15 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin, GridS
         verbosity: int = 1, 
         num_workers: int = 1,
         debug: bool = True,
-        generator_template_name: GRAMMARS = "polynomial"
+        generator_template_name: GRAMMARS = "polynomial",
+        include_time_as_variable: bool = False,
     ):
         self.num_candidates = num_candidates
         self.verbosity = verbosity
         self.num_workers = num_workers
         self.debug = debug
         self.generator_template_name = generator_template_name
+        self.include_time_as_variable = include_time_as_variable
         
     def get_hyper_grid(self) -> Dict[str, Any]:
         return {
@@ -96,7 +98,7 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin, GridS
             data = data,
             task_type="differential", 
             lhs_vars = feature_names,
-            rhs_vars = ["t"] + feature_names,
+            rhs_vars = ["t"] + feature_names if self.include_time_as_variable else feature_names,
             sample_size = self.num_candidates,
             system_size = len(feature_names),
             generator_template_name = generator_template_name,
