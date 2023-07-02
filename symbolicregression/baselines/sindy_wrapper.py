@@ -19,7 +19,7 @@ class SINDyWrapper(
     
     def __init__(
         self, 
-        polynomial_degree: Union[None, int] = None,
+        polynomial_degree: Union[None, int] = 2,
         functions: Union[None, List[str]] = None,
         optimizer_threshold: Union[None, float] = None,
         optimizer_alpha: Union[None, float] = None,
@@ -28,6 +28,7 @@ class SINDyWrapper(
         smoother_window_length: Union[None, int] = None,
         debug: bool = False,
         grid_search_polynomial_degree: bool = False,
+        grid_search_functions: bool = False,
     ):
         fd_kwargs = {"smoother_window_length": smoother_window_length}
         if finite_difference_order is not None:
@@ -40,6 +41,7 @@ class SINDyWrapper(
         self.optimizer_max_iter = optimizer_max_iter
         self.debug = debug
         self.grid_search_polynomial_degree = grid_search_polynomial_degree
+        self.grid_search_functions = grid_search_functions
         
         feature_library = create_library(
             degree=self.polynomial_degree, functions=self.functions,
@@ -113,15 +115,20 @@ class SINDyWrapper(
             "optimizer_threshold": list(set([0.05, 0.1, 0.15, self.optimizer_threshold])),
             "optimizer_alpha": list(set([0.025, 0.05, 0.075, self.optimizer_alpha])),
             "optimizer_max_iter": list(set([20, 100, self.optimizer_max_iter])),
-            # "finite_difference_order": list(set([2, self.finite_difference_order])),
-            # "smoother_window_length": list(set([None, 9, self.smoother_window_length])),
+            "finite_difference_order": list(set([2,3,4, self.finite_difference_order])),
+            "smoother_window_length": list(set([None, 15, self.smoother_window_length])),
         }
         if self.grid_search_polynomial_degree:
             hparams["polynomial_degree"] = np.arange(1, self.polynomial_degree+1, dtype=int)
+        if self.grid_search_functions:
+             # empty list means all
+            hparams["functions"] = [None, ["sin", "cos", "exp"], []]
+            if not self.functions in hparams["functions"]:
+                hparams["functions"].append(self.functions)
         return hparams
     
     def get_n_jobs(self) -> Union[int, None]:
-        return 24
+        return 48
 
         
 def _logarithm_with_error(x):
