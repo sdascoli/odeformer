@@ -38,11 +38,7 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin, GridS
         self.include_time_as_variable = include_time_as_variable
         
     def get_hyper_grid(self) -> Dict[str, Any]:
-        return {
-            "generator_template_name": list(get_args(GRAMMARS)),
-            "finite_difference_order": list(set([2,3,4, self.finite_difference_order])),
-            "smoother_window_length": list(set([None, 15, self.smoother_window_length])),
-        }
+        return {"generator_template_name": list(get_args(GRAMMARS))}
     
     def get_n_jobs(self) -> int:
         return 48
