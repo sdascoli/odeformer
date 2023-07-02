@@ -12,6 +12,7 @@ from symbolicregression.baselines.baseline_utils import variance_weighted_r2_sco
 import re
 import numpy as np
 import pandas as pd
+import traceback
 
 __all__ = ("ProGEDWrapper")
 
@@ -22,7 +23,7 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin, GridS
     
     def __init__(
         self, 
-        num_candidates: int = 16, 
+        num_candidates: int = 32, 
         verbosity: int = 1, 
         num_workers: int = 1,
         debug: bool = True,
@@ -35,10 +36,14 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin, GridS
         self.generator_template_name = generator_template_name
         
     def get_hyper_grid(self) -> Dict[str, Any]:
-        return {"generator_template_name": list(get_args(GRAMMARS))}
+        return {
+            "generator_template_name": list(get_args(GRAMMARS)),
+            "finite_difference_order": list(set([2,3,4, self.finite_difference_order])),
+            "smoother_window_length": list(set([None, 15, self.smoother_window_length])),
+        }
     
     def get_n_jobs(self) -> int:
-        return None
+        return 48
         
     def set_params(self, **params: Dict):
         for key, value in params.items():
@@ -63,6 +68,7 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin, GridS
             assert pred_trajectory is not None, f"pred_trajectory is None."
             return metric(trajectories, pred_trajectory)
         except AssertionError as e:
+            print(traceback.format_exc())
             return np.nan
     
     def fit(
