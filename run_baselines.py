@@ -31,6 +31,13 @@ def main(params):
             functions=None, # None means all
             grid_search_polynomial_degree=True,
         )
+    elif params.baseline_model == "sindy_full":
+        model = SINDyWrapper(
+            polynomial_degree=3,
+            functions=[], # only polynomials
+            grid_search_polynomial_degree=True,
+            grid_search_functions=True,
+        )
     if params.baseline_model == "sindy_save":
         model = SINDyWrapper(
             optimizer_alpha=0.05,
@@ -39,19 +46,27 @@ def main(params):
             functions=["sin", "cos", "exp"],
             grid_search_polynomial_degree=True,
         )
-    elif params.baseline_model == "sindy_poly":
-        model = SINDyWrapper(
-            polynomial_degree=6,
-            functions=[], # only polynomials
-            grid_search_polynomial_degree=True,
-        )
     elif params.baseline_model == "sindy_poly3":
         model = SINDyWrapper(
             polynomial_degree=3,
             functions=[], # only polynomials
         )
+    elif params.baseline_model == "sindy_poly6":
+        model = SINDyWrapper(
+            polynomial_degree=6,
+            functions=[], # only polynomials
+            grid_search_polynomial_degree=True,
+        )
+    elif params.baseline_model == "sindy_poly10":
+        model = SINDyWrapper(
+            polynomial_degree=6,
+            functions=[], # only polynomials
+            grid_search_polynomial_degree=True,
+        )
     elif params.baseline_model == "pysr":
         model = PySRWrapper()
+    elif params.baseline_model == "pysr_poly":
+        model = PySRWrapper(unary_operators=[])
     elif params.baseline_model == "proged":
         model = ProGEDWrapper()
     elif params.baseline_model == "afp":
@@ -89,8 +104,14 @@ def str2bool(arg: Union[bool, str]):
 if __name__ == "__main__":
     BASE = os.path.join(os.getcwd(), "experiments")
     parser = get_parser()
-    parser.add_argument("--baseline_model", type=str, default="pysr",
-        choices=["afp", "feafp", "ffx", "eplex", "ehc", "proged", "pysr", "sindy", "sindy_save", "sindy_poly", "sindy_poly3",]
+    parser.add_argument("--baseline_model", type=str, default="sindy_poly",
+        choices=[
+            "afp", "feafp", "eplex", "ehc",
+            "proged",
+            "ffx",
+            "pysr", "pysr_poly",
+            "sindy", "sindy_full", "sindy_save", "sindy_poly3", "sindy_poly6", "sindy_poly10",
+        ]
     )
     parser.add_argument("--dataset", type=str, choices=["strogatz", "<path_to_dataset.pkl>"], default="strogatz")
     parser.add_argument("--baseline_hyper_opt", type=str2bool, default=True, 
@@ -114,12 +135,19 @@ if __name__ == "__main__":
     params.eval_only = True
     params.cpu = True
     
+    if not hasattr(params, "subsample_ratio"):
+        params.subsample_ratio = 0 # no subsampling
+    if not hasattr(params, "eval_noise_gamma"):
+        params.eval_noise_gamma = 0 # no noise
+    
     params.dump_path = os.path.join(
         BASE, 
         params.baseline_model,
         params.dataset,
         f"hyper_opt_{params.baseline_hyper_opt}",
         f"baseline_hyper_opt_eval_fraction_{params.baseline_hyper_opt_eval_fraction}",
+        f"subsample_ratio_{params.subsample_ratio}",
+        f"eval_gamma_noise{params.eval_noise_gamma}",
         f"eval_size_{params.eval_size}",
         f"baseline_to_sympy_{params.baseline_to_sympy}",
     )
