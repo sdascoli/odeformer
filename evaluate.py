@@ -138,10 +138,26 @@ class Evaluator(object):
                 break
             times = samples["times"]
             trajectories = samples["trajectory"]
+            infos = samples["infos"]
             assert isinstance(times, List), type(times)
             assert isinstance(trajectories, List), type(trajectories)
-            infos = samples["infos"]
-            
+            if hasattr(self.params, "subsample_ratio") and self.params.subsample_ratio is not None:
+                subsampled_tra_and_time = [
+                    self.env._subsample_trajectory(
+                        times=time, trajectory=tra, subsample_ratio=self.params.subsample_ratio,
+                    )
+                    for (time, tra) in zip(times, trajectories)
+                ]
+                subsampled_tra_and_time = list(map(list, zip(*subsampled_tra_and_time)))
+                times = subsampled_tra_and_time[0]
+                trajectories = subsampled_tra_and_time[1]
+            if hasattr(self.params, "eval_noise_gamma") and self.params.eval_noise_gamma is not None:
+                trajectories = [
+                    _trajectory + self.env._create_noise(
+                        train=False, trajectory=_trajectory, gamma=self.params.eval_noise_gamma,
+                    )
+                    for _trajectory in trajectories
+                ]
             if "tree" in samples.keys():
                 trees = [self.env.simplifier.simplify_tree(tree, expand=True) for tree in samples["tree"]]
                 batch_results["trees"].extend(
@@ -211,9 +227,9 @@ class Evaluator(object):
                 time, idx = sorted(time), np.argsort(time)
                 trajectory = trajectory[idx]
                 best_candidate = candidates[0] # candidates are sorted
-                if isinstance(best_candidate, str):
-                    try: best_candidate = self.str_to_tree(best_candidate)
-                    except: pass
+                # if isinstance(best_candidate, str):
+                #     try: best_candidate = self.str_to_tree(best_candidate)
+                #     except: pass
                 pred_trajectory = self.model.integrate_prediction(
                     time, y0=trajectory[0], prediction=best_candidate
                 )
@@ -361,9 +377,9 @@ class Evaluator(object):
                     start = j * len(times)
                     stop = (j+1) * len(times)
                     trajectory = np.concatenate((x[start:stop], y[start:stop]),axis=1)
-                    times_, trajectory_ = self.env.generator._subsample_trajectory(times, trajectory, subsample_ratio=self.params.subsample_ratio)
-                    samples['times'].append(times_)
-                    samples['trajectory'].append(trajectory_)
+                    # times_, trajectory_ = self.env.generator._subsample_trajectory(times, trajectory, subsample_ratio=self.params.subsample_ratio)
+                    samples['times'].append(times)
+                    samples['trajectory'].append(trajectory)
                     samples['tree'].append(self.str_to_tree(format_strogatz_equation(strogatz_equations[name])))
                 iterator.append((samples, None))
             with open(path_dataset, "wb") as fout:
