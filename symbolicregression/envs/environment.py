@@ -416,6 +416,26 @@ class FunctionEnvironment(object):
                     print(traceback.format_exc())
                 continue
 
+    def _subsample_trajectory(
+        self, 
+        times: np.ndarray, 
+        trajectory: np.ndarray, 
+        subsample_ratio: Union[None, float],
+        rng=None,
+    ):
+        if subsample_ratio is None:
+            subsample_ratio = self.params.subsample_ratio
+        if rng is None:
+            rng = self.rng
+        indices_to_remove = rng.choice(
+            trajectory.shape[0], 
+            int(trajectory.shape[0] * subsample_ratio), 
+            replace=False,
+        )
+        trajectory = np.delete(trajectory, indices_to_remove, axis=0)
+        times = np.delete(times, indices_to_remove, axis=0)
+        return times, trajectory
+
     def _create_noise(self, train: bool, trajectory: np.ndarray, gamma: Union[None, float] = None):
         if gamma is None:
             gamma = (
