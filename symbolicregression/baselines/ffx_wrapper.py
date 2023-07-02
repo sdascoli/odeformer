@@ -26,7 +26,7 @@ class FFXWrapper(
 ):
     def __init__(
         self, 
-        finite_difference_order: Union[None, int] = None,
+        finite_difference_order: Union[None, int] = 2,
         smoother_window_length: Union[None, int] = None,
     ):
         fd_kwargs = {}
@@ -38,9 +38,12 @@ class FFXWrapper(
     
     def get_hyper_grid(self) -> Dict[str, List[Any]]:
         return {
-            #"finite_difference_order": [2, 3, 4, 5],
-            #"smoother_window_length": [None, 9],
+            "finite_difference_order": list(set([2,3,4, self.finite_difference_order])),
+            "smoother_window_length": list(set([None, 15, self.smoother_window_length])),
         }
+        
+    def get_n_jobs(self) -> int:
+        return 12
     
     def score(
         self, 
