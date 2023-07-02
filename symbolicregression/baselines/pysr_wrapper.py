@@ -21,9 +21,9 @@ class PySRWrapper(
 
     def __init__(
         self, 
-        finite_difference_order: Union[None, int] = None,
+        finite_difference_order: Union[None, int] = 2,
         smoother_window_length: Union[None, int] = None,
-        niterations: int = 40,
+        niterations: int = 50,
         binary_operators: Union[None, List[str]] = None,
         unary_operators: Union[None, List[str]] = None,
         loss: str = "loss(x, y) = (x - y)^2",
@@ -51,18 +51,17 @@ class PySRWrapper(
         
     def get_hyper_grid(self) -> Dict:
         return {
-            "unary_operators": [
-                [],
-                ["cos", "exp", "sin", "neg",],
-                ["cos", "exp", "sin", "neg", "log", "sqrt",], 
-            ],
-            "niterations": [40, 100],
-            # "finite_difference_order": [3],
-            # "smoother_window_length": [None],
+            # "unary_operators": [
+            #     [],
+            #     ["cos", "exp", "sin", "neg",],
+            #     ["cos", "exp", "sin", "neg", "log", "sqrt",], 
+            # ],
+            "finite_difference_order": list(set([2,3,4, self.finite_difference_order])),
+            "smoother_window_length": list(set([None, 15, self.smoother_window_length])),
         }
         
     def get_n_jobs(self) -> int:
-        return 12
+        return 48
         
     def score(
         self,
