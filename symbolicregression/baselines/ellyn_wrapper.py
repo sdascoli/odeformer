@@ -125,7 +125,7 @@ class EllynMixin(
         return str(sympy.parse_expr(eq))    
     
     def get_n_jobs(self) -> int:
-        return 24
+        return 48
 
 
 class AFPWrapper(EllynMixin):
@@ -163,10 +163,22 @@ class AFPWrapper(EllynMixin):
             ['n','v','+','-','*','/','exp','log','2','3', 'sqrt'],
             ['n','v','+','-','*','/', 'exp','log','2','3', 'sqrt', 'sin','cos']
         ]
+        finite_difference_orders = [2,3,4]
+        smoother_window_lengths = [None, 15]
         hyper_params = []
         for p, g in zip(pop_sizes, gs):
             for op_list in op_lists:
-                hyper_params.append({'popsize':[p], 'g':[g], 'op_list':[op_list]})
+                for fdo in finite_difference_orders:
+                    for swl in smoother_window_lengths:
+                        hyper_params.append(
+                            {
+                                'popsize': [p], 
+                                'g': [g], 
+                                'op_list': [op_list],
+                                'finite_difference_order': [fdo],
+                                'smoother_window_length': [swl],
+                            }
+                        )
         return hyper_params
 
 
@@ -207,10 +219,22 @@ class EHCWrapper(EllynMixin):
             ['n','v','+','-','*','/','exp','log','2','3', 'sqrt'],
             ['n','v','+','-','*','/', 'exp','log','2','3', 'sqrt', 'sin','cos']
         ]
+        finite_difference_orders = [2,3,4]
+        smoother_window_lengths = [None, 15]
         hyper_params = []
         for p, g in zip(pop_sizes, gs):
             for op_list in op_lists:
-                hyper_params.append({'popsize':[p], 'g':[g], 'op_list':[op_list]})
+                for fdo in finite_difference_orders:
+                    for swl in smoother_window_lengths:
+                        hyper_params.append(
+                            {
+                                'popsize': [p], 
+                                'g': [g], 
+                                'op_list': [op_list],
+                                'finite_difference_order': [fdo],
+                                'smoother_window_length': [swl],
+                            }
+                        )
         return hyper_params
 
 
@@ -249,10 +273,22 @@ class EPLEXWrapper(EllynMixin):
             ['n','v','+','-','*','/','sin','cos','exp','log','2','3', 'sqrt'],
             ['n','v','+','-','*','/', 'exp','log','2','3', 'sqrt']
         ]
+        finite_difference_orders = [2,3,4]
+        smoother_window_lengths = [None, 15]
         hyper_params = []
         for p, g in zip(pop_sizes, gs):
             for op_list in op_lists:
-                hyper_params.append({'popsize':[p], 'g':[g], 'op_list':[op_list]})
+                for fdo in finite_difference_orders:
+                    for swl in smoother_window_lengths:
+                        hyper_params.append(
+                            {
+                                'popsize': [p], 
+                                'g': [g], 
+                                'op_list': [op_list],
+                                'finite_difference_order': [fdo],
+                                'smoother_window_length': [swl],
+                            }
+                        )
         return hyper_params
 
 
@@ -297,8 +333,20 @@ class FEAFPWrapper(EllynMixin):
             ['n','v','+','-','*','/','sin','cos','exp','log','2','3', 'sqrt'],
             ['n','v','+','-','*','/', 'exp','log','2','3', 'sqrt']
         ]
+        finite_difference_orders = [2,3,4]
+        smoother_window_lengths = [None, 15]
         hyper_params = []
         for p, g in zip(pop_sizes, gs):
             for op_list in op_lists:
-                hyper_params.append({'popsize':[p], 'g':[g], 'op_list':[op_list]})
+                for fdo in finite_difference_orders:
+                    for swl in smoother_window_lengths:
+                        hyper_params.append(
+                            {
+                                'popsize': [p], 
+                                'g': [g], 
+                                'op_list': [op_list],
+                                'finite_difference_order': [fdo],
+                                'smoother_window_length': [swl],
+                            }
+                        )
         return hyper_params
