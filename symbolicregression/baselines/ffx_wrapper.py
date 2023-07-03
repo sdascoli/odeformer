@@ -43,7 +43,9 @@ class FFXWrapper(
         }
         
     def get_n_jobs(self) -> int:
-        return 12
+        # Unfortunately the SystemExit that is sometimes raise in ffx.fit() 
+        # is not properly handled when using n_jobs != None in GridSearchCV.
+        return None
     
     def score(
         self, 
@@ -85,7 +87,13 @@ class FFXWrapper(
                 )
                 return self.final_equations
         # TODO: How to restrict function class, e.g. no "max", log10?
-        super().fit(X=trajectories, y=derivatives)
+        try:
+            super().fit(X=trajectories, y=derivatives)
+        except SystemExit:
+            # Some errors result in sys exit whereas we might want to continue with the next example
+            # https://github.com/soerenab/ffx/blob/master/ffx/core/model_factories.py#L471
+            print("Caught SystemExit")
+            raise ValueError("Caught `SystemExit` from ffx.fit()")
         self.final_equations = self.__get_equations()
         return self.final_equations
     
