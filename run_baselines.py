@@ -38,7 +38,7 @@ def main(params):
             grid_search_polynomial_degree=True,
             grid_search_functions=True,
         )
-    if params.baseline_model == "sindy_save":
+    elif params.baseline_model == "sindy_save":
         model = SINDyWrapper(
             optimizer_alpha=0.05,
             optimizer_threshold=0.04,
@@ -79,6 +79,8 @@ def main(params):
         model = FEAFPWrapper()
     elif params.baseline_model == "ffx":
         model = FFXWrapper()
+    else:
+        raise ValueError(f"Unknown model: {params.baseline_model}")
         
     evaluator_default = Evaluator(trainer, model)
     
@@ -104,7 +106,7 @@ def str2bool(arg: Union[bool, str]):
 if __name__ == "__main__":
     BASE = os.path.join(os.getcwd(), "experiments")
     parser = get_parser()
-    parser.add_argument("--baseline_model", type=str, default="sindy_poly",
+    parser.add_argument("--baseline_model", type=str, default="ffx",
         choices=[
             "afp", "feafp", "eplex", "ehc",
             "proged",
@@ -126,7 +128,7 @@ if __name__ == "__main__":
     params = parser.parse_args()
     if params.dataset == "strogatz":
         params.eval_on_pmlb = True
-        params.path_dataset = "/p/project/hai_microbio/sb/repos/odeformer/datasets/strogatz.pkl"
+        params.path_dataset = "datasets/strogatz.pkl"
         params.eval_on_file = False
     else:
         params.eval_on_pmlb = False
@@ -139,6 +141,8 @@ if __name__ == "__main__":
         params.subsample_ratio = 0 # no subsampling
     if not hasattr(params, "eval_noise_gamma"):
         params.eval_noise_gamma = 0 # no noise
+    if not hasattr(params, "eval_noise_type"):
+        params.eval_noise_type = "additive"
     
     params.dump_path = os.path.join(
         BASE, 
@@ -147,7 +151,8 @@ if __name__ == "__main__":
         f"hyper_opt_{params.baseline_hyper_opt}",
         f"baseline_hyper_opt_eval_fraction_{params.baseline_hyper_opt_eval_fraction}",
         f"subsample_ratio_{params.subsample_ratio}",
-        f"eval_gamma_noise{params.eval_noise_gamma}",
+        f"eval_noise_type_{params.eval_noise_type}",
+        f"eval_gamma_noise_{params.eval_noise_gamma}",
         f"eval_size_{params.eval_size}",
         f"baseline_to_sympy_{params.baseline_to_sympy}",
     )
