@@ -43,7 +43,7 @@ class FFXWrapper(
         }
         
     def get_n_jobs(self) -> int:
-        return 12
+        return None
     
     def score(
         self, 
