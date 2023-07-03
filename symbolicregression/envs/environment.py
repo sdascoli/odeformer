@@ -13,7 +13,7 @@ import sys
 import copy
 import json
 import operator
-from typing import Optional, List, Dict, Union
+from typing import Optional, List, Dict, Union, Literal
 from typing_extensions import Literal
 from collections import deque, defaultdict
 import time
@@ -436,17 +436,28 @@ class FunctionEnvironment(object):
         times = np.delete(times, indices_to_remove, axis=0)
         return times, trajectory
 
-    def _create_noise(self, train: bool, trajectory: np.ndarray, gamma: Union[None, float] = None):
+    def _create_noise(
+        self,
+        train: bool,
+        trajectory: np.ndarray,
+        gamma: Union[None, float] = None,
+        noise_type: Literal["additive", "multiplicative"] = "additive",
+    ) -> np.ndarray:
         if gamma is None:
             gamma = (
                 self.rng.uniform(0, self.params.train_noise_gamma)
                 if train
                 else self.params.eval_noise_gamma
             )
-        norm = scipy.linalg.norm(
-            (np.abs(trajectory) + 1e-100) / np.sqrt(trajectory.shape[0])
-        )
-        return gamma * norm * np.random.randn(*trajectory.shape)
+        if noise_type == "additive":
+            norm = scipy.linalg.norm(
+                (np.abs(trajectory) + 1e-100) / np.sqrt(trajectory.shape[0])
+            )
+            return gamma * norm * np.random.randn(*trajectory.shape)
+        elif noise_type == "multiplicative": 
+            return np.random.normal(loc=1, scale=gamma, size=trajectory.shape)
+        else:
+            raise ValueError(f"Unknown noise type: `{noise_type}`.")
 
     @timeout(TIMEOUT)
     def _gen_expr(
