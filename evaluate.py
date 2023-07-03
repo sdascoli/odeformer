@@ -154,7 +154,7 @@ class Evaluator(object):
             if hasattr(self.params, "eval_noise_gamma") and self.params.eval_noise_gamma is not None:
                 trajectories = [
                     _trajectory + self.env._create_noise(
-                        train=False, trajectory=_trajectory, gamma=self.params.eval_noise_gamma,
+                        train=False, trajectory=_trajectory, gamma=self.params.eval_noise_gamma, noise_type=self.params.eval_noise_type,
                     )
                     for _trajectory in trajectories
                 ]
