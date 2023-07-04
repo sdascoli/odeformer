@@ -29,6 +29,7 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin, GridS
         debug: bool = True,
         generator_template_name: GRAMMARS = "polynomial",
         include_time_as_variable: bool = False,
+        grid_search_generator_template_name: bool = True,
     ):
         self.num_candidates = num_candidates
         self.verbosity = verbosity
@@ -36,9 +37,13 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin, GridS
         self.debug = debug
         self.generator_template_name = generator_template_name
         self.include_time_as_variable = include_time_as_variable
+        self.grid_search_generator_template_name = grid_search_generator_template_name
         
     def get_hyper_grid(self) -> Dict[str, Any]:
-        return {"generator_template_name": list(get_args(GRAMMARS))}
+        hparams = {}
+        if self.grid_search_generator_template_name:
+            hparams["generator_template_name"] = list(get_args(GRAMMARS))
+        return hparams
     
     def get_n_jobs(self) -> int:
         return 48
