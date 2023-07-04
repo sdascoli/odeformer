@@ -31,6 +31,13 @@ def main(params):
             functions=None, # None means all
             grid_search_polynomial_degree=True,
         )
+    elif params.baseline_model == "sindy_all":
+        model = SINDyWrapper(
+            polynomial_degree=10,
+            functions=[], # only polynomials
+            grid_search_polynomial_degree=True,
+            grid_search_functions=True,
+        )
     elif params.baseline_model == "sindy_full":
         model = SINDyWrapper(
             polynomial_degree=3,
@@ -59,7 +66,7 @@ def main(params):
         )
     elif params.baseline_model == "sindy_poly10":
         model = SINDyWrapper(
-            polynomial_degree=6,
+            polynomial_degree=10,
             functions=[], # only polynomials
             grid_search_polynomial_degree=True,
         )
@@ -69,6 +76,11 @@ def main(params):
         model = PySRWrapper(unary_operators=[])
     elif params.baseline_model == "proged":
         model = ProGEDWrapper()
+    elif params.baseline_model == "proged_poly":
+        model = ProGEDWrapper(
+            generator_template_name="polynomial",
+            grid_search_generator_template_name=False,
+        )
     elif params.baseline_model == "afp":
         model = AFPWrapper()
     elif params.baseline_model == "ehc":
@@ -109,10 +121,10 @@ if __name__ == "__main__":
     parser.add_argument("--baseline_model", type=str, default="ffx",
         choices=[
             "afp", "feafp", "eplex", "ehc",
-            "proged",
+            "proged", "proged_poly",
             "ffx",
             "pysr", "pysr_poly",
-            "sindy", "sindy_full", "sindy_save", "sindy_poly3", "sindy_poly6", "sindy_poly10",
+            "sindy", "sindy_all", "sindy_full", "sindy_save", "sindy_poly3", "sindy_poly6", "sindy_poly10",
         ]
     )
     parser.add_argument("--dataset", type=str, choices=["strogatz", "<path_to_dataset.pkl>"], default="strogatz")
