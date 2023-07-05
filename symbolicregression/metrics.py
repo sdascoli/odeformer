@@ -222,8 +222,9 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     results[metric].append(np.nan)
                 else:
                     if not isinstance(ptree, str):
-                        # TODO: are predicted_tree from Odeformer already in infix format? How to get them as string?
                         ptree = ptree.infix()
+                    if not isinstance(gttree, str):
+                        gttree = gttree.infix()
                     results[metric].append(
                         np.sum([get_complexity(sympy.parse_expr(comp)) for comp in ptree.split("|")]) - \
                             np.sum([get_complexity(sympy.parse_expr(comp)) for comp in gttree.split("|")])
