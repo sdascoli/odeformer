@@ -238,14 +238,17 @@ class Evaluator(object):
                 time, idx = sorted(time), np.argsort(time)
                 trajectory = trajectory[idx]
                 best_candidate = candidates[0] # candidates are sorted
-                # if isinstance(best_candidate, str):
-                #     try: best_candidate = self.str_to_tree(best_candidate)
-                #     except: pass
+                if isinstance(best_candidate, str):
+                    try: best_candidate = self.str_to_tree(best_candidate)
+                    except: pass
                 pred_trajectory = self.model.integrate_prediction(
                     time, y0=trajectory[0], prediction=best_candidate
                 )
-                try: best_candidate = self.env.simplifier.simplify_tree(best_candidate, expand=True)
-                except: pass
+                if (not hasattr(self.params.convert_prediction_to_tree) or \
+                    (hasattr(self.params.convert_prediction_to_tree) and self.params.convert_prediction_to_tree)
+                ):
+                    try: best_candidate = self.env.simplifier.simplify_tree(best_candidate, expand=True)
+                    except: pass
                 best_result = compute_metrics(
                     pred_trajectory, 
                     trajectory, 

@@ -137,6 +137,9 @@ if __name__ == "__main__":
     parser.add_argument("--baseline_to_sympy", type=str2bool, default=True, 
         help="Do / Don't parse predicted equation with sympy."                    
     )
+    parser.add_argument("--convert_prediction_to_tree", str2bool, default=False,
+        help = "If True, we attempt to convert predicted equations to Odeformers tree format."
+    )
     params = parser.parse_args()
     if params.dataset == "strogatz":
         params.eval_on_pmlb = True
@@ -145,7 +148,7 @@ if __name__ == "__main__":
     else:
         params.eval_on_pmlb = False
         params.eval_on_file = params.dataset
-    params.validation_metrics = 'r2,r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio,is_valid' # complexity,term_difference,term_difference_sympy
+    params.validation_metrics = 'r2,r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio,is_valid,complexity_sympy,relative_complexity_sympy' # complexity,term_difference,term_difference_sympy
     params.eval_only = True
     params.cpu = True
     
@@ -182,4 +185,7 @@ if __name__ == "__main__":
     print(params)    
     main(params)
 
-# assess hyper params
+# log complexity
+# log time
+# max of ffx?
+# make plot
