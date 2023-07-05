@@ -7,17 +7,19 @@
 from typing import Literal, List, Union
 from sklearn.metrics import r2_score, mean_squared_error
 from collections import defaultdict
-from sympy import Add
+from sympy import Add, preorder_traversal
 import regex
 import numpy as np
 import scipy
 import sympy
 from symbolicregression.envs.generators import Node, NodeList
 
-def is_valid_tree(tree):
-    if not tree:
-        return False
-    return isinstance(tree, (NodeList, Node))
+def get_complexity(expr: sympy.core.Expr):
+    # taken from: https://github.com/cavalab/srbench/blob/master/postprocessing/symbolic_utils.py#L12:L16
+    c=0
+    for arg in preorder_traversal(expr):
+        c += 1
+    return c
 
 def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2"):
     results = defaultdict(list)
@@ -174,27 +176,61 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                         results[metric].append(np.nan)
 
         elif metric == "complexity":
-            if not is_valid_tree(predicted_tree):
+            if not predicted_tree: 
                 results[metric].extend([np.nan for _ in range(len(true))])
                 continue
             for i in range(len(predicted_tree)):
                 if predicted_tree[i] is None:
                     results[metric].append(np.nan)
                 else:
-                    results[metric].append(len(predicted_tree[i].prefix().split(",")))
+                    results[metric].append(len(predicted_tree[i].prefix().replace("|", "").split(",")))
                     
         elif metric == "relative_complexity":
-            if not is_valid_tree(predicted_tree):
+            if not predicted_tree: 
                 results[metric].extend([np.nan for _ in range(len(true))])
                 continue
             for i in range(len(predicted_tree)):
                 if predicted_tree[i] is None:
                     results[metric].append(np.nan)
                 else:
-                    results[metric].append(len(predicted_tree[i].prefix().split(",")) - len(tree[i].prefix().split(",")))
+                    results[metric].append(
+                        len(predicted_tree[i].prefix().replace("|", "").split(",")) - \
+                            len(tree[i].prefix().replace("|", "").split(","))
+                    )
+
+        elif metric == "complexity_sympy":
+            if not predicted_tree: 
+                results[metric].extend([np.nan for _ in range(len(true))])
+                continue
+            for ptree in predicted_tree:
+                if ptree is None:
+                    results[metric].append(np.nan)
+                else:
+                    if not isinstance(ptree, str):
+                        # TODO: are predicted_tree from Odeformer already in infix format? How to get them as string?
+                        ptree = ptree.infix()
+                    results[metric].append(
+                        np.sum([get_complexity(sympy.parse_expr(comp)) for comp in ptree.split("|")])
+                    )
+                    
+        elif metric == "relative_complexity_sympy":
+            if not predicted_tree: 
+                results[metric].extend([np.nan for _ in range(len(true))])
+                continue
+            for ptree, gttree in zip(predicted_tree, tree):
+                if ptree is None:
+                    results[metric].append(np.nan)
+                else:
+                    if not isinstance(ptree, str):
+                        # TODO: are predicted_tree from Odeformer already in infix format? How to get them as string?
+                        ptree = ptree.infix()
+                    results[metric].append(
+                        np.sum([get_complexity(sympy.parse_expr(comp)) for comp in ptree.split("|")]) - \
+                            np.sum([get_complexity(sympy.parse_expr(comp)) for comp in gttree.split("|")])
+                    )
 
         elif metric == "edit_distance":
-            if not is_valid_tree(predicted_tree):
+            if not predicted_tree: 
                 results[metric].extend([np.nan for _ in range(len(true))])
                 continue
             for i in range(len(predicted_tree)):
@@ -205,7 +241,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     results[metric].append(distance)
 
         elif metric == "term_difference":
-            if not is_valid_tree(predicted_tree): 
+            if not predicted_tree: 
                 results[metric].extend([np.nan for _ in range(len(true))])
                 continue
             for i in range(len(predicted_tree)):
@@ -237,7 +273,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     ]
                 return terms
                 
-            if not is_valid_tree(predicted_tree):
+            if not predicted_tree:
                 results[metric].extend([np.nan for _ in range(len(true))])
                 continue
             for i in range(len(predicted_tree)):
