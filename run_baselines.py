@@ -114,6 +114,11 @@ def str2bool(arg: Union[bool, str]):
     if arg.lower() in ["true", "yes", "t", "y"]:
         return True
     return False
+
+def str_or_None(arg: str):
+    if arg.lower == "none":
+        return None
+    return arg
     
 if __name__ == "__main__":
     BASE = os.path.join(os.getcwd(), "experiments")
@@ -137,8 +142,11 @@ if __name__ == "__main__":
     parser.add_argument("--baseline_to_sympy", type=str2bool, default=True, 
         help="Do / Don't parse predicted equation with sympy."                    
     )
-    parser.add_argument("--convert_prediction_to_tree", str2bool, default=False,
+    parser.add_argument("--convert_prediction_to_tree", type=str2bool, default=False,
         help = "If True, we attempt to convert predicted equations to Odeformers tree format."
+    )
+    parser.add_argument("--baseline_sorting_metric", type=str_or_None, default="r2",
+        help = "If not None, sort pareto front according to this metric before selecting the final, best model."
     )
     params = parser.parse_args()
     if params.dataset == "strogatz":
@@ -184,8 +192,3 @@ if __name__ == "__main__":
         assert torch.cuda.is_available()
     print(params)    
     main(params)
-
-# log complexity
-# log time
-# max of ffx?
-# make plot

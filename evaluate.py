@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Dict, List, Union
+from typing import Callable, Dict, List, Union
 from timeit import default_timer as timer
 from pathlib import Path
 from collections import OrderedDict, defaultdict
@@ -14,6 +14,7 @@ import os
 import copy
 import json
 import glob
+import math
 import sympy
 import torch
 import wandb
@@ -92,6 +93,37 @@ def read_file(filename, label="target", sep=None):
     y = input_data[label].values
     assert X.shape[1] == feature_names.shape[0]
     return X, y, feature_names
+
+
+def sort_candidates(
+    candidates: List[str],
+    trajectory: np.ndarray,
+    times: np.ndarray,
+    sorting_metric: str,
+    integrate_prediction: Callable,
+):
+    if "r2" in sorting_metric:
+        descending = True
+    else: 
+        descending = False
+    _scores = []
+    for candidate in candidates:
+        _score = compute_metrics(
+            predicted = integrate_prediction(
+                times=times,
+                y0=trajectory[0],
+                prediction=candidate,
+            ),
+            true = trajectory, 
+            metrics = sorting_metric,
+        )[sorting_metric][0]
+        if math.isnan(_score): 
+            _score = -np.infty if descending else np.infty
+        _scores.append(_score)
+    sorted_idx = np.argsort(_scores)  
+    if descending: sorted_idx = list(reversed(sorted_idx))
+    return [candidates[i] for i in sorted_idx]
+
 
 class Evaluator(object):
 
@@ -179,16 +211,22 @@ class Evaluator(object):
                     masked_trajectories[seq_id][:, -n_masked_variables:] = np.nan
                     n_masked_variables_arr.append(n_masked_variables)
                 infos['n_masked_variables'] = np.array(n_masked_variables_arr)
+                start_time_fit = timer()
                 all_candidates: Dict[int, List[str]] = self.model.fit(
                     times, masked_trajectories, verbose=False, sort_candidates=True
                 )
+                duration_fit = timer() - start_time_fit
+                all_duration_fit: Dict[int, float] = {}
+                for key in all_candidates.keys():
+                    all_duration_fit[key] = duration_fit / len(all_candidates)
             else:
                 if hasattr(self.params, "baseline_hyper_opt") and self.params.baseline_hyper_opt:
                     all_candidates: Dict[int, List[str]] = {}
+                    all_duration_fit: Dict[int, float] = {}
                     for _trajectory_i, (_times, _trajectory) in enumerate(zip(times, trajectories)):
                         if hasattr(self.params, "baseline_hyper_opt_eval_fraction"):
                             baseline_hyper_opt_eval_fraction = self.params.baseline_hyper_opt_eval_fraction
-                        if baseline_hyper_opt_eval_fraction is None:
+                        else:
                             baseline_hyper_opt_eval_fraction = 0.3
                             self.trainer.logger.warning(
                                 "baseline_hyper_opt_eval_fraction is None. "\
@@ -209,13 +247,33 @@ class Evaluator(object):
                         _model.fit(_times, _trajectory)
                         duration_fit = timer() - start_time_fit
                         _all_candidates = _model.best_estimator_._get_equations()
-                        all_candidates[_trajectory_i] = _all_candidates[0]
+                        if hasattr(self.params, "baseline_sorting_metric"):
+                            all_candidates[_trajectory_i] = sort_candidates(
+                                candidates = _all_candidates[0], # _all_candidates[0] is a List of str
+                                trajectory = _trajectory,
+                                times = _times,
+                                sorting_metric = self.params.baseline_sorting_metric,
+                                integrate_prediction=self.model.integrate_prediction,
+                            )
+                        all_duration_fit[_trajectory_i] = duration_fit
                 else:
                     start_time_fit = timer()
                     all_candidates: Dict[int, List[str]] = self.model.fit(
                         times, trajectories, verbose=False, sort_candidates=True
                     )
+                    if hasattr(self.params, "baseline_sorting_metric"):
+                        for _trajectory_i, (_times, _trajectory) in enumerate(zip(times, trajectories)):
+                            all_candidates[_trajectory_i] = sort_candidates(
+                                candidates = _all_candidates[_trajectory_i], # _all_candidates[0] is a List of str
+                                trajectory = _trajectory,
+                                times = _times,
+                                sorting_metric = self.params.baseline_sorting_metric,
+                                integrate_prediction=self.model.integrate_prediction,
+                            )
                     duration_fit = timer() - start_time_fit
+                    all_duration_fit: Dict[int, float] = {}
+                    for key in all_candidates.keys():
+                        all_duration_fit[key] = duration_fit / len(all_candidates)
             if hasattr(self.params, "to_sympy") and self.params.baseline_to_sympy:
                 try: 
                     _all_candidates = self.model.to_sympy(
@@ -228,8 +286,11 @@ class Evaluator(object):
                     # e.g. model does not implement to_sympy()
                     pass 
             best_results = {metric:[] for metric in self.params.validation_metrics.split(',')}
+            best_results["duration_fit"] = []
             best_candidates = []
-            for time, trajectory, tree, candidates in zip(times, trajectories, trees, all_candidates.values()):
+            for time, trajectory, tree, candidates, duration_fit in zip(
+                times, trajectories, trees, all_candidates.values(), all_duration_fit.values()
+            ):
                 if not candidates: 
                     for k in best_results:
                         best_results[k].append(np.nan)
@@ -238,17 +299,20 @@ class Evaluator(object):
                 time, idx = sorted(time), np.argsort(time)
                 trajectory = trajectory[idx]
                 best_candidate = candidates[0] # candidates are sorted
-                if isinstance(best_candidate, str):
+                if (isinstance(best_candidate, str) and \
+                    not hasattr(self.params, "convert_prediction_to_tree") or \
+                    (hasattr(self.params, "convert_prediction_to_tree") and self.params.convert_prediction_to_tree)):
                     try: best_candidate = self.str_to_tree(best_candidate)
                     except: pass
+                    
                 pred_trajectory = self.model.integrate_prediction(
                     time, y0=trajectory[0], prediction=best_candidate
                 )
-                if (not hasattr(self.params.convert_prediction_to_tree) or \
-                    (hasattr(self.params.convert_prediction_to_tree) and self.params.convert_prediction_to_tree)
-                ):
+                if not hasattr(self.params, "convert_prediction_to_tree") or \
+                    (hasattr(self.params, "convert_prediction_to_tree") and self.params.convert_prediction_to_tree):
                     try: best_candidate = self.env.simplifier.simplify_tree(best_candidate, expand=True)
                     except: pass
+                    
                 best_result = compute_metrics(
                     pred_trajectory, 
                     trajectory, 
@@ -256,6 +320,7 @@ class Evaluator(object):
                     tree = tree,
                     metrics=self.params.validation_metrics
                 )
+                best_result["duration_fit"] = [duration_fit]
                 for k, v in best_result.items():
                     best_results[k].append(v[0])
                 best_candidates.append(best_candidate)
@@ -281,7 +346,6 @@ class Evaluator(object):
                 batch_results["info_" + k].extend(v)
             for k, v in best_results.items():
                 batch_results[k ].extend(v)
-            batch_results["time_to_fit"].append(duration_fit)
 
         batch_results = pd.DataFrame.from_dict(batch_results)
         batch_results.to_csv(save_file, index=False)
@@ -299,7 +363,7 @@ class Evaluator(object):
         if "trees" in df: df = df.drop(columns=["trees"])
         if "info_name" in df.columns: df = df.drop(columns=["info_name"])
 
-        for metric in self.params.validation_metrics.split(','):
+        for metric in self.params.validation_metrics.split(',') + ["duration_fit"]:
             scores[metric] = df[metric].mean()
                         
         for ablation in self.ablation_to_keep:
@@ -308,7 +372,7 @@ class Evaluator(object):
                 for k, v in avg_scores_ablation.items():
                     if k not in info_columns:
                         scores[k + "_{}_{}".format(ablation, val)] = v
-        scores["time_to_fit"] = df.time_to_fit.mean()
+        
         return scores
         
     def evaluate_in_domain(
