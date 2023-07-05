@@ -5,25 +5,23 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import Dict, List, Union
+from timeit import default_timer as timer
+from pathlib import Path
+from collections import OrderedDict, defaultdict
+from tqdm import tqdm
+
+import os
 import copy
 import json
-
-from pathlib import Path
-
-from logging import getLogger
-from collections import OrderedDict, defaultdict
-from concurrent.futures import ProcessPoolExecutor
-import os
-import torch
-import numpy as np
-from copy import deepcopy
-from symbolicregression.utils import to_cuda
 import glob
-import scipy
 import sympy
-import pickle
+import torch
 import wandb
+import pickle
+import numpy as np
+import pandas as pd
 
+from symbolicregression.utils import to_cuda
 from parsers import get_parser
 import symbolicregression
 from symbolicregression.slurm import init_signal_handler, init_distributed_mode
@@ -35,11 +33,6 @@ from symbolicregression.trainer import Trainer
 from symbolicregression.model.sklearn_wrapper import SymbolicTransformerRegressor
 from symbolicregression.model.model_wrapper import ModelWrapper
 from symbolicregression.metrics import compute_metrics
-from sklearn.model_selection import train_test_split
-import pandas as pd
-
-from tqdm import tqdm
-import time
 
 # np.seterr(all="raise")
 
@@ -152,12 +145,21 @@ class Evaluator(object):
                 times = subsampled_tra_and_time[0]
                 trajectories = subsampled_tra_and_time[1]
             if hasattr(self.params, "eval_noise_gamma") and self.params.eval_noise_gamma is not None:
-                trajectories = [
-                    _trajectory + self.env._create_noise(
-                        train=False, trajectory=_trajectory, gamma=self.params.eval_noise_gamma, noise_type=self.params.eval_noise_type,
+                _trajectories = []
+                for _trajectory in trajectories:
+                    _noise = self.env._create_noise(
+                        train=False,
+                        trajectory=_trajectory,
+                        gamma=self.params.eval_noise_gamma,
+                        noise_type=self.params.eval_noise_type,
                     )
-                    for _trajectory in trajectories
-                ]
+                    if self.params.eval_noise_type == "additive":
+                        _trajectories.append(_trajectory + _noise)
+                    elif self.params.eval_noise_type == "multiplicative":
+                        _trajectories.append(_trajectory * _noise)
+                    else:
+                        raise ValueError(f"Unknown noise type: `{self.params.eval_noise_type}`")
+                trajectories = _trajectories
             if "tree" in samples.keys():
                 trees = [self.env.simplifier.simplify_tree(tree, expand=True) for tree in samples["tree"]]
                 batch_results["trees"].extend(
@@ -170,11 +172,16 @@ class Evaluator(object):
                 masked_trajectories = copy.deepcopy(trajectories)
                 n_masked_variables_arr = []
                 for seq_id in range(len(times)):
-                    n_masked_variables = min(np.random.randint(0, self.params.max_masked_variables + 1), infos["dimension"][seq_id]-1)
+                    n_masked_variables = min(
+                        np.random.randint(0, self.params.max_masked_variables + 1), 
+                        infos["dimension"][seq_id]-1
+                    )
                     masked_trajectories[seq_id][:, -n_masked_variables:] = np.nan
                     n_masked_variables_arr.append(n_masked_variables)
                 infos['n_masked_variables'] = np.array(n_masked_variables_arr)
-                all_candidates: Dict[int, List[str]] = self.model.fit(times, masked_trajectories, verbose=False, sort_candidates=True)
+                all_candidates: Dict[int, List[str]] = self.model.fit(
+                    times, masked_trajectories, verbose=False, sort_candidates=True
+                )
             else:
                 if hasattr(self.params, "baseline_hyper_opt") and self.params.baseline_hyper_opt:
                     all_candidates: Dict[int, List[str]] = {}
@@ -182,7 +189,7 @@ class Evaluator(object):
                         if hasattr(self.params, "baseline_hyper_opt_eval_fraction"):
                             baseline_hyper_opt_eval_fraction = self.params.baseline_hyper_opt_eval_fraction
                         if baseline_hyper_opt_eval_fraction is None:
-                            baseline_hyper_opt_eval_fraction = 0.5
+                            baseline_hyper_opt_eval_fraction = 0.3
                             self.trainer.logger.warning(
                                 "baseline_hyper_opt_eval_fraction is None. "\
                                 f"Using baseline_hyper_opt_eval_fraction = {baseline_hyper_opt_eval_fraction} instead."
@@ -198,13 +205,17 @@ class Evaluator(object):
                         )
                         assert len(set(train_idcs).intersection(test_idcs)) == 0, "`train_idcs` and `test_idcs` overlap."
                         _model = self.model.get_grid_search(train_idcs, test_idcs)
+                        start_time_fit = timer()
                         _model.fit(_times, _trajectory)
+                        duration_fit = timer() - start_time_fit
                         _all_candidates = _model.best_estimator_._get_equations()
                         all_candidates[_trajectory_i] = _all_candidates[0]
                 else:
+                    start_time_fit = timer()
                     all_candidates: Dict[int, List[str]] = self.model.fit(
                         times, trajectories, verbose=False, sort_candidates=True
                     )
+                    duration_fit = timer() - start_time_fit
             if hasattr(self.params, "to_sympy") and self.params.baseline_to_sympy:
                 try: 
                     _all_candidates = self.model.to_sympy(
@@ -267,6 +278,7 @@ class Evaluator(object):
                 batch_results["info_" + k].extend(v)
             for k, v in best_results.items():
                 batch_results[k ].extend(v)
+            batch_results["time_to_fit"].append(duration_fit)
 
         batch_results = pd.DataFrame.from_dict(batch_results)
         batch_results.to_csv(save_file, index=False)
@@ -293,7 +305,7 @@ class Evaluator(object):
                 for k, v in avg_scores_ablation.items():
                     if k not in info_columns:
                         scores[k + "_{}_{}".format(ablation, val)] = v
-                            
+        scores["time_to_fit"] = df.time_to_fit.mean()
         return scores
         
     def evaluate_in_domain(
