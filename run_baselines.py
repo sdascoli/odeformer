@@ -123,7 +123,7 @@ def str_or_None(arg: str):
 if __name__ == "__main__":
     BASE = os.path.join(os.getcwd(), "experiments")
     parser = get_parser()
-    parser.add_argument("--baseline_model", type=str, default="ffx",
+    parser.add_argument("--baseline_model", type=str, default="sindy_poly3",
         choices=[
             "afp", "feafp", "eplex", "ehc",
             "proged", "proged_poly",
@@ -156,7 +156,7 @@ if __name__ == "__main__":
     else:
         params.eval_on_pmlb = False
         params.eval_on_file = params.dataset
-    params.validation_metrics = 'r2,r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio,is_valid,complexity_sympy,relative_complexity_sympy' # complexity,term_difference,term_difference_sympy
+    params.validation_metrics = 'r2,r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio,is_valid,complexity_sympy,relative_complexity_sympy,complexity_string,relative_complexity_string' # complexity,term_difference,term_difference_sympy
     params.eval_only = True
     params.cpu = True
     
@@ -176,10 +176,11 @@ if __name__ == "__main__":
         f"subsample_ratio_{params.subsample_ratio}",
         f"eval_noise_type_{params.eval_noise_type}",
         f"eval_gamma_noise_{params.eval_noise_gamma}",
-        f"eval_size_{params.eval_size}",
         f"baseline_to_sympy_{params.baseline_to_sympy}",
     )
+    
     params.eval_dump_path = params.dump_path
+    # params.reevaluate_path = f"/home/haicu/soeren.becker/repos/odeformer/experiments/{params.dump_path}/eval_pmlb.csv"
     
     symbolicregression.utils.CUDA = not params.cpu
     if params.batch_size_eval is None:
