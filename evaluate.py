@@ -4,11 +4,12 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Callable, Dict, List, Union
+from tqdm import tqdm
+from copy import deepcopy
 from timeit import default_timer as timer
+from typing import Callable, Dict, List, Union
 from pathlib import Path
 from collections import OrderedDict, defaultdict
-from tqdm import tqdm
 
 import os
 import copy
@@ -22,9 +23,9 @@ import pickle
 import numpy as np
 import pandas as pd
 
-from symbolicregression.utils import to_cuda
-from parsers import get_parser
 import symbolicregression
+from parsers import get_parser
+from symbolicregression.utils import to_cuda
 from symbolicregression.slurm import init_signal_handler, init_distributed_mode
 from symbolicregression.utils import bool_flag, initialize_exp
 from symbolicregression.model import check_model_params, build_modules
@@ -163,6 +164,8 @@ class Evaluator(object):
                 break
             times = samples["times"]
             trajectories = samples["trajectory"]
+            times_original = deepcopy(times)
+            trajectories_original = deepcopy(trajectories)
             infos = samples["infos"]
             assert isinstance(times, List), type(times)
             assert isinstance(trajectories, List), type(trajectories)
@@ -220,7 +223,12 @@ class Evaluator(object):
                 for key in all_candidates.keys():
                     all_duration_fit[key] = duration_fit / len(all_candidates)
             else:
-                if hasattr(self.params, "baseline_hyper_opt") and self.params.baseline_hyper_opt:
+                if hasattr(self.params, "reevaluate_path") and self.params.reevaluate_path:
+                    scores = pd.read_csv(self.params.reevaluate_path)
+                    all_candidates = {0: [scores.predicted_trees.values.tolist()[samples_i]]}
+                    all_duration_fit = {0: [scores.duration_fit.values.tolist()[samples_i]]}
+                    
+                elif hasattr(self.params, "baseline_hyper_opt") and self.params.baseline_hyper_opt:
                     all_candidates: Dict[int, List[str]] = {}
                     all_duration_fit: Dict[int, float] = {}
                     for _trajectory_i, (_times, _trajectory) in enumerate(zip(times, trajectories)):
@@ -276,8 +284,8 @@ class Evaluator(object):
                         all_duration_fit[key] = duration_fit / len(all_candidates)
             if hasattr(self.params, "to_sympy") and self.params.baseline_to_sympy:
                 try: 
-                    _all_candidates = self.model.to_sympy(
-                        eqs=_all_candidates, 
+                    all_candidates = self.model.to_sympy(
+                        eqs=all_candidates, 
                         var_names=[f"x_{i}" for i in range(self.params.max_dimension)],
                         return_type=str,
                         evaluate=True,
@@ -288,8 +296,11 @@ class Evaluator(object):
             best_results = {metric:[] for metric in self.params.validation_metrics.split(',')}
             best_results["duration_fit"] = []
             best_candidates = []
+            
+            ### Fitting for all trajectories of this sample is done, next evaluate prediction ###
+            
             for time, trajectory, tree, candidates, duration_fit in zip(
-                times, trajectories, trees, all_candidates.values(), all_duration_fit.values()
+                times_original, trajectories_original, trees, all_candidates.values(), all_duration_fit.values()
             ):
                 if not candidates: 
                     for k in best_results:
