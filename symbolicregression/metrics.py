@@ -21,6 +21,55 @@ def get_complexity(expr: sympy.core.Expr):
         c += 1
     return c
 
+def tokenize_equation(eq: str, tokens_to_ignore: str = "|,", debug: bool = False) -> List[str]:
+    constant_token = "€"
+    tokens_to_ignore = tokens_to_ignore.split(",")
+    assert constant_token not in tokens_to_ignore
+    tokens = []
+    eq = eq.replace(" ", "")
+    CONSTANTS_PATTERN=r"(?:(?<!_\d*))(?:(?<=[\*/\+-])[-+]?)?(?:(?<=\()[-+]?)?(?:(?<=^)[-+]?)?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[Ee][+-]?\d+)?"
+    constants = regex.findall(pattern=CONSTANTS_PATTERN, string=eq)
+    eq = regex.sub(pattern=CONSTANTS_PATTERN, repl=str(constant_token), string=eq)
+    eq = eq.replace(" ","")
+    constant_i = 0
+    op = ""
+    for symbol in eq:
+        if symbol in tokens_to_ignore:
+            if debug: print(symbol, "ignore", op)
+            continue
+        elif symbol in ["+", "-", "*", "/"]:
+            if debug: print(symbol, '["+", "-", "*", "/"]', op)
+            if op != "":
+                tokens.append(op)
+                op = ""
+            tokens.append(symbol)
+        elif symbol == constant_token:
+            if debug: print(symbol, 'constant_token', op)
+            if op != "":
+                tokens.append(op)
+                op = ""
+            tokens.append(constants[constant_i])
+            constant_i += 1
+        elif symbol == "(":
+            if debug: print(symbol, '(', op)
+            if op != "":
+                tokens.append(op)
+                op = ""
+        elif symbol == ")":
+            if debug: print(symbol, ')', op)
+            if op != "":
+                tokens.append(op)
+                op = ""
+        else:
+            if debug: print(symbol, 'else', op)
+            op += symbol
+            
+        if debug: print(tokens, op)
+    if op != "":
+        tokens.append(op)
+        op = ""
+    return tokens
+
 def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2"):
     results = defaultdict(list)
     if metrics == "":
@@ -212,7 +261,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     results[metric].append(
                         np.sum([get_complexity(sympy.parse_expr(comp)) for comp in ptree.split("|")])
                     )
-                    
+        
         elif metric == "relative_complexity_sympy":
             if not predicted_tree: 
                 results[metric].extend([np.nan for _ in range(len(true))])
@@ -228,6 +277,47 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     results[metric].append(
                         np.sum([get_complexity(sympy.parse_expr(comp)) for comp in ptree.split("|")]) - \
                             np.sum([get_complexity(sympy.parse_expr(comp)) for comp in gttree.split("|")])
+                    )
+
+        elif metric == "complexity_string":
+            if not predicted_tree: 
+                results[metric].extend([np.nan for _ in range(len(true))])
+                continue
+            for ptree in predicted_tree:
+                if ptree is None:
+                    results[metric].append(np.nan)
+                else:
+                    if not isinstance(ptree, str):
+                        # TODO: are predicted_tree from Odeformer already in infix format? How to get them as string?
+                        ptree = ptree.infix()
+                    results[metric].append(
+                        np.sum([
+                            len(tokenize_equation(str(sympy.parse_expr(comp))))
+                            for comp in ptree.split("|")
+                        ])
+                    )
+                    
+        elif metric == "relative_complexity_string":
+            if not predicted_tree: 
+                results[metric].extend([np.nan for _ in range(len(true))])
+                continue
+            for ptree, gttree in zip(predicted_tree, tree):
+                if ptree is None:
+                    results[metric].append(np.nan)
+                else:
+                    if not isinstance(ptree, str):
+                        ptree = ptree.infix()
+                    if not isinstance(gttree, str):
+                        gttree = gttree.infix()
+                    results[metric].append(
+                        np.sum([
+                            len(tokenize_equation(str(sympy.parse_expr(comp)))) 
+                            for comp in ptree.split("|")
+                        ]) - \
+                        np.sum([
+                            len(tokenize_equation(str(sympy.parse_expr(comp))))
+                            for comp in gttree.split("|")
+                        ])
                     )
 
         elif metric == "edit_distance":
