@@ -1,9 +1,8 @@
 from typing import Callable, Dict, List, Union
-from sklearn.metrics import r2_score
 import numpy as np
 import pandas as pd
 import itertools
-import tempfile
+import traceback
 from pysr import PySRRegressor
 from symbolicregression.model.mixins import (
     GridSearchMixin,
@@ -105,7 +104,15 @@ class PySRWrapper(
         by: str = "score"
     ) -> Dict[int, List[str]]:
         if hof is None:
-            hof = self.get_hof()
+            try:
+                hof = self.get_hof()
+            except (pd.errors.ParserError, pd.errors.EmptyDataError) as e:
+                traceback.print_exception(e)
+                return {0: [None]}
+            except Exception as e:
+                traceback.print_exception(e)
+                print("############ {e} ############")
+                return {0: [None]}
         if isinstance(hof, List):
             # We have a list of candidates per dimension and combine them via a Cartesian product.
             # The first returned equation in the result correspond to the pair of best 
