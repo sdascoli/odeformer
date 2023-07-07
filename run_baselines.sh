@@ -5,24 +5,33 @@ source $CONDA_BASE/etc/profile.d/conda.sh
 conda activate symbolicregression39
 
 MODELS=(
-    "sindy"
-    "sindy_save"
-    "sindy_poly3"
-    "sindy_poly6"
-    "sindy_poly10"
-    "sindy_full"
     # "afp"
     # "feafp"
-    "ffx"
     # "eplex"
     # "ehc"
     # "proged"
-    # "pysr"
+    # "proged_poly"
+    # "ffx"
+    "pysr"
+    "pysr_poly"
+    # "sindy"
+    # "sindy_all"
+    # "sindy_full"
+    # "sindy_save"
+    # "sindy_poly3"
+    # "sindy_poly6"
+    # "sindy_poly10"
 )
 
-for subsample_ratio in "0" "0.25" "0.5";
+dataset="strogatz"
+hyper_opt="True"
+eval_noise_type="additive"
+baseline_hyper_opt_eval_fraction="0.3"
+baseline_to_sympy="True"
+
+for subsample_ratio in "0.0" "0.25" "0.5";
 do
-    for eval_noise_gamma in "0" "0.001" "0.01";
+    for eval_noise_gamma in "0.0" "0.001" "0.01" "0.02" "0.03" "0.04" "0.05"; #"0" "0.001" "0.01"; #
     do
         for model in "${MODELS[@]}";
         do
