@@ -224,9 +224,14 @@ class Evaluator(object):
                     all_duration_fit[key] = duration_fit / len(all_candidates)
             else:
                 if hasattr(self.params, "reevaluate_path") and self.params.reevaluate_path:
-                    scores = pd.read_csv(self.params.reevaluate_path)
-                    all_candidates = {0: [scores.predicted_trees.values.tolist()[samples_i]]}
-                    all_duration_fit = {0: [scores.duration_fit.values.tolist()[samples_i]]}
+                    scores = pd.read_csv(self.params.reevaluate_path)#, delimiter="\t")
+                    all_candidates = {}
+                    for _k in range(len(trajectories)):
+                        all_candidates[_k] = [scores.predicted_trees.values.tolist()[len(trajectories)*samples_i+_k]]
+                    try:
+                        all_duration_fit = {0: [scores.duration_fit.values.tolist()[samples_i]]}
+                    except:
+                        all_duration_fit = {0: -1, 1: -1, 2: -1, 3: -1}
                     
                 elif hasattr(self.params, "baseline_hyper_opt") and self.params.baseline_hyper_opt:
                     all_candidates: Dict[int, List[str]] = {}
@@ -282,17 +287,7 @@ class Evaluator(object):
                     all_duration_fit: Dict[int, float] = {}
                     for key in all_candidates.keys():
                         all_duration_fit[key] = duration_fit / len(all_candidates)
-            if hasattr(self.params, "to_sympy") and self.params.baseline_to_sympy:
-                try: 
-                    all_candidates = self.model.to_sympy(
-                        eqs=all_candidates, 
-                        var_names=[f"x_{i}" for i in range(self.params.max_dimension)],
-                        return_type=str,
-                        evaluate=True,
-                    )
-                except: 
-                    # e.g. model does not implement to_sympy()
-                    pass 
+            
             best_results = {metric:[] for metric in self.params.validation_metrics.split(',')}
             best_results["duration_fit"] = []
             best_candidates = []
