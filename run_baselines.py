@@ -91,6 +91,8 @@ def main(params):
         model = FEAFPWrapper()
     elif params.baseline_model == "ffx":
         model = FFXWrapper()
+    elif params.baseline_model in ["odeformer", "odeformer_opt", "odeformer_opt_random"]:
+        model = setup_odeformer(trainer)
     else:
         raise ValueError(f"Unknown model: {params.baseline_model}")
         
@@ -123,13 +125,14 @@ def str_or_None(arg: str):
 if __name__ == "__main__":
     BASE = os.path.join(os.getcwd(), "experiments")
     parser = get_parser()
-    parser.add_argument("--baseline_model", type=str, default="sindy_poly3",
+    parser.add_argument("--baseline_model", type=str, default="odeformer",
         choices=[
             "afp", "feafp", "eplex", "ehc",
             "proged", "proged_poly",
             "ffx",
             "pysr", "pysr_poly",
             "sindy", "sindy_all", "sindy_full", "sindy_save", "sindy_poly3", "sindy_poly6", "sindy_poly10",
+            "odeformer", "odeformer_opt", "odeformer_opt_random"
         ]
     )
     parser.add_argument("--dataset", type=str, choices=["strogatz", "<path_to_dataset.pkl>"], default="strogatz")
@@ -181,7 +184,12 @@ if __name__ == "__main__":
     
     params.eval_dump_path = params.dump_path
     # params.reevaluate_path = f"/home/haicu/soeren.becker/repos/odeformer/experiments/{params.dump_path}/eval_pmlb.csv"
-    
+    if params.baseline_model == "odeformer":
+        params.reevaluate_path = "./experiments/odeformer/scores.csv"
+    if params.baseline_model == "odeformer_opt":
+        params.reevaluate_path = "/p/project/hai_microbio/sb/repos/odeformer/experiments/odeformer/optimize/scores_optimize.csv"
+    if params.baseline_model == "odeformer_opt_random":
+        params.reevaluate_path = "/p/project/hai_microbio/sb/repos/odeformer/experiments/odeformer/optimize_init_random/random_seed_2023/scores_optimize.csv"
     symbolicregression.utils.CUDA = not params.cpu
     if params.batch_size_eval is None:
         params.batch_size_eval = int(1.5 * params.batch_size)
@@ -191,5 +199,5 @@ if __name__ == "__main__":
     logger = initialize_exp(params, write_dump_path=False)
     if not params.cpu:
         assert torch.cuda.is_available()
-    print(params)    
+    print(params)
     main(params)
