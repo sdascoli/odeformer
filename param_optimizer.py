@@ -13,7 +13,6 @@ import pickle
 import argparse
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 from evaluate import *
 from symbolicregression.model.mixins import PredictionIntegrationMixin
@@ -33,7 +32,25 @@ class ConstantOptimizer(PredictionIntegrationMixin):
         track_eval_history: bool = True,
     ):
         """
-        NOTE: for eval_objective, a smaller objective value should imply better parameters.
+        Parameters
+        ----------
+            eq : str
+                equation with constants to be optimized
+            y0 : np.ndarray
+                initial value condition for ode integration
+            time : np.ndarray
+                evaluation times for ode integration
+            observed_trajectory : np.ndarray
+                We optimize the constants such that the integrated ODE becomes closer to this observed trajectory.
+            init_random : bool
+                If True, start optimization from random initial guesses. If False, start from constant values in `eq`.
+            optimization_objective : Literal["mse", "r2"]
+                Objective function to optimize.
+            eval_objective : Literal["mse", "r2"]
+                Objective function for evaluating the fit.
+            track_eval_history : bool
+                If True, the eval_objective is stored for each optimization step and the final parameter estimates are 
+                taken to be those parameter values that achieved the best evaluation objective score.
         """
         
         self.eq = eq
@@ -44,8 +61,7 @@ class ConstantOptimizer(PredictionIntegrationMixin):
         self.optimization_objective = optimization_objective
         self.eval_objective = eval_objective
         self.track_eval_history = track_eval_history
-        self.CONSTANTS_PATTERN = \
-            r"(?:(?<!_\d*))(?:(?<!\*\*))(?:[-+]?)?(?:(?<=\()[-+]?)?(?:(?<=^)[-+]?)?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[Ee][+-]?\d+)?"
+        self.CONSTANTS_PATTERN = r"(?:(?<!_\d*))(?:(?<!\*\*))(?:[-+]?)?(?:(?<=\()[-+]?)?(?:(?<=^)[-+]?)?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[Ee][+-]?\d+)?"
         self.orig_params = self.get_params()
         self.eval_history = []
         
@@ -60,41 +76,37 @@ class ConstantOptimizer(PredictionIntegrationMixin):
         param_priors = {}
         _ = regex.sub(
             pattern = self.CONSTANTS_PATTERN,
-            repl=lambda m: replace_constant_by_param(m, param_priors),
+            repl=lambda match: replace_constant_by_param(match, param_priors),
             string=self.eq
         )
         return param_priors
     
-    def set_params(self, params: np.ndarray) -> str:
+    def insert_params(self, params: np.ndarray) -> str:
         params = deepcopy(params)
         if isinstance(params, np.ndarray):
             params = params.tolist()
         assert isinstance(params, List), type(params)
-        params = params[::-1]
-        
-        def replace_constant_by_param(params: List) -> str:
-            return f"{params.pop()}"
-        
         return regex.sub(
             pattern = self.CONSTANTS_PATTERN,
-            repl=lambda _match: replace_constant_by_param(params), # do not remove lambda, this needs to be a Callable
+            repl=lambda _: f"{params.pop(0)}", # do not remove lambda, this needs to be a Callable
             string=self.eq
         )
+        
+    def set_params(self, params: np.ndarray) -> str:
+        self.eq = self.insert_params(params)
     
     def simulate(self, params: Union[List, np.ndarray]) -> Tuple[np.ndarray, str]:
         return self.integrate_prediction(
             times=self.time,
             y0=self.y0, 
-            prediction=self.set_params(params),
+            prediction=self.insert_params(params),
         )
-        
         
     def objective(self, params: np.ndarray) -> float:
         simulated_trajectory = self.simulate(params)
         if self.track_eval_history:
             self.eval_history.append([self._objective(simulated_trajectory, self.eval_objective), *params])
         return self._objective(simulated_trajectory, self.optimization_objective)
-        
         
     def _objective(self, simulated_trajectory, objective: str):
         if simulated_trajectory is None or not np.isfinite(simulated_trajectory).any():
@@ -110,7 +122,7 @@ class ConstantOptimizer(PredictionIntegrationMixin):
             return np.inf
     
     def optimize(self) -> Tuple[str, np.ndarray, np.ndarray]:
-        param_priors = np.array(list(self.get_params().values()))
+        param_priors = list(self.get_params().values())
         info = minimize(
             fun=lambda _params: self.objective(_params),
             x0=(np.random.randn(len(param_priors)) if self.init_random else param_priors),
@@ -121,7 +133,7 @@ class ConstantOptimizer(PredictionIntegrationMixin):
         else:
             # take final params
             optimal_params = info["x"]  
-        return self.set_params(optimal_params), optimal_params, self.simulate(optimal_params)
+        return self.insert_params(optimal_params), optimal_params, self.simulate(optimal_params)
         
     def _get_optimal_params(self) -> np.ndarray:
         if len(self.eval_history) == 0:
@@ -162,14 +174,15 @@ def main(args, result_dir, result_file):
                 y0=_trajectory[0],
                 time=_times,
                 observed_trajectory=_trajectory,
-                optimization_objective="r2",
-                eval_objective="r2",
-                init_random=False,
-                track_eval_history=False
+                optimization_objective=args.optimization_objective,
+                eval_objective=args.eval_objective,
+                init_random=args.init_random,
+                track_eval_history=args.track_eval_history,
             )
+            orig_params = list(param_optimizer.get_params().values())
+            orig_trajectory = param_optimizer.simulate(orig_params)
             
             final_eq, estimated_params, simulated_trajectory = param_optimizer.optimize()
-            
             try:
                 r2 = variance_weighted_r2_score(_trajectory, simulated_trajectory)
             except Exception as e:
@@ -189,10 +202,12 @@ def main(args, result_dir, result_file):
             print(final_r2s[-1])
             final_preds.append(final_eq)
             trajetory_counter += 1
-    
+        
     final_scores.loc[:, "predicted_trees"] = final_preds
+    print(f"Saving optimized score at: {os.path.join(result_dir, result_file)}.")
     final_scores.to_csv(os.path.join(result_dir, result_file))
     print(f"final_scores: {final_scores}")
+    print(f"final_scores (min): {np.nanmin(np.array(final_r2s), axis=0)}")
     print(f"final_scores (mean): {np.nanmean(np.array(final_r2s), axis=0)}")
     print(f"final_scores (median): {np.nanmedian(np.array(final_r2s), axis=0)}")
             
@@ -212,13 +227,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--path_scores", type=str, default="./experiments/odeformer/scores.csv")
     parser.add_argument("--path_dataset", type=str, default="./datasets/strogatz.pkl")
-    parser.add_argument("--num_simulations", type=int, default=10000)
-    parser.add_argument("--num_posterio_samples", type=int, default=100000)
     parser.add_argument("--random_seed", type=int, default=2023)
-    parser.add_argument("--random_param_initialization", type=str2bool, default=False)
+    parser.add_argument("--init_random", type=str2bool, default=False)
+    parser.add_argument("--optimization_objective", type=str, default="r2")
+    parser.add_argument("--eval_objective", type=str, default="r2")
+    parser.add_argument("--track_eval_history", type=str2bool, default=True)
+    
     args = parser.parse_args()
     
-    result_dir = Path(args.path_scores).parent / "optimize"
+    if args.init_random:
+        result_dir = Path(args.path_scores).parent / "optimize_init_random" / f"random_seed_{args.random_seed}"
+    else:
+        result_dir = Path(args.path_scores).parent / "optimize"
     result_file = f"{str(Path(args.path_scores).stem)}_optimize.csv"
     os.makedirs(result_dir, exist_ok=True)
     
@@ -227,7 +247,3 @@ if __name__ == "__main__":
         pickle.dump(obj = dict(vars(args)), file=fout)
 
     main(args, result_dir, result_file)
-    
-    # TODO: optimization fails for 1 example, why? Maybe try better loss function?
-    # TODO: start from random initial guesses
-    # TODO: write up in manuscript
