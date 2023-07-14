@@ -165,10 +165,10 @@ class Evaluator(object):
             for i, (time, trajectory) in enumerate(zip(times, trajectories)):
                 # add noise
                 if self.params.eval_noise_gamma:
-                    trajectory += self.env._create_noise(trajectory, gamma=self.params.eval_noise_gamma)
+                    trajectory += self.env._create_noise(trajectory, gamma=self.params.eval_noise_gamma, seed=self.params.test_env_seed)
                 # subsample
                 if self.params.eval_subsample_ratio:
-                    times, trajectory = self.env.subsample_trajectory(times, trajectory, subsample_ratio=self.params.eval_subsample_ratio)
+                    times, trajectory = self.env.subsample_trajectory(times, trajectory, subsample_ratio=self.params.eval_subsample_ratio, seed=self.params.test_env_seed)
                 times[i] = time
                 trajectories[i] = trajectory
 

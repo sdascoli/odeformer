@@ -520,12 +520,16 @@ class FunctionEnvironment(object):
     def _create_noise(self, 
                       trajectory: np.ndarray, 
                       train=None, 
-                      gamma=None):
-        if self.rng is None:
-            self.rng = np.random.RandomState(0)
+                      gamma=None,
+                      seed=None):
+        if seed is not None:
+            rng = np.random.RandomState(seed)
+        else:
+            try: rng = self.env.rng
+            except: rng = np.random.RandomState(0)
         if gamma is None:
             gamma = (
-                self.rng.uniform(0, self.params.train_noise_gamma)
+                rng.uniform(0, self.params.train_noise_gamma)
                 if train
                 else self.params.eval_noise_gamma
             )
@@ -539,16 +543,20 @@ class FunctionEnvironment(object):
                               trajectory: np.ndarray, 
                               train=None,
                               subsample_ratio: Union[None, float]=None,
+                              seed=None
     ):
-        if self.rng is None:
-            self.rng = np.random.RandomState(0)
+        if seed is not None:
+            rng = np.random.RandomState(seed)
+        else:
+            try: rng = self.env.rng
+            except: rng = np.random.RandomState(0)
         if subsample_ratio is None:
             subsample_ratio = (
-                self.rng.uniform(0, self.params.train_subsample_ratio)
+                rng.uniform(0, self.params.train_subsample_ratio)
                 if train
                 else self.params.eval_subsample_ratio
             )
-        indices_to_remove = self.rng.choice(
+        indices_to_remove = rng.choice(
             trajectory.shape[0], 
             int(trajectory.shape[0] * subsample_ratio), 
             replace=False,
