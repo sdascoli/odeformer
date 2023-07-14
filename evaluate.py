@@ -162,6 +162,16 @@ class Evaluator(object):
             else:
                 trees = [None]*len(times)
 
+            for i, (time, trajectory) in enumerate(zip(times, trajectories)):
+                # add noise
+                if self.params.eval_noise_gamma:
+                    trajectory += self.env._create_noise(trajectory, gamma=self.params.eval_noise_gamma)
+                # subsample
+                if self.params.eval_subsample_ratio:
+                    times, trajectory = self.env.subsample_trajectory(times, trajectory, subsample_ratio=self.params.eval_subsample_ratio)
+                times[i] = time
+                trajectories[i] = trajectory
+
             # fit            
             if self.params.max_masked_variables:  # randomly mask some variables
                 masked_trajectories = copy.deepcopy(trajectories)
@@ -307,15 +317,8 @@ class Evaluator(object):
                 start = j * len(times)
                 stop = (j+1) * len(times)
                 trajectory = np.concatenate((x[start:stop], y[start:stop]),axis=1)
-                # add noise
-                trajectory += self.env._create_noise(trajectory, gamma=self.params.eval_noise_gamma)
-                # subsample
-                if self.params.eval_subsample_ratio:
-                    times_, trajectory_ = self.env._subsample_trajectory(times, trajectory, subsample_ratio=self.params.eval_subsample_ratio)
-                else:
-                    times_, trajectory_ = times, trajectory
-                samples['times'].append(times_)
-                samples['trajectory'].append(trajectory_)
+                samples['times'].append(times)
+                samples['trajectory'].append(trajectory)
             iterator.append((samples, None))
 
         if save:
