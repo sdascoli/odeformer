@@ -92,13 +92,13 @@ def get_parser():
     parser.add_argument(
         "--n_enc_heads",
         type=int,
-        default=8,
+        default=16,
         help="Number of Transformer encoder heads",
     )
     parser.add_argument(
         "--n_dec_heads",
         type=int,
-        default=8,
+        default=16,
         help="Number of Transformer decoder heads",
     )
     parser.add_argument(
@@ -173,7 +173,7 @@ def get_parser():
     parser.add_argument(
         "--optimizer",
         type=str,
-        default='adam_cosine,warmup_updates=10000,init_period=100000,period_mult=1.5,lr_shrink=0.5',
+        default='adam_cosine,warmup_updates=10000,init_period=300000,period_mult=1.5,lr_shrink=0.5',
         help="Optimizer (SGD / RMSprop / Adam, etc.)",
     )
     parser.add_argument("--lr", 

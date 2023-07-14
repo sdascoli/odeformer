@@ -9,14 +9,14 @@ import shutil
 from distutils import dir_util
 #user = os.getlogin()
 
-exp_folder = 'general'
+exp_folder = 'no_subsampling'
 
 #dump_path = f'/home/{user}/odeformer/experiments'
 dump_path = f'/sb_u0621_liac_scratch/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
 
 extra_args = {
-    'reload_data':dump_path + "/datagen_general/datagen_use_sympy_True",
+    'reload_data':dump_path + "/datagen_final/datagen_use_sympy_True",
     'use_wandb':True,
     'collate_queue_size': 1000,
     #'n_steps_per_epoch':1000,
@@ -28,12 +28,16 @@ extra_args = {
     'max_dimension':6,
     'float_descriptor_length':3,
     'enc_emb_dim':256,
-    'dec_emb_dim':512
+    'dec_emb_dim':512,
+    #'subsample_ratio':0.5,
+    'max_points':200,
     }
 
 grid = {
     #'float_descriptor_length':[1,2,3],
-    "train_noise_gamma":[0,1],
+    "train_noise_gamma":[0,.1],
+    "train_subsample_ratio":[0,.5],
+    #"lr":[4e-4],
     #"sign_as_token":[False],
     #"use_two_hot":[False]
     #"fixed_init_scale":[True,False],

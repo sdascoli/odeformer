@@ -4,7 +4,9 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 #
-import math, time, copy
+import math
+import copy
+import time as _time
 import numpy as np
 import torch
 from collections import defaultdict
@@ -30,19 +32,13 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
     def __init__(self,
                 model=None,
                 max_input_points=10000,
-                max_number_bags=-1,
-                stop_refinement_after=1,
-                n_trees_to_refine=1,
                 rescale=False,
                 average_trajectories=False,
                 params=None
                 ):
 
         self.max_input_points = max_input_points
-        self.max_number_bags = max_number_bags
         self.model = model
-        self.stop_refinement_after = stop_refinement_after
-        self.n_trees_to_refine = n_trees_to_refine
         self.rescale = rescale
         self.params = params
         self.average_trajectories = average_trajectories
@@ -63,7 +59,6 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
         rescale=None,
         verbose=False,
     ):
-        self.start_fit = time.time()
 
         if not average_trajectories: average_trajectories = self.average_trajectories
         self.model.average_trajectories = average_trajectories
@@ -77,27 +72,29 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
             times = [times]
             trajectories = [trajectories]
         n_datasets = len(times)
-
-        # take finite differences
-        if self.params:
-            if self.params.differentiate:
-                for i in range(len(times)):
-                    trajectories[i], times[i] = np.diff(trajectories[i], axis=0), times[i][1:]
         
+        # rescale time and features
         scaler = utils_wrapper.Scaler(time_range=[1, self.params.time_range], feature_scale=self.params.init_scale) if self.rescale else None 
         scale_params = {}
         if scaler is not None:
             scaled_times = []
             scaled_trajectories = []
-            for i, (time_, trajectory) in enumerate(zip(times, trajectories)):
-                scaled_time, scaled_trajectory = scaler.fit_transform(time_, trajectory)
+            for i, (time, trajectory) in enumerate(zip(times, trajectories)):
+                scaled_time, scaled_trajectory = scaler.fit_transform(time, trajectory)
                 scaled_times.append(scaled_time)
                 scaled_trajectories.append(scaled_trajectory)
                 scale_params[i]=scaler.get_params()
         else:
-            scaled_times = times
-            scaled_trajectories = trajectories
+            scaled_times = times.copy()
+            scaled_trajectories = trajectories.copy()
 
+        # permute trajectories so that when bagging the model doesn't get chunks
+        for i, (scaled_time, scaled_trajectory) in enumerate(zip(scaled_times, scaled_trajectories)):
+            permutation = np.random.permutation(len(scaled_time))
+            scaled_times[i] = scaled_time[permutation]
+            scaled_trajectories[i] = scaled_trajectory[permutation]
+
+        # split into bags of size max_input_points
         inputs, inputs_ids = [], []
         for seq_id in range(len(scaled_times)):
             for seq_l in range(len(scaled_times[seq_id])):
@@ -111,14 +108,10 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
             # inputs.append([])
             # inputs_ids.append(seq_id)
 
-        if self.max_number_bags>0:
-            inputs = inputs[:self.max_number_bags]
-            inputs_ids = inputs_ids[:self.max_number_bags]
-
         # Forward transformer
-        forward_time=time.time()
+        forward_time=_time.time()
         outputs = self.model(inputs)  ##Forward transformer: returns predicted functions
-        if verbose: print("Finished forward in {} secs".format(time.time()-forward_time))
+        if verbose: print("Finished forward in {} secs".format(_time.time()-forward_time))
 
         all_candidates = defaultdict(list)
         assert len(inputs) == len(outputs), "Problem with inputs and outputs"
@@ -132,24 +125,23 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
                     candidate = self.model.env.simplifier.simplify_tree(candidate)
                 all_candidates[input_id].append(candidate)
         #assert len(all_candidates.keys())==n_datasets
-
+    
         if sort_candidates:
             for input_id in all_candidates.keys():
-                all_candidates[input_id] = self.sort_candidates(times[input_id], trajectories[input_id], all_candidates[input_id], metric=sort_metric)
-            
-        self.trees = all_candidates
+                all_candidates[input_id] = self.sort_candidates(times[input_id], trajectories[input_id], all_candidates[input_id], metric=sort_metric, verbose=verbose)
 
         return all_candidates
 
     @torch.no_grad()
     def evaluate_tree(self, tree, times, trajectory, metric):
         earliest = np.argmin(times)
-        pred_trajectory = self.integrate_prediction(times, trajectory[earliest], prediction=tree)
+        try: pred_trajectory = self.integrate_prediction(times, trajectory[earliest], prediction=tree)
+        except: return np.nan
         metrics = compute_metrics(pred_trajectory, trajectory, predicted_tree=tree, metrics=metric)
         return metrics[metric][0]
 
     @torch.no_grad()
-    def sort_candidates(self, times, trajectory, candidates, metric="snmse"):
+    def sort_candidates(self, times, trajectory, candidates, metric="snmse", verbose=False):
         if "r2" in metric: 
             descending = True
         else: 
@@ -162,7 +154,14 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
             scores.append(score)
         sorted_idx = np.argsort(scores)  
 
-        if descending: sorted_idx= reversed(sorted_idx)
+        if descending: sorted_idx= list(reversed(sorted_idx))
         candidates = [candidates[i] for i in sorted_idx]
+
+        scores = [scores[i] for i in sorted_idx]
+
+        if verbose: 
+            print(scores, candidates)
+            for score, candidate in zip(scores, candidates):
+                print(f'{score}:{candidate}')
 
         return candidates

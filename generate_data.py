@@ -8,7 +8,7 @@ from pathlib import Path
 import shutil
 from distutils import dir_util
 
-exp_folder = 'datagen_general'
+exp_folder = 'datagen_final'
 
 dump_path = f'/sb_u0621_liac_scratch/odeformer/experiments'
 Path(dump_path).mkdir(exist_ok=True)
@@ -23,11 +23,13 @@ extra_args = {
     'min_dimension':1,
     'max_dimension':6,
     'print_freq':100,
+    'max_points':200,
     "export_data":True,
     "use_wandb":False,
     "cpu":True,
-    
-    "operators_to_use":"add:3,mul:1,inv:1,sin:1,id:3"
+    "train_noise_gamma":0,
+    "train_subsample_ratio":0, 
+    #"operators_to_use":"add:3,mul:1,inv:1,sin:1,id:3"
      }
 
 grid = {

@@ -192,7 +192,7 @@ def load_run(run, extra_args = {}):
 
     dstr = SymbolicTransformerRegressor(
         model=mw,
-        max_input_points=int(params.max_points*params.subsample_ratio),
+        max_input_points=int(params.max_points),
         rescale=params.rescale,
         params = params
     )

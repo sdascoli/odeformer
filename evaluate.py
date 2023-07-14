@@ -76,7 +76,7 @@ def setup_odeformer(trainer) -> SymbolicTransformerRegressor:
     )
     return SymbolicTransformerRegressor(
         model=mw,
-        max_input_points=int(trainer.params.max_points*trainer.params.subsample_ratio),
+        max_input_points=trainer.params.max_points,
         rescale=trainer.params.rescale,
         params=trainer.params
     )
@@ -135,14 +135,24 @@ class Evaluator(object):
             map(lambda x: "info_" + x, self.params.ablation_to_keep.split(","))
         )
 
-    def evaluate_on_iterator(self,iterator,save_file,):
+    def evaluate_on_iterator(self, iterator, save_file, name="in_domain"):
         self.trainer.logger.info("evaluate_on_iterator")
         scores = OrderedDict({"epoch": self.trainer.epoch})
         batch_results = defaultdict(list)
         for samples_i, (samples, _) in enumerate(tqdm(iterator)):
             times = samples["times"]
             trajectories = samples["trajectory"]
+            
             infos = samples["infos"]
+            for k, v in infos.items():
+                if isinstance(v, np.ndarray) or isinstance(v, torch.Tensor):
+                    infos[k] = v.tolist()
+                elif isinstance(v, List):
+                    infos[k] = v
+                else:
+                    raise TypeError(f"v should be of type List of np.ndarray but has type: {type(v)}")
+            for k, v in infos.items():
+                batch_results["info_" + k].extend(v)
 
             if "tree" in samples.keys():
                 trees = [self.env.simplifier.simplify_tree(tree, expand=True) for tree in samples["tree"]]
@@ -151,7 +161,8 @@ class Evaluator(object):
                 )
             else:
                 trees = [None]*len(times)
-            
+
+            # fit            
             if self.params.max_masked_variables:  # randomly mask some variables
                 masked_trajectories = copy.deepcopy(trajectories)
                 n_masked_variables_arr = []
@@ -160,10 +171,11 @@ class Evaluator(object):
                     masked_trajectories[seq_id][:, -n_masked_variables:] = np.nan
                     n_masked_variables_arr.append(n_masked_variables)
                 infos['n_masked_variables'] = np.array(n_masked_variables_arr)
-                all_candidates: Dict[int, List[str]] = self.model.fit(times, masked_trajectories, verbose=False, sort_candidates=True)
+                all_candidates = self.model.fit(times, masked_trajectories, verbose=False, sort_candidates=True)
             else:
-                all_candidates: Dict[int, List[str]] = self.model.fit(times, trajectories, verbose=False, sort_candidates=True)
+                all_candidates = self.model.fit(times, trajectories, verbose=False, sort_candidates=True)
 
+            # validation
             best_results = {metric:[] for metric in self.params.validation_metrics.split(',')}
             best_candidates = []
             for time, trajectory, tree, candidates in zip(times, trajectories, trees, all_candidates.values()):
@@ -176,40 +188,33 @@ class Evaluator(object):
                 trajectory = trajectory[idx]
                 best_candidate = candidates[0] # candidates are sorted
 
-                pred_trajectory = self.model.integrate_prediction(
-                    time, y0=trajectory[0], prediction=best_candidate
-                )
-                best_result = compute_metrics(
-                    pred_trajectory, 
-                    trajectory, 
-                    predicted_tree=best_candidate, 
-                    tree = tree,
-                    metrics=self.params.validation_metrics
-                )
                 pred_trajectory = self.model.integrate_prediction(time, y0=trajectory[0], prediction=best_candidate) 
-                try: best_candidate = self.env.simplifier.simplify_tree(best_candidate, expand=True)
-                except: pass
+                best_candidate = self.env.simplifier.simplify_tree(best_candidate, expand=True)
                 best_result = compute_metrics(pred_trajectory, trajectory, predicted_tree=best_candidate, tree=tree, metrics=self.params.validation_metrics)
                 for k, v in best_result.items():
                     best_results[k].append(v[0])
                 best_candidates.append(best_candidate)
- 
+
             batch_results["predicted_trees"].extend([tree.infix() if hasattr(tree, 'infix') else tree for tree in best_candidates])
-
-            for k, v in infos.items():
-                if isinstance(v, np.ndarray) or isinstance(v, torch.Tensor):
-                    infos[k] = v.tolist()
-                elif isinstance(v, List):
-                    infos[k] = v
-                else:
-                    raise TypeError(
-                        f"v should be of type List of np.ndarray but has type: {type(v)}"
-                    )
-
-            for k, v in infos.items():
-                batch_results["info_" + k].extend(v)
             for k, v in best_results.items():
-                batch_results[k ].extend(v)
+                batch_results[k].extend(v)
+
+            # test
+            test_results = {metric:[] for metric in self.params.validation_metrics.split(',')}
+            for tree, candidate, dimension in zip(trees, best_candidates, infos["dimension"]):
+                y0 = self.env.rng.randn(dimension)
+                time = np.linspace(1, self.params.time_range, self.params.max_points)
+                trajectory = self.model.integrate_prediction(time, y0=y0, prediction=tree) 
+                if not tree or not candidate or (trajectory is None):
+                    for k in test_results:
+                        test_results[k].append(np.nan)
+                    continue
+                pred_trajectory = self.model.integrate_prediction(time, y0=y0, prediction=candidate) 
+                result = compute_metrics(pred_trajectory, trajectory, predicted_tree=candidate, tree=tree, metrics=self.params.validation_metrics)
+                for k, v in result.items():
+                    test_results[k].append(v[0])
+            for k, v in test_results.items():
+                batch_results['test_'+k].extend(v)
 
         batch_results = pd.DataFrame.from_dict(batch_results)
         batch_results.to_csv(save_file, index=False)
@@ -228,8 +233,14 @@ class Evaluator(object):
         if "info_name" in df.columns: df = df.drop(columns=["info_name"])
 
         for metric in self.params.validation_metrics.split(','):
-            scores[metric] = df[metric].mean()
+            for prefix in ["", "test_"]:
+                scores[prefix+metric] = df[prefix+metric].mean()
+                scores[prefix+metric + '_median'] = df[prefix+metric].median()
                         
+        if self.params.use_wandb:
+            for prefix in ["", "test_"]:
+                wandb.log({'in_domain_'+prefix+metric: scores[prefix+metric] for metric in self.params.validation_metrics.split(',')})
+
         for ablation in self.ablation_to_keep:
             for val, df_ablation in df.groupby(ablation):
                 avg_scores_ablation = df_ablation.mean()
@@ -265,11 +276,9 @@ class Evaluator(object):
             save_file = os.path.join(self.save_path, "eval_in_domain.csv")
 
         scores = self.evaluate_on_iterator(iterator,
-                                           save_file)
+                                           save_file,
+                                           name = "in_domain")
         
-        if self.params.use_wandb:
-            wandb.log({'in_domain_'+metric: scores[metric] for metric in self.params.validation_metrics.split(',')})
-
         return scores
 
     def evaluate_on_pmlb(
@@ -298,7 +307,13 @@ class Evaluator(object):
                 start = j * len(times)
                 stop = (j+1) * len(times)
                 trajectory = np.concatenate((x[start:stop], y[start:stop]),axis=1)
-                times_, trajectory_ = self.env.generator._subsample_trajectory(times, trajectory, subsample_ratio=self.params.subsample_ratio)
+                # add noise
+                trajectory += self.env._create_noise(trajectory, gamma=self.params.eval_noise_gamma)
+                # subsample
+                if self.params.eval_subsample_ratio:
+                    times_, trajectory_ = self.env._subsample_trajectory(times, trajectory, subsample_ratio=self.params.eval_subsample_ratio)
+                else:
+                    times_, trajectory_ = times, trajectory
                 samples['times'].append(times_)
                 samples['trajectory'].append(trajectory_)
             iterator.append((samples, None))
@@ -306,10 +321,7 @@ class Evaluator(object):
         if save:
             save_file = os.path.join(self.save_path, "eval_pmlb.csv")
 
-        scores = self.evaluate_on_iterator(iterator,save_file)
-
-        if self.params.use_wandb:
-            wandb.log({'pmlb_'+metric: scores[metric] for metric in self.params.validation_metrics.split(',')})
+        scores = self.evaluate_on_iterator(iterator,save_file, name="pmlb")
 
         return scores
     
@@ -356,10 +368,7 @@ class Evaluator(object):
         if save:
             save_file = os.path.join(self.save_path, "eval_oscillators.csv")
 
-        scores = self.evaluate_on_iterator(iterator,save_file)
-
-        if self.params.use_wandb:
-            wandb.log({'oscillators_'+metric: scores[metric] for metric in self.params.validation_metrics.split(',')})
+        scores = self.evaluate_on_iterator(iterator,save_file, name="oscillators")
 
         return scores
     
@@ -465,7 +474,7 @@ if __name__ == "__main__":
     pk = pickle.load(open(params.reload_checkpoint + "/params.pkl", "rb"))
     pickled_args = pk.__dict__
     for p in params.__dict__:
-        if p in pickled_args and p not in ["dump_path", "reload_checkpoint", "rescale", "validation_metrics", "eval_in_domain", "eval_on_pmlb", "batch_size_eval", "beam_size", "beam_selection_metric", "subsample_prob", "eval_noise_gamma", "eval_noise_type", "use_wandb", "eval_size", "reload_data"]:
+        if p in pickled_args and p not in ["dump_path", "reload_checkpoint", "rescale", "validation_metrics", "eval_in_domain", "eval_on_pmlb", "batch_size_eval", "beam_size", "beam_selection_metric", "subsample_prob", "eval_noise_gamma", "eval_subsample_ratio", "eval_noise_type", "use_wandb", "eval_size", "reload_data"]:
             params.__dict__[p] = pickled_args[p]
 
     params.is_slurm_job = False
