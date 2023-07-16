@@ -7,7 +7,7 @@
 from tqdm import tqdm
 from copy import deepcopy
 from timeit import default_timer as timer
-from typing import Callable, Dict, List, Union
+from typing import Any, Callable, Dict, List, Union
 from pathlib import Path
 from collections import OrderedDict, defaultdict
 
@@ -527,53 +527,88 @@ class Evaluator(object):
         nodes = [self.env.simplifier.sympy_expr_to_tree(e) for e in exprs]
         return NodeList(nodes)
     
+    def read_equations_from_txt_file(self, path: str, save: bool, seed: Union[None, int]):
+        # read text file where each line is assumed to be an equation
+        # TODO: currently all y0 are set to 1
+        _filename = Path(path).name
+        if seed is not None:
+            np.random.seed(seed)
+        iterator = []
+        with open(path) as f:
+            for line_i, line in enumerate(f):
+                samples = defaultdict(list)
+                line = line.rstrip("\n")
+                tree = self.str_to_tree(line)
+                eqs = line.split("|")
+                dim = len(eqs)
+                var_names = [f"x_{k}" for k in range(dim)]
+                y0 = np.ones(len(var_names))
+                times = np.linspace(0, 5, 256)
+                trajectory = self.model.integrate_prediction(
+                    times, y0=y0, prediction=line
+                )
+                if np.nan in trajectory:
+                    self.trainer.logger.info(
+                        f"NaN detected in solution trajectory of {line}. Excluding this equation."
+                    )
+                    continue
+                samples['infos'] = {
+                    'dimension': [2],
+                    'n_unary_ops': [np.nan],
+                    'n_input_points': [len(times)],
+                    'name': [f"{_filename}_{line_i:03d}_{line}"],
+                }
+                samples['times'].append(times)
+                samples["trajectory"].append(trajectory)
+                samples['tree'].append(tree)
+                iterator.append((samples, None))
+        with open(path+".pkl", "wb") as fpickle:
+            pickle.dump(iterator, fpickle)
+        return iterator
+    
+    def read_equations_from_json_file(self, path: str, save: bool):
+        iterator = []
+        with open(path, "r") as fjson:
+            store: List[Dict[str, Any]] = json.load(fjson)
+        for sample_i, _sample in enumerate(store):
+            for solution_i in range(len(_sample["solutions"])):
+                try:
+                    samples = defaultdict(list)
+                    times = _sample["solutions"][solution_i][0]["t"]
+                    trajectory = np.array(_sample["solutions"][solution_i][0]["y"]).T
+                    samples['infos'] = {
+                        'dimension': [trajectory.shape[1]],
+                        'n_unary_ops': [np.nan],
+                        'n_input_points': [len(times)],
+                        'name': [f"{_sample['eq_description']}_{solution_i:2d}"],
+                        'dataset': ["strogatz_extended"],
+                    }
+                    samples['times'].append(times)
+                    samples['trajectory'].append(trajectory)
+                    samples['tree'].append(self.str_to_tree(" | ".join(_sample["substituted"][solution_i])))
+                    iterator.append((samples, None))
+                except Exception as e:
+                    print(sample_i, solution_i)
+                    print(e)
+                
+        return iterator
+            
+    
     def evaluate_on_file(self, path: str, save: bool, seed: Union[None, int]):
         _filename = Path(path).name
         if path.endswith(".pkl"):
             # read pickle file which is assumed to have correct format
             with open(path, "rb") as fpickle:
                 iterator = pickle.load(fpickle)
+        elif path.endswith(".json"):
+            iterator = self.read_equations_from_json_file(path=path, save=save)
         else:
-            # read text file where each line is assumed to be an equation
-            if seed is not None:
-                np.random.seed(seed)
-            iterator = []
-            with open(path) as f:
-                for line_i, line in enumerate(f):
-                    samples = defaultdict(list)
-                    line = line.rstrip("\n")
-                    tree = self.str_to_tree(line)
-                    eqs = line.split("|")
-                    dim = len(eqs)
-                    var_names = [f"x_{k}" for k in range(dim)]
-                    y0 = np.ones(len(var_names))
-                    times = np.linspace(0, 5, 256)
-                    trajectory = self.model.integrate_prediction(
-                        times, y0=y0, prediction=line
-                    )
-                    if np.nan in trajectory:
-                        self.trainer.logger.info(
-                            f"NaN detected in solution trajectory of {line}. Excluding this equation."
-                        )
-                        continue
-                    samples['infos'] = {
-                        'dimension': [2],
-                        'n_unary_ops': [np.nan],
-                        'n_input_points': [len(times)],
-                        'name': [f"{_filename}_{line_i:03d}_{line}"],
-                    }
-                    samples['times'].append(times)
-                    samples["trajectory"].append(trajectory)
-                    samples['tree'].append(tree)
-                    iterator.append((samples, None))
-            with open(path+".pkl", "wb") as fpickle:
-                pickle.dump(iterator, fpickle)
-                
+            iterator = self.read_equations_from_txt_file(path=path, save=save, seed=seed)
         if save:
             save_file = os.path.join(self.save_path, f"eval_{_filename}.csv")
         else:
             save_file = None
-        return self.evaluate_on_iterator(iterator,save_file)
+        return self.evaluate_on_iterator(iterator, save_file)
                     
 
 def main(params):
@@ -602,6 +637,9 @@ def main(params):
     model = setup_odeformer(trainer)
     evaluator = Evaluator(trainer, model)
     save = params.save_results
+
+    
+
 
     if params.eval_in_domain:
       scores = evaluator.evaluate_in_domain("functions",save=save,)
