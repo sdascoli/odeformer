@@ -129,11 +129,11 @@ def solve_equations(equations, config):
     print("SOLVING DONE")
 
 
-def plot_trajectories(equations):
+def plot_trajectories(equations, path="./plots"):
     """Create plots for all solved trajectories for all equations for visual inspection."""
     # Create a directory for plots if it doesn't exist
-    if not os.path.exists('plots'):
-        os.makedirs('plots')
+    if not os.path.exists(path):
+        os.makedirs(path, parent=True)
 
     # Loop over all equations
     for eq_dict in tqdm(equations):
@@ -175,13 +175,14 @@ def plot_trajectories(equations):
                 axs[i, j].legend()
         
         # Save the plot as .pdf
-        fig.savefig(f'plots/{eq_id}_{plot_filename}', format='pdf');
+        fig.savefig(os.path.join(path, f'{eq_id}_{plot_filename}'), format='pdf');
         plt.close(fig)
     print("PLOTTING DONE")
 
 
 if __name__ == '__main__':
+    base_path = "./datasets/strogatz_extended"
     process_equations(equations)
     solve_equations(equations, config)
-    save_to_disk(equations, 'solutions.json')
-    plot_trajectories(equations)
+    save_to_disk(equations, filename=os.path.join(base_path, 'strogatz_extended.json'))
+    plot_trajectories(equations, path=os.path.join(base_path, "plots"))

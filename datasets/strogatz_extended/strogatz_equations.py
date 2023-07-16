@@ -451,7 +451,8 @@ equations = [
 },
 {
     'id': 35,
-    'eq': 'cot(x_1) * cos(x_0) | sin(x_0) * (cos(x_1)^2 + c_0 * sin(x_1)^2)',
+    # 'eq': 'cot(x_1) * cos(x_0) | sin(x_0) * (cos(x_1)^2 + c_0 * sin(x_1)^2)',
+    'eq': '(cos(x_1) / sin(x_1)) * cos(x_0) | sin(x_0) * (cos(x_1)^2 + c_0 * sin(x_1)^2)',
     'dim': 2,
     'consts': [[0.1], [4.2]],
     'init': [[1.13, -0.3]],
