@@ -96,17 +96,21 @@ def main(params):
     else:
         raise ValueError(f"Unknown model: {params.baseline_model}")
         
-    evaluator_default = Evaluator(trainer, model)
+    evaluator = Evaluator(trainer, model)
+    
+    # evaluator.evaluate_on_file(
+    #     path="/p/project/hai_microbio/sb/repos/odeformer/datasets/strogatz_extended/solutions.json",
+    #     save=params.save_results,
+    #     seed=13,
+    # )
     
     if params.eval_on_file:
-        scores = evaluator_default.evaluate_on_file(
+        scores = evaluator.evaluate_on_file(
             path=params.eval_on_file, save=params.save_results, seed=13,
         )
-        _name = Path(params.eval_on_file).name
-        # format_and_save(params, scores, batch_results, str(_name))
         
     if params.eval_on_pmlb:
-        scores = evaluator_default.evaluate_on_pmlb(
+        scores = evaluator.evaluate_on_pmlb(
             save=params.save_results, path_dataset=params.path_dataset
         )
     
@@ -125,7 +129,7 @@ def str_or_None(arg: str):
 if __name__ == "__main__":
     BASE = os.path.join(os.getcwd(), "experiments")
     parser = get_parser()
-    parser.add_argument("--baseline_model", type=str, default="odeformer",
+    parser.add_argument("--baseline_model", type=str, default="sindy_poly10",
         choices=[
             "afp", "feafp", "eplex", "ehc",
             "proged", "proged_poly",
@@ -135,7 +139,9 @@ if __name__ == "__main__":
             "odeformer", "odeformer_opt", "odeformer_opt_random"
         ]
     )
-    parser.add_argument("--dataset", type=str, choices=["strogatz", "<path_to_dataset.pkl>"], default="strogatz")
+    parser.add_argument("--dataset", type=str, choices=["strogatz", "<path_to_dataset>"], 
+        default="/p/project/hai_microbio/sb/repos/odeformer/datasets/strogatz_extended/strogatz_extended.json"
+    )
     parser.add_argument("--baseline_hyper_opt", type=str2bool, default=True, 
         help="Do / Don't optimizer hyper parameters."
     )
@@ -156,12 +162,15 @@ if __name__ == "__main__":
         params.eval_on_pmlb = True
         params.path_dataset = "datasets/strogatz.pkl"
         params.eval_on_file = False
+        dataset_name = params.dataset
     else:
         params.eval_on_pmlb = False
         params.eval_on_file = params.dataset
+        dataset_name = Path(params.dataset).stem
     params.validation_metrics = 'r2,r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio,is_valid,complexity_sympy,relative_complexity_sympy,complexity_string,relative_complexity_string' # complexity,term_difference,term_difference_sympy
     params.eval_only = True
     params.cpu = True
+    params.max_dimension = 5
     
     if not hasattr(params, "subsample_ratio"):
         params.subsample_ratio = 0 # no subsampling
@@ -170,10 +179,12 @@ if __name__ == "__main__":
     if not hasattr(params, "eval_noise_type"):
         params.eval_noise_type = "additive"
     
+    
+    
     params.dump_path = os.path.join(
         BASE, 
         params.baseline_model,
-        params.dataset,
+        dataset_name,
         f"hyper_opt_{params.baseline_hyper_opt}",
         f"baseline_hyper_opt_eval_fraction_{params.baseline_hyper_opt_eval_fraction}",
         f"subsample_ratio_{params.subsample_ratio}",
