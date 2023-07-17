@@ -92,7 +92,6 @@ class GridSearchMixin(ABC):
                 trajectory=trajectory,
                 times=times,
                 sorting_metric=self.sorting_metric,
-                integrate_prediction=self.integrate_prediction,
             )
         return all_candidates
         
