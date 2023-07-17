@@ -436,29 +436,6 @@ class FunctionEnvironment(object):
         times = np.delete(times, indices_to_remove, axis=0)
         return times, trajectory
 
-    def _create_noise(
-        self,
-        train: bool,
-        trajectory: np.ndarray,
-        gamma: Union[None, float] = None,
-        noise_type: Literal["additive", "multiplicative"] = "additive",
-    ) -> np.ndarray:
-        if gamma is None:
-            gamma = (
-                self.rng.uniform(0, self.params.train_noise_gamma)
-                if train
-                else self.params.eval_noise_gamma
-            )
-        if noise_type == "additive":
-            norm = scipy.linalg.norm(
-                (np.abs(trajectory) + 1e-100) / np.sqrt(trajectory.shape[0])
-            )
-            return gamma * norm * np.random.randn(*trajectory.shape)
-        elif noise_type == "multiplicative": 
-            return np.random.normal(loc=1, scale=gamma, size=trajectory.shape)
-        else:
-            raise ValueError(f"Unknown noise type: `{noise_type}`.")
-
     @timeout(TIMEOUT)
     def _gen_expr(
         self,
@@ -520,14 +497,6 @@ class FunctionEnvironment(object):
         times, trajectory = datapoints
         n_points = trajectory.shape[0]
 
-        ##output noise added to trajectory
-        if self.params.train_noise_gamma > 0 or self.params.eval_noise_gamma > 0:
-            try:
-                trajectory += self._create_noise()
-            except Exception as e:
-                print(e, "norm computation error")
-                return {"tree": tree}, ["norm computation error"]
-
         # encode tree
         tree_encoded = self.equation_encoder.encode(tree)
         skeleton_tree, _ = self.generator.function_to_skeleton(tree)
@@ -567,6 +536,65 @@ class FunctionEnvironment(object):
         }
 
         return expr, []
+    
+    def _create_noise(
+        self, 
+        trajectory: np.ndarray, 
+        train: Union[bool, None] = None, 
+        gamma: Union[None, float] = None,
+        noise_type: Literal["additive", "multiplicative"] = "additive",
+        seed: Union[int, None] = None,
+    ):
+        """Returns noise"""
+        if seed is not None:
+            rng = np.random.RandomState(seed)
+        else:
+            try: rng = self.env.rng
+            except: rng = np.random.RandomState(0)
+        if gamma is None:
+            gamma = (
+                rng.uniform(0, self.params.train_noise_gamma)
+                if train
+                else self.params.eval_noise_gamma
+            )
+        if noise_type == "additive":
+            norm = scipy.linalg.norm(
+                (np.abs(trajectory) + 1e-100) / np.sqrt(trajectory.shape[0])
+            )
+            return gamma * norm * np.random.randn(*trajectory.shape)
+        elif noise_type == "multiplicative": 
+            return np.random.normal(loc=1, scale=gamma, size=trajectory.shape)
+        else:
+            raise ValueError(f"Unknown noise type: {noise_type}.")
+    
+    def _subsample_trajectory(
+        self,
+        times: np.ndarray, 
+        trajectory: np.ndarray, 
+        train=None,
+        subsample_ratio: Union[None, float]=None,
+        seed=None,
+    ):
+        """Applies subsampling in-place."""
+        if seed is not None:
+            rng = np.random.RandomState(seed)
+        else:
+            try: rng = self.env.rng
+            except: rng = np.random.RandomState(0)
+        if subsample_ratio is None:
+            subsample_ratio = (
+                rng.uniform(0, self.params.train_subsample_ratio)
+                if train
+                else self.params.eval_subsample_ratio
+            )
+        indices_to_remove = rng.choice(
+            trajectory.shape[0], 
+            int(trajectory.shape[0] * subsample_ratio), 
+            replace=False,
+        )
+        trajectory = np.delete(trajectory, indices_to_remove, axis=0)
+        times = np.delete(times, indices_to_remove, axis=0)
+        return times, trajectory
 
     def create_train_iterator(self, task, data_path, params, **args):
         """
@@ -694,7 +722,7 @@ class FunctionEnvironment(object):
         parser.add_argument(
             "--max_unary_depth",
             type=int,
-            default=6,
+            default=7,
             help="Max number of operators inside unary",
         )
         parser.add_argument(
@@ -811,13 +839,6 @@ class FunctionEnvironment(object):
             help="should we pad inputs to the maximum dimension?",
         )
 
-        # generator
-        parser.add_argument(
-            "--differentiate",
-            type=bool_flag,
-            default=False,
-            help="Whether to use two hot embeddings",
-        )
         parser.add_argument(
             "--use_two_hot",
             type=bool_flag,
@@ -861,7 +882,7 @@ class FunctionEnvironment(object):
             help="Minimum probability of generating an example with given n_op, for our curriculum strategy",
         )
         parser.add_argument(
-            "--max_points", type=int, default=300, help="Max number of terms in the series"
+            "--max_points", type=int, default=200, help="Max number of terms in the series"
         )
         parser.add_argument(
             "--min_points", type=int, default=50, help="Min number of terms per dim"
@@ -913,9 +934,15 @@ class FunctionEnvironment(object):
             help="Probability to generate n in leafs",
         )
         parser.add_argument(
-            "--subsample_ratio",
+            "--train_subsample_ratio",
             type=float,
             default=0.5,
+            help="Ratio of timesteps to remove",
+        )
+        parser.add_argument(
+            "--eval_subsample_ratio",
+            type=float,
+            default=0,
             help="Ratio of timesteps to remove",
         )
         parser.add_argument(
@@ -976,7 +1003,6 @@ class EnvDataset(Dataset):
         assert task in FunctionEnvironment.TRAINING_TASKS
         assert size is None or not self.train
         assert not params.batch_load or params.reload_size > 0
-        assert not (params.differentiate and params.subsample_ratio)
         
         # batching
         self.num_workers = params.num_workers
@@ -1100,6 +1126,19 @@ class EnvDataset(Dataset):
                 sample = self.generate_sample()
             else:
                 sample = self.read_sample()
+
+            times, trajectory = sample['times'], sample['trajectory']
+
+            # subsampling
+            if self.params.train_subsample_ratio or self.params.eval_subsample_ratio:
+                times, trajectory = self.env._subsample_trajectory(times, trajectory, train=self.train)
+            # output noise added to trajectory
+            if self.params.train_noise_gamma or self.params.eval_noise_gamma:
+                trajectory += self.env._create_noise(trajectory, train=self.train)
+            
+            sample['times'] = times
+            sample['trajectory'] = trajectory
+            
             self.collate_queue.append(sample)
 
         # sort sequences
@@ -1259,6 +1298,18 @@ class EnvDataset(Dataset):
                 return SKIP_ITEM
             else:
                 sample = self.read_sample()
+
+        times, trajectory = sample['times'], sample['trajectory']
+
+        # subsampling
+        if self.params.train_subsample_ratio or self.params.eval_subsample_ratio:
+            times, trajectory = self.env._subsample_trajectory(times, trajectory, train=self.train)
+        # output noise added to trajectory
+        if self.params.train_noise_gamma or self.params.eval_noise_gamma:
+            trajectory += self.env._create_noise(trajectory, train=self.train)
+        
+        sample['times'] = times
+        sample['trajectory'] = trajectory
 
         return sample
 

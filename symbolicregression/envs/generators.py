@@ -154,7 +154,7 @@ class Node:
     def __repr__(self):
         # infix a default print
         return str(self)
-
+    
     def val(self, x, t, deterministic=True):
         if len(x.shape) == 1:
             x = x.reshape((1, -1))
@@ -335,6 +335,9 @@ class NodeList:
     def replace_node_value(self, old_value, new_value):
         for node in self.nodes:
             node.replace_node_value(old_value, new_value)
+
+    def get_dimension(self):
+        return len(self.nodes)
 
 
 class Generator(ABC):
@@ -780,26 +783,6 @@ class RandomFunctions(Generator):
         tree_with_constants = env.word_to_infix(prefix, is_float=False, str_array=False)
         return tree_with_constants
 
-    def _subsample_trajectory(
-        self, 
-        times: np.ndarray, 
-        trajectory: np.ndarray, 
-        rng=None,
-        subsample_ratio: Union[None, float]=None,
-    ):
-        if subsample_ratio is None:
-            subsample_ratio = self.params.subsample_ratio
-        if rng is None:
-            rng = np.random.RandomState(0)
-        indices_to_remove = rng.choice(
-            trajectory.shape[0], 
-            int(trajectory.shape[0] * subsample_ratio), 
-            replace=False,
-        )
-        trajectory = np.delete(trajectory, indices_to_remove, axis=0)
-        times = np.delete(times, indices_to_remove, axis=0)
-        return times, trajectory
-
     def generate_datapoints(
         self,
         tree,
@@ -834,16 +817,6 @@ class RandomFunctions(Generator):
             last = trajectory[-window_len:]
             if np.all(np.abs((np.max(last, axis=0)-np.min(last, axis=0))/window_len) < 1e-3): # remove constant
                 return None, None
-
-        
-        #trajectory = np.concatenate((t.reshape(-1,1),trajectory), axis=-1)
-        times, trajectory = self._subsample_trajectory(times, trajectory, rng=rng, subsample_ratio=self.params.subsample_ratio)
-
-        # take finite differences
-        if self.params.differentiate:
-            trajectory = np.diff(trajectory, axis=0)
-            times = times[1:]
-        
         
         return tree, (times, trajectory)
 

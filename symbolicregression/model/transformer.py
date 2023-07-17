@@ -536,16 +536,15 @@ class TransformerModel(nn.Module):
             assert tensor.size() == (1, bs, self.dim)
             tensor = tensor.data[-1, :, :].to(self.dtype)  # (bs, dim)  ##BE CAREFUL
             scores = self.proj(tensor)  # (bs, n_words)
-            if average_across_batch:
-                scores = scores.mean(dim=0, keepdim=True).expand(bs, scores.size(1))
 
             # select next words: sample or greedy
             if sample_temperature is None:
                 next_words = torch.topk(scores, 1)[1].squeeze(1)
             else:
-                next_words = torch.multinomial(
-                    F.softmax(scores.float() / sample_temperature, dim=1), num_samples=1
-                ).squeeze(1)
+                if average_across_batch:
+                    scores = scores.mean(dim=0, keepdim=True).expand(bs, scores.size(1))
+                logits = F.softmax(scores.float()/sample_temperature, dim=1)
+                next_words = torch.multinomial(logits, num_samples=1).squeeze(1)
             assert next_words.size() == (bs,)
 
             if self.use_two_hot:
@@ -820,7 +819,7 @@ class BeamHypotheses(object):
         """
         Add a new hypothesis to the list.
         """
-        score = sum_logprobs / len(hyp) ** self.length_penalty
+        score = sum_logprobs / (len(hyp) ** self.length_penalty)
         if len(self) < self.n_hyp or score > self.worst_score:
             self.hyp.append((score, hyp))
             if len(self) > self.n_hyp:
