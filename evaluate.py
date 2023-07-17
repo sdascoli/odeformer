@@ -126,28 +126,30 @@ class Evaluator(object):
     ) -> Dict[str, Dict[str, Any]]:
         
         assert "test" not in samples.keys(), samples.keys()
+        samples["test"] = {"times":[], "trajectories":[]}
         
         if evaluation_task == "interpolation":
             samples["test"] = deepcopy(samples["train"])
             return samples
 
         elif evaluation_task == "forecasting":
-            assert len(samples["train"]["trajectories"]) == 1, len(samples["train"]["trajectories"])
-            y0 = samples["train"]["trajectories"][0][-1]
-            t0 = samples["train"]["times"][0][-1]
-            ode = samples["tree"]
-            teval = np.linspace(t0, t0+5, 512, endpoint=True)
-            test_trajectory = self.model.integrate_prediction(teval, y0=y0, prediction=ode)
-            samples["test"] = {"trajectories": [test_trajectory], "times": [teval]}
+            for time, trajectory in zip(samples["train"]["times"], samples["train"]["trajectories"]):
+                y0 = trajectory[-1]
+                t0 = time[-1]
+                ode = samples["tree"]
+                teval = np.linspace(t0, t0+5, 512, endpoint=True)
+                test_trajectory = self.model.integrate_prediction(teval, y0=y0, prediction=ode)
+                samples["test"]["trajectories"].append(test_trajectory)
+                samples["test"]["times"].append(teval)
             return samples
         
         elif evaluation_task == "y0_generalization":
-            dimension = samples["info"]["dimension"]
-            y0 = self.env.rng.randn(dimension)
-            teval = samples["train"]["times"]
-            ode = samples["tree"]
-            test_trajectory = self.model.integrate_prediction(teval, y0=y0, prediction=ode)
-            samples["test"] = {"trajectories": [test_trajectory], "times": [teval]}
+            for time, trajectory, dimension in zip(samples["train"]["times"], samples["train"]["trajectories"], samples["infos"]["dimension"]):
+                y0 = self.env.rng.randn(dimension)
+                ode = samples["tree"]
+                test_trajectory = self.model.integrate_prediction(time, y0=y0, prediction=ode)
+                samples["test"]["trajectories"].append(test_trajectory)
+                samples["test"]["times"].append(time)
             return samples
         
         else:
@@ -160,7 +162,7 @@ class Evaluator(object):
         trajectories: List[Dict],
         trees: List[Union[None, NodeList]],
         all_candidates: Union[List, Dict],
-        all_durations: Union[None, Dict],
+        all_durations: Union[List, Dict],
         validation_metrics: str
     ) -> Tuple[Dict, Dict]:
         
@@ -168,23 +170,23 @@ class Evaluator(object):
         best_results["duration_fit"], best_results["pareto_front"], best_candidates = [], [], []
         zipped = [times, trajectories, trees, (all_candidates.values() if isinstance(all_candidates, Dict) else all_candidates)]
         if all_durations is not None:
-            zipped.append(all_durations.values())
+            zipped.append(all_durations)
         for items in zip(*zipped):
             if len(items) == 5:
                 time, trajectory, tree, candidates, duration_fit  = items
             else:
                 time, trajectory, tree, candidates = items
-            best_results["pareto_front"].append(candidates)
-            if not candidates: 
+            if not candidates or trajectory is None: 
                 for k in best_results:
                     best_results[k].append(np.nan)
                 best_candidates.append(None)
                 continue
+            best_results["pareto_front"].append(candidates)
             time, idx = sorted(time), np.argsort(time)
             trajectory = trajectory[idx]
             if isinstance(candidates, List):
                 best_candidate = candidates[0]
-            elif isinstance(candidates, str):
+            else:
                 best_candidate = candidates
 
             if isinstance(best_candidate, str) and (not hasattr(self.params, "convert_prediction_to_tree") or self.params.convert_prediction_to_tree):
@@ -202,17 +204,18 @@ class Evaluator(object):
                 metrics=validation_metrics
             )
             if len(items) == 5:
-                best_result["duration_fit"] = duration_fit
+                best_result["duration_fit"] = [duration_fit]
             for k, v in best_result.items():
                 best_results[k].append(v[0])
             best_candidates.append(best_candidate)
         return best_results, best_candidates
 
-    def evaluate_on_iterator(self, iterator, save_file, name="in_domain"):
+    def evaluate_on_iterator(self, iterator, name="in_domain"):
         self.trainer.logger.info("evaluate_on_iterator")
         scores = OrderedDict({"epoch": self.trainer.epoch})
         batch_results = defaultdict(list)
         _total = min(self.eval_size, len(iterator)) if self.eval_size > 0 else len(iterator)
+        
         for samples_i, samples in enumerate(tqdm(iterator, total=_total)):
             if samples_i == self.eval_size:
                 break
@@ -264,11 +267,14 @@ class Evaluator(object):
                 trajectories[i] = trajectory
 
             # fit
-            all_candidates, all_duration_fit = dict(), dict()
-            for _trajectory_i, (_times, _trajectory) in enumerate(zip(times, trajectories)):
-                start_time_fit = timer()
-                all_candidates[_trajectory_i] = self.model.fit(_times, _trajectory)[0]
-                all_duration_fit[_trajectory_i] = [timer() - start_time_fit]
+            start_time_fit = timer()
+            all_candidates = self.model.fit(times, trajectories, verbose=False, sort_candidates=True)
+            all_duration_fit = [timer() - start_time_fit] * len(times)
+            #all_candidates, all_duration_fit = dict(), dict()
+            #for _trajectory_i, (_times, _trajectory) in enumerate(zip(times, trajectories)):
+            #    start_time_fit = timer()
+            #    all_candidates[_trajectory_i] = self.model.fit(_times, _trajectory)[0]
+            #    all_duration_fit[_trajectory_i] = [timer() - start_time_fit]
             
             # evaluate on train data
             best_results, best_candidates = self._evaluate(
@@ -294,6 +300,9 @@ class Evaluator(object):
                 batch_results['test_'+k].extend(v)
 
         batch_results = pd.DataFrame.from_dict(batch_results)
+
+        save_file = os.path.join(self.save_path, f"eval_{name}.csv")
+
         batch_results.to_csv(save_file, index=False)
         self.trainer.logger.info("Saved {} equations to {}".format(len(batch_results), save_file))
         try:
@@ -301,27 +310,33 @@ class Evaluator(object):
         except:
             self.trainer.logger.info("WARNING: no results")
             return
+        
         info_columns = [x for x in list(df.columns) if x.startswith("info_")]
         df = df.drop(columns=filter(lambda x: x not in self.ablation_to_keep, info_columns))
-        df = df.drop(columns=["predicted_trees"])
+        df = df.drop(columns=["predicted_trees", "pareto_front"])
         if "trees" in df: df = df.drop(columns=["trees"])
         if "info_name" in df.columns: df = df.drop(columns=["info_name"])
 
-        for metric in self.params.validation_metrics.split(',') + ["duration_fit"]:
+        for metric in self.params.validation_metrics.split(','):
             scores[metric] = df[metric].mean()
+            scores["test_"+metric] = df["test_"+metric].mean()
+        scores["duration_fit"] = df["duration_fit"].mean()
                         
-        for ablation in self.ablation_to_keep:
-            for val, df_ablation in df.groupby(ablation):
-                avg_scores_ablation = df_ablation.mean()
-                for k, v in avg_scores_ablation.items():
-                    if k not in info_columns:
-                        scores[k + "_{}_{}".format(ablation, val)] = v
+        # for ablation in self.ablation_to_keep:
+        #     for val, df_ablation in df.groupby(ablation):
+        #         avg_scores_ablation = df_ablation.mean()
+        #         for k, v in avg_scores_ablation.items():
+        #             if k not in info_columns:
+        #                 scores[k + "_{}_{}".format(ablation, val)] = v
+
+        if self.params.use_wandb:
+            wandb.log({name+"_"+metric: score for metric, score in scores.items()})
+
         return scores
         
     def evaluate_in_domain(
         self,
         task,
-        save=True,
     ):
         self.model.rescale = False
         self.trainer.logger.info(
@@ -337,17 +352,14 @@ class Evaluator(object):
             size=self.params.eval_size,
             test_env_seed=self.params.test_env_seed,
         )
-        if save:
-            save_file = os.path.join(self.save_path, "eval_in_domain.csv")
+
         scores = self.evaluate_on_iterator(iterator,
-                                           save_file,
                                            name = "in_domain")
         
         return scores
 
     def evaluate_on_pmlb(
         self,
-        save=True,
         path_dataset=None,
     ):
         if path_dataset is not None and os.path.exists(path_dataset):
@@ -406,20 +418,18 @@ class Evaluator(object):
                     # for k,v in samples['infos'].items():
                     #     samples['infos'][k] = np.array([v]*4)
                     iterator.append(samples)
-            with open(path_dataset, "wb") as fout:
-                self.trainer.logger.info(f"Saving dataset under:\n{path_dataset}")
-                pickle.dump(obj=iterator, file=fout)
-        
-        if save:
-            save_file = os.path.join(self.save_path, "eval_pmlb.csv")
-        scores = self.evaluate_on_iterator(iterator,save_file)
-        if self.params.use_wandb:
-            wandb.log({'pmlb_'+metric: scores[metric] for metric in self.params.validation_metrics.split(',')})
+            if path_dataset:
+                with open(path_dataset, "wb") as fout:
+                    self.trainer.logger.info(f"Saving dataset under:\n{path_dataset}")
+                    pickle.dump(obj=iterator, file=fout)
+
+        scores = self.evaluate_on_iterator(iterator,
+                                           name="pmlb")
+
         return scores
     
     def evaluate_on_oscillators(
         self,
-        save=True,
     ):
         self.model.rescale = self.params.rescale
         self.trainer.logger.info(
@@ -455,12 +465,10 @@ class Evaluator(object):
             samples["train"]['trajectories'].append(np.concatenate((x,y),axis=1))
             samples["tree"] = None
             iterator.append(samples)
-        if save:
-            save_file = os.path.join(self.save_path, "eval_oscillators.csv")
 
-        scores = self.evaluate_on_iterator(iterator,save_file, name="oscillators")
-        if self.params.use_wandb:
-            wandb.log({'oscillators_'+metric: scores[metric] for metric in self.params.validation_metrics.split(',')})
+        scores = self.evaluate_on_iterator(iterator,
+                                           name="oscillators")
+
         return scores
     
     def str_to_tree(self, expr: str):
@@ -576,20 +584,17 @@ def main(params):
     modules = build_modules(env, params)
     trainer = Trainer(modules, env, params)
     model = setup_odeformer(trainer)
-    evaluator = Evaluator(trainer, model)
-    save = params.save_results
-
-    
+    evaluator = Evaluator(trainer, model)  
 
 
     if params.eval_in_domain:
-      scores = evaluator.evaluate_in_domain("functions",save=save,)
+      scores = evaluator.evaluate_in_domain("functions")
       logger.info("__log__:%s" % json.dumps(scores))
 
     if params.eval_on_pmlb:
-        scores = evaluator.evaluate_on_pmlb(save=save)
+        scores = evaluator.evaluate_on_pmlb()
         logger.info("__pmlb__:%s" % json.dumps(scores))
-        scores = evaluator.evaluate_on_oscillators(save=save)
+        scores = evaluator.evaluate_on_oscillators()
         logger.info("__oscillators__:%s" % json.dumps(scores))
     
     if params.eval_on_file is not None:

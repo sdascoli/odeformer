@@ -326,6 +326,12 @@ def get_parser():
         default="r2_zero,accuracy_l1_1e-1,snmse,term_difference,is_valid,is_valid_tree",
         help="What metrics should we report? accuracy_tolerance/l1_error/r2/_complexity/_relative_complexity/is_symbolic_solution",
     )
+    parser.add_argument(
+        "--evaluation_task",
+        type=str,
+        default="y0_generalization",
+        help="What task we should consider to evaluate the model",
+    )
     parser.add_argument("--beam_selection_metric", type=str, default='r2_zero', help='Metric to use for beam search selection')
 
     parser.add_argument(
