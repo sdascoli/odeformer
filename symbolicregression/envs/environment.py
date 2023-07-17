@@ -13,7 +13,7 @@ import sys
 import copy
 import json
 import operator
-from typing import Optional, List, Dict, Union
+from typing import Optional, List, Dict, Union, Literal
 from typing_extensions import Literal
 from collections import deque, defaultdict
 import time
@@ -517,11 +517,15 @@ class FunctionEnvironment(object):
 
         return expr, []
     
-    def _create_noise(self, 
-                      trajectory: np.ndarray, 
-                      train=None, 
-                      gamma=None,
-                      seed=None):
+    def _create_noise(
+        self, 
+        trajectory: np.ndarray, 
+        train: Union[bool, None] = None, 
+        gamma: Union[None, float] = None,
+        noise_type: Literal["additive", "multiplicative"] = "additive",
+        seed: Union[int, None] = None,
+    ):
+        """Returns noise"""
         if seed is not None:
             rng = np.random.RandomState(seed)
         else:
@@ -533,18 +537,25 @@ class FunctionEnvironment(object):
                 if train
                 else self.params.eval_noise_gamma
             )
-        norm = scipy.linalg.norm(
-            (np.abs(trajectory) + 1e-100) / np.sqrt(trajectory.shape[0])
-        )
-        return gamma * norm * np.random.randn(*trajectory.shape)
+        if noise_type == "additive":
+            norm = scipy.linalg.norm(
+                (np.abs(trajectory) + 1e-100) / np.sqrt(trajectory.shape[0])
+            )
+            return gamma * norm * np.random.randn(*trajectory.shape)
+        elif noise_type == "multiplicative": 
+            return np.random.normal(loc=1, scale=gamma, size=trajectory.shape)
+        else:
+            raise ValueError(f"Unknown noise type: {noise_type}.")
     
-    def _subsample_trajectory(self,
-                              times: np.ndarray, 
-                              trajectory: np.ndarray, 
-                              train=None,
-                              subsample_ratio: Union[None, float]=None,
-                              seed=None
+    def _subsample_trajectory(
+        self,
+        times: np.ndarray, 
+        trajectory: np.ndarray, 
+        train: Union[bool, None]=None,
+        subsample_ratio: Union[None, float]=None,
+        seed: Union[None, int]=None,
     ):
+        """Applies subsampling in-place."""
         if seed is not None:
             rng = np.random.RandomState(seed)
         else:

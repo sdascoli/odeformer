@@ -4,10 +4,71 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+from typing import Literal, List, Union
 from sklearn.metrics import r2_score, mean_squared_error
 from collections import defaultdict
+from sympy import Add, preorder_traversal
+import regex
 import numpy as np
 import scipy
+import sympy
+from symbolicregression.envs.generators import Node, NodeList
+
+def get_complexity(expr: sympy.core.Expr):
+    # taken from: https://github.com/cavalab/srbench/blob/master/postprocessing/symbolic_utils.py#L12:L16
+    c=0
+    for arg in preorder_traversal(expr):
+        c += 1
+    return c
+
+def tokenize_equation(eq: str, tokens_to_ignore: str = "|,", debug: bool = False) -> List[str]:
+    constant_token = "€"
+    tokens_to_ignore = tokens_to_ignore.split(",")
+    assert constant_token not in tokens_to_ignore
+    tokens = []
+    eq = eq.replace(" ", "")
+    CONSTANTS_PATTERN=r"(?:(?<!_\d*))(?:(?<=[\*/\+-])[-+]?)?(?:(?<=\()[-+]?)?(?:(?<=^)[-+]?)?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[Ee][+-]?\d+)?"
+    constants = regex.findall(pattern=CONSTANTS_PATTERN, string=eq)
+    eq = regex.sub(pattern=CONSTANTS_PATTERN, repl=str(constant_token), string=eq)
+    eq = eq.replace(" ","")
+    constant_i = 0
+    op = ""
+    for symbol in eq:
+        if symbol in tokens_to_ignore:
+            if debug: print(symbol, "ignore", op)
+            continue
+        elif symbol in ["+", "-", "*", "/"]:
+            if debug: print(symbol, '["+", "-", "*", "/"]', op)
+            if op != "":
+                tokens.append(op)
+                op = ""
+            tokens.append(symbol)
+        elif symbol == constant_token:
+            if debug: print(symbol, 'constant_token', op)
+            if op != "":
+                tokens.append(op)
+                op = ""
+            tokens.append(constants[constant_i])
+            constant_i += 1
+        elif symbol == "(":
+            if debug: print(symbol, '(', op)
+            if op != "":
+                tokens.append(op)
+                op = ""
+        elif symbol == ")":
+            if debug: print(symbol, ')', op)
+            if op != "":
+                tokens.append(op)
+                op = ""
+        else:
+            if debug: print(symbol, 'else', op)
+            op += symbol
+            
+        if debug: print(tokens, op)
+    if op != "":
+        tokens.append(op)
+        op = ""
+    return tokens
 
 def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2"):
     results = defaultdict(list)
@@ -171,7 +232,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                 if predicted_tree[i] is None:
                     results[metric].append(np.nan)
                 else:
-                    results[metric].append(len(predicted_tree[i].prefix().split(",")))
+                    results[metric].append(len(predicted_tree[i].prefix().replace("|", "").split(",")))
                     
         elif metric == "relative_complexity":
             if not predicted_tree: 
@@ -181,7 +242,87 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                 if predicted_tree[i] is None:
                     results[metric].append(np.nan)
                 else:
-                    results[metric].append(len(predicted_tree[i].prefix().split(",")) - len(tree[i].prefix().split(",")))
+                    results[metric].append(
+                        len(predicted_tree[i].prefix().replace("|", "").split(",")) - \
+                            len(tree[i].prefix().replace("|", "").split(","))
+                    )
+
+        elif metric == "complexity_sympy":
+            if not predicted_tree: 
+                results[metric].extend([np.nan for _ in range(len(true))])
+                continue
+            for ptree in predicted_tree:
+                if ptree is None:
+                    results[metric].append(np.nan)
+                else:
+                    if not isinstance(ptree, str):
+                        # TODO: are predicted_tree from Odeformer already in infix format? How to get them as string?
+                        ptree = ptree.infix()
+                    results[metric].append(
+                        np.sum([get_complexity(sympy.parse_expr(comp)) for comp in ptree.split("|")])
+                    )
+        
+        elif metric == "relative_complexity_sympy":
+            if not predicted_tree: 
+                results[metric].extend([np.nan for _ in range(len(true))])
+                continue
+            for ptree, gttree in zip(predicted_tree, tree):
+                if ptree is None or gttree is None:
+                    if gttree is None:
+                        print("Cannot compute relative_complexity_sympy as ground truth tree is None. Returning np.nan")
+                    results[metric].append(np.nan)
+                else:
+                    if not isinstance(ptree, str):
+                        ptree = ptree.infix()
+                    if not isinstance(gttree, str):
+                        gttree = gttree.infix()
+                    results[metric].append(
+                        np.sum([get_complexity(sympy.parse_expr(comp)) for comp in ptree.split("|")]) - \
+                            np.sum([get_complexity(sympy.parse_expr(comp)) for comp in gttree.split("|")])
+                    )
+
+        elif metric == "complexity_string":
+            if not predicted_tree: 
+                results[metric].extend([np.nan for _ in range(len(true))])
+                continue
+            for ptree in predicted_tree:
+                if ptree is None:
+                    results[metric].append(np.nan)
+                else:
+                    if not isinstance(ptree, str):
+                        # TODO: are predicted_tree from Odeformer already in infix format? How to get them as string?
+                        ptree = ptree.infix()
+                    results[metric].append(
+                        np.sum([
+                            len(tokenize_equation(str(sympy.parse_expr(comp))))
+                            for comp in ptree.split("|")
+                        ])
+                    )
+                    
+        elif metric == "relative_complexity_string":
+            if not predicted_tree: 
+                results[metric].extend([np.nan for _ in range(len(true))])
+                continue
+            for ptree, gttree in zip(predicted_tree, tree):
+                if ptree is None or gttree is None:
+                    if gttree is None:
+                        print("Cannot compute relative_complexity_sympy as ground truth tree is None. Returning np.nan")
+                    results[metric].append(np.nan)
+                else:
+                    if not isinstance(ptree, str):
+                        ptree = ptree.infix()
+                    if not isinstance(gttree, str):
+                        gttree = gttree.infix()
+                    results[metric].append(
+                        np.sum([
+                            len(tokenize_equation(str(sympy.parse_expr(comp)))) 
+                            for comp in ptree.split("|")
+                        ]) - \
+                        np.sum([
+                            len(tokenize_equation(str(sympy.parse_expr(comp))))
+                            for comp in gttree.split("|")
+                        ])
+                    )
 
         elif metric == "edit_distance":
             if not predicted_tree: 
@@ -207,6 +348,44 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                     for dim in range(dimension):
                         pred_terms = predicted_tree[i].nodes[dim].infix(skeleton=True).split(" + ")
                         terms = tree[i].nodes[dim].infix(skeleton=True).split(" + ")
+                        missing.append(sum([1 for term in terms if term not in pred_terms])/len(terms))
+                        extra.append(sum([1 for term in pred_terms if term not in terms])/len(terms))
+                    results[metric].append(np.mean(missing) + np.mean(extra))
+                    
+        elif metric == "term_difference_sympy":
+            
+            # If variables names contain indices, the index must be preceeded by "_", e.g. x_0, x_1
+            
+            def get_terms(eq: str, constant_token: Union[None, Literal["CONSTANT"]]=Literal["CONSTANT"]) -> List:
+                terms = [str(term) for term in list(Add.make_args(sympy.parse_expr(eq)))]
+                if constant_token is not None:
+                    terms = [
+                        regex.sub(
+                            pattern=r"(?<!_\d*)[-+]?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[Ee][+-]?\d+)?",
+                            repl=str(constant_token),
+                            string=term,
+                        ) for term in terms
+                    ]
+                return terms
+                
+            if not predicted_tree:
+                results[metric].extend([np.nan for _ in range(len(true))])
+                continue
+            for i in range(len(predicted_tree)):
+                if predicted_tree[i] is None or tree[i] is None or len(predicted_tree[i].nodes) != len(tree[i].nodes):
+                    results[metric].append(np.nan)
+                else:
+                    dimension = len(predicted_tree[i].nodes)
+                    extra, missing = [], []
+                    for dim in range(dimension):
+                        pred_terms = get_terms(
+                            eq=predicted_tree[i].nodes[dim].infix(skeleton=False), 
+                            constant_token="CONSTANT",
+                        )
+                        terms = get_terms(
+                            eq=tree[i].nodes[dim].infix(skeleton=False),
+                            constant_token="CONSTANT",
+                        )
                         missing.append(sum([1 for term in terms if term not in pred_terms])/len(terms))
                         extra.append(sum([1 for term in pred_terms if term not in terms])/len(terms))
                     results[metric].append(np.mean(missing) + np.mean(extra))
