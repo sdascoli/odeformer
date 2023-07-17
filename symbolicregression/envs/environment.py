@@ -416,26 +416,6 @@ class FunctionEnvironment(object):
                     print(traceback.format_exc())
                 continue
 
-    def _subsample_trajectory(
-        self, 
-        times: np.ndarray, 
-        trajectory: np.ndarray, 
-        subsample_ratio: Union[None, float],
-        rng=None,
-    ):
-        if subsample_ratio is None:
-            subsample_ratio = self.params.subsample_ratio
-        if rng is None:
-            rng = self.rng
-        indices_to_remove = rng.choice(
-            trajectory.shape[0], 
-            int(trajectory.shape[0] * subsample_ratio), 
-            replace=False,
-        )
-        trajectory = np.delete(trajectory, indices_to_remove, axis=0)
-        times = np.delete(times, indices_to_remove, axis=0)
-        return times, trajectory
-
     @timeout(TIMEOUT)
     def _gen_expr(
         self,
@@ -571,9 +551,9 @@ class FunctionEnvironment(object):
         self,
         times: np.ndarray, 
         trajectory: np.ndarray, 
-        train=None,
+        train: Union[bool, None]=None,
         subsample_ratio: Union[None, float]=None,
-        seed=None,
+        seed: Union[None, int]=None,
     ):
         """Applies subsampling in-place."""
         if seed is not None:
