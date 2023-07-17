@@ -301,6 +301,5 @@ if __name__ == "__main__":
     print(params)
     main(params)
 
-    # TODO save pareto front of baselines
     # TODO enable re-evaluation
     # TODO integrate constant optimization
