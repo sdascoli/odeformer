@@ -267,7 +267,9 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                 results[metric].extend([np.nan for _ in range(len(true))])
                 continue
             for ptree, gttree in zip(predicted_tree, tree):
-                if ptree is None:
+                if ptree is None or gttree is None:
+                    if gttree is None:
+                        print("Cannot compute relative_complexity_sympy as ground truth tree is None. Returning np.nan")
                     results[metric].append(np.nan)
                 else:
                     if not isinstance(ptree, str):
@@ -302,7 +304,9 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                 results[metric].extend([np.nan for _ in range(len(true))])
                 continue
             for ptree, gttree in zip(predicted_tree, tree):
-                if ptree is None:
+                if ptree is None or gttree is None:
+                    if gttree is None:
+                        print("Cannot compute relative_complexity_sympy as ground truth tree is None. Returning np.nan")
                     results[metric].append(np.nan)
                 else:
                     if not isinstance(ptree, str):
