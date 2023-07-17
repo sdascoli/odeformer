@@ -18,7 +18,8 @@ class SINDyWrapper(
     """SINDy with default values. You only need to set the names of variables."""
     
     def __init__(
-        self, 
+        self,
+        model_dir: str,
         polynomial_degree: Union[None, int] = 2,
         functions: Union[None, List[str]] = None,
         optimizer_threshold: Union[None, float] = None,
@@ -29,11 +30,16 @@ class SINDyWrapper(
         debug: bool = False,
         grid_search_polynomial_degree: bool = False,
         grid_search_functions: bool = False,
+        optimize_hyperparams: bool = True,
+        hyper_opt_eval_fraction: Union[None, float] = None,
+        sorting_metric: str = "r2", 
+        grid_search_is_running: bool = False,
     ):
         fd_kwargs = {"smoother_window_length": smoother_window_length}
         if finite_difference_order is not None:
             fd_kwargs["finite_difference_order"] = finite_difference_order
         FiniteDifferenceMixin.__init__(self, **fd_kwargs)
+        self.model_dir = model_dir
         self.polynomial_degree = polynomial_degree
         self.functions = functions
         self.optimizer_threshold = optimizer_threshold
@@ -42,6 +48,11 @@ class SINDyWrapper(
         self.debug = debug
         self.grid_search_polynomial_degree = grid_search_polynomial_degree
         self.grid_search_functions = grid_search_functions
+        self.optimize_hyperparams = optimize_hyperparams
+        self.hyper_opt_eval_fraction = hyper_opt_eval_fraction
+        self.sorting_metric = sorting_metric
+        self.grid_search_is_running = grid_search_is_running
+        
         
         feature_library = create_library(
             degree=self.polynomial_degree, functions=self.functions,
@@ -87,6 +98,13 @@ class SINDyWrapper(
         *args, **kwargs, # ignored, for compatibility only
     ) -> Dict[int, Union[None, List[str]]]:
         
+        if self.optimize_hyperparams and not self.grid_search_is_running:
+            if isinstance(trajectories, List):
+                assert len(trajectories) == 1, len(trajectories)
+                trajectories = trajectories[0]
+            assert isinstance(trajectories, np.ndarray)
+            return self.fit_grid_search(times=times, trajectory=trajectories)
+        
         if isinstance(trajectories, List) and not average_trajectories:
             # we have multiple trajectories but do not want to average
             return super().fit_all(times, trajectories, average_trajectories=False)
@@ -112,11 +130,21 @@ class SINDyWrapper(
     
     def get_hyper_grid(self) -> Dict[str, List[Any]]:
         hparams = {
-            "optimizer_threshold": list(set([0.05, 0.1, 0.15, self.optimizer_threshold])),
-            "optimizer_alpha": list(set([0.025, 0.05, 0.075, self.optimizer_alpha])),
-            "optimizer_max_iter": list(set([20, 100, self.optimizer_max_iter])),
-            "finite_difference_order": list(set([2,3,4, self.finite_difference_order])),
-            "smoother_window_length": list(set([None, 15, self.smoother_window_length])),
+            "optimizer_threshold": list(
+                set(
+                    [0.05, 0.1, 0.15] + ([self.optimizer_threshold] if self.optimizer_threshold is not None else []))
+            ),
+            "optimizer_alpha": list(
+                set([0.025, 0.05, 0.075] + ([self.optimizer_alpha] if self.optimizer_alpha is not None else []))
+            ),
+            "optimizer_max_iter": list(
+                set([20, 100] + ([self.optimizer_max_iter] if self.optimizer_max_iter is not None else []))
+            ),
+            "finite_difference_order": list(
+                set([2,3,4,] + ([self.finite_difference_order] if self.finite_difference_order is not None else []))
+            ),
+            "smoother_window_length": list(
+                set([None, 15,] + ([self.smoother_window_length] if self.smoother_window_length is not None else []))),
         }
         if self.grid_search_polynomial_degree:
             hparams["polynomial_degree"] = np.arange(1, self.polynomial_degree+1, dtype=int)

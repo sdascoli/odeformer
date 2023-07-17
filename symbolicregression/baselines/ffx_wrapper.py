@@ -25,9 +25,14 @@ class FFXWrapper(
     GridSearchMixin,
 ):
     def __init__(
-        self, 
+        self,
+        model_dir: str,
         finite_difference_order: Union[None, int] = 2,
         smoother_window_length: Union[None, int] = None,
+        optimize_hyperparams: bool = True,
+        hyper_opt_eval_fraction: Union[None, float] = None,
+        sorting_metric: str = "r2", 
+        grid_search_is_running: bool = False,
     ):
         fd_kwargs = {}
         if finite_difference_order is not None:
@@ -35,11 +40,24 @@ class FFXWrapper(
         if smoother_window_length is not None:
             fd_kwargs["smoother_window_length"] = smoother_window_length
         FiniteDifferenceMixin.__init__(self, **fd_kwargs)
+        self.model_dir = model_dir
+        self.optimize_hyperparams = optimize_hyperparams
+        self.hyper_opt_eval_fraction = hyper_opt_eval_fraction
+        self.sorting_metric = sorting_metric
+        self.grid_search_is_running = grid_search_is_running
     
     def get_hyper_grid(self) -> Dict[str, List[Any]]:
         return {
-            "finite_difference_order": list(set([2,3,4, self.finite_difference_order])),
-            "smoother_window_length": list(set([None, 15, self.smoother_window_length])),
+            "finite_difference_order": list(
+                set([2,3,4] + ([self.finite_difference_order] if self.finite_difference_order is not None else []))
+            ),
+            "smoother_window_length": list(
+                set(
+                    [None, 15, self.smoother_window_length] + (
+                        [self.smoother_window_length] if self.smoother_window_length is not None else []
+                    )
+                )
+            ),
         }
         
     def get_n_jobs(self) -> int:
@@ -74,6 +92,14 @@ class FFXWrapper(
         derivatives: Union[None, np.ndarray] = None,
         *args, **kwargs, # ignored, for compatibility only
     ) -> Dict[int, List[str]]:
+        
+        if self.optimize_hyperparams and not self.grid_search_is_running:
+            if isinstance(trajectories, List):
+                assert len(trajectories) == 1, len(trajectories)
+                trajectories = trajectories[0]
+            assert isinstance(trajectories, np.ndarray)
+            return self.fit_grid_search(times=times, trajectory=trajectories)
+        
         if isinstance(trajectories, List):
             self.final_equations = self.fit_all(times=times, trajectories=trajectories)
             return self.final_equations

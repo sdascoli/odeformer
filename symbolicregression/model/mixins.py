@@ -1,9 +1,13 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List, Union
+from copy import deepcopy
+from typing import Callable, Dict, List, Union
 from typing_extensions import Literal
 from tqdm.auto import tqdm
 from collections import defaultdict
 from sklearn.model_selection import GridSearchCV
+import os
+import json
+import math
 import sympy
 import torch
 import numpy as np
@@ -11,6 +15,7 @@ import itertools
 import traceback
 from pysindy.differentiation import FiniteDifference, SmoothedFiniteDifference
 from symbolicregression.envs.generators import integrate_ode
+from symbolicregression.metrics import compute_metrics
 
 __all__ = (
     "BatchMixin", 
@@ -23,6 +28,14 @@ __all__ = (
 
 class GridSearchMixin(ABC):
     
+    @abstractmethod
+    def integrate_prediction(self) -> np.ndarray:
+        ...
+        
+    @abstractmethod
+    def fit(self) -> Dict:
+        ...
+
     @abstractmethod
     def get_hyper_grid(self) -> Dict:
         ...
@@ -46,6 +59,73 @@ class GridSearchMixin(ABC):
             error_score=np.nan,
             n_jobs=(self.get_n_jobs() if n_jobs is None else n_jobs),
         )
+    
+    def save_pareto_front(self, equations: Dict, filename="equations.json"):
+        with open(os.path.join(self.model_dir, filename), "a") as fout:
+            json.dump(fp=fout, obj=equations)
+    
+    def fit_grid_search(
+        self,
+        times: np.ndarray,
+        trajectory: np.ndarray,
+    ):
+        self.grid_search_is_running = True
+        train_idcs = np.arange(
+            int(np.floor((1-self.hyper_opt_eval_fraction)*len(times))), 
+            dtype=int
+        )
+        test_idcs = np.arange(
+            int(np.floor((1-self.hyper_opt_eval_fraction)*len(times))), 
+            len(times),
+            dtype=int
+        )
+        assert len(set(train_idcs).intersection(test_idcs)) == 0, "`train_idcs` and `test_idcs` overlap."
+        model = self.get_grid_search(train_idcs, test_idcs)
+        model.fit(times, trajectory)
+        self.grid_search_is_running = False
+        all_candidates = model.best_estimator_._get_equations()
+        self.save_pareto_front(all_candidates)
+        assert len(all_candidates) == 1, f"len(all_candidates) = {len(all_candidates)}"
+        if len(all_candidates[0]) > 1:
+            all_candidates = self.sort_candidates(
+                candidates=all_candidates[0],
+                trajectory=trajectory,
+                times=times,
+                sorting_metric=self.sorting_metric,
+                integrate_prediction=self.integrate_prediction,
+            )
+        return all_candidates
+        
+    def sort_candidates(
+        self,
+        candidates: List[str],
+        trajectory: np.ndarray,
+        times: np.ndarray,
+        sorting_metric: str,
+    ):
+        if "r2" in sorting_metric:
+            descending = True
+        else: 
+            descending = False
+        _scores = []
+        for candidate in candidates:
+            _score = compute_metrics(
+                predicted = self.integrate_prediction(
+                    times=times,
+                    y0=trajectory[0],
+                    prediction=candidate,
+                ),
+                true = trajectory, 
+                metrics = sorting_metric,
+            )[sorting_metric][0]
+            if math.isnan(_score): 
+                _score = -np.infty if descending else np.infty
+            _scores.append(_score)
+        sorted_idx = np.argsort(_scores)  
+        if descending: sorted_idx = list(reversed(sorted_idx))
+        return [candidates[i] for i in sorted_idx]
+        
+        
 
 class SympyMixin:
     def to_sympy(

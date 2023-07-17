@@ -22,7 +22,8 @@ GRAMMARS = Literal["universal", "rational", "simplerational", "trigonometric", "
 class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin, GridSearchMixin):
     
     def __init__(
-        self, 
+        self,
+        model_dir: str,
         num_candidates: int = 32, 
         verbosity: int = 1, 
         num_workers: int = 1,
@@ -30,7 +31,12 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin, GridS
         generator_template_name: GRAMMARS = "polynomial",
         include_time_as_variable: bool = False,
         grid_search_generator_template_name: bool = True,
+        optimize_hyperparams: bool = True,
+        hyper_opt_eval_fraction: Union[None, float] = None,
+        sorting_metric: str = "r2", 
+        grid_search_is_running: bool = False,
     ):
+        self.model_dir = model_dir
         self.num_candidates = num_candidates
         self.verbosity = verbosity
         self.num_workers = num_workers
@@ -38,6 +44,11 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin, GridS
         self.generator_template_name = generator_template_name
         self.include_time_as_variable = include_time_as_variable
         self.grid_search_generator_template_name = grid_search_generator_template_name
+        self.optimize_hyperparams = optimize_hyperparams
+        self.hyper_opt_eval_fraction = hyper_opt_eval_fraction
+        self.sorting_metric = sorting_metric
+        self.grid_search_is_running = grid_search_is_running
+    
         
     def get_hyper_grid(self) -> Dict[str, Any]:
         hparams = {}
@@ -82,6 +93,14 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin, GridS
         generator_template_name: Union[None, Literal["polynomial",]] = None,
         *args, **kwargs, # ignored, for compatibility only
     ) -> Dict[int, List[Union[None, str]]]:
+        
+        if self.optimize_hyperparams and not self.grid_search_is_running:
+            if isinstance(trajectories, List):
+                assert len(trajectories) == 1, len(trajectories)
+                trajectories = trajectories[0]
+            assert isinstance(trajectories, np.ndarray)
+            return self.fit_grid_search(times=times, trajectory=trajectories)
+        
         if isinstance(trajectories, List):
             return self.fit_all(times=times, trajectories=trajectories)
         # trajectories needs to have shape (len(time-series), #vars)

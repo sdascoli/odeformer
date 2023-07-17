@@ -1,4 +1,5 @@
 from typing import Callable, Dict, List, Union
+import os
 import numpy as np
 import pandas as pd
 import itertools
@@ -20,6 +21,7 @@ class PySRWrapper(
 
     def __init__(
         self, 
+        model_dir: str,
         finite_difference_order: Union[None, int] = 2,
         smoother_window_length: Union[None, int] = None,
         niterations: int = 50,
@@ -27,7 +29,10 @@ class PySRWrapper(
         unary_operators: Union[None, List[str]] = None,
         loss: str = "loss(x, y) = (x - y)^2",
         procs: int = 1,
-        equation_file: Union[None, str] = "./pysr_hof.csv",
+        optimize_hyperparams: bool = True,
+        hyper_opt_eval_fraction: Union[None, float] = None,
+        sorting_metric: str = "r2", 
+        grid_search_is_running: bool = False,
     ):
         if binary_operators is None:
             binary_operators = ["plus", "sub", "mult", "pow", "div"] 
@@ -39,7 +44,7 @@ class PySRWrapper(
             unary_operators=unary_operators,
             loss=loss,
             procs=procs,
-            equation_file=equation_file,
+            equation_file=os.path.join(model_dir, "pysr_hof.csv"),
         )
         fd_kwargs = {}
         if finite_difference_order is not None:
@@ -47,14 +52,14 @@ class PySRWrapper(
         if smoother_window_length is not None:
             fd_kwargs["smoother_window_length"] = smoother_window_length
         FiniteDifferenceMixin.__init__(self, **fd_kwargs)
+        self.model_dir = model_dir
+        self.optimize_hyperparams = optimize_hyperparams
+        self.hyper_opt_eval_fraction = hyper_opt_eval_fraction
+        self.sorting_metric = sorting_metric
+        self.grid_search_is_running = grid_search_is_running
         
     def get_hyper_grid(self) -> Dict:
         return {
-            # "unary_operators": [
-            #     [],
-            #     ["cos", "exp", "sin", "neg",],
-            #     ["cos", "exp", "sin", "neg", "log", "sqrt",], 
-            # ],
             "finite_difference_order": list(set([2,3,4, self.finite_difference_order])),
             "smoother_window_length": list(set([None, 15, self.smoother_window_length])),
         }
@@ -85,6 +90,14 @@ class PySRWrapper(
         trajectories: Union[List[np.ndarray], np.ndarray],
         *args, **kwargs, # ignored, for compatibility only
     ) -> Dict[int, Union[None, List[str]]]:
+        
+        if self.optimize_hyperparams and not self.grid_search_is_running:
+            if isinstance(trajectories, List):
+                assert len(trajectories) == 1, len(trajectories)
+                trajectories = trajectories[0]
+            assert isinstance(trajectories, np.ndarray)
+            return self.fit_grid_search(times=times, trajectory=trajectories)
+        
         if isinstance(trajectories, List):
             return self.fit_all(times=times, trajectories=trajectories)
         feature_names = [f"x_{i}" for i in range(trajectories.shape[1])]
@@ -111,7 +124,7 @@ class PySRWrapper(
                 return {0: [None]}
             except Exception as e:
                 traceback.print_exception(e)
-                print("############ {e} ############")
+                print(f"############ {e} ############")
                 return {0: [None]}
         if isinstance(hof, List):
             # We have a list of candidates per dimension and combine them via a Cartesian product.

@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Any, Callable, Dict, List, Union
 from sklearn.metrics import r2_score
 from ellyn import ellyn
@@ -26,28 +27,48 @@ class EllynMixin(
     SympyMixin,
     GridSearchMixin,
 ):
-    def __init__(self, **kwargs):
+    def __init__(
+        self, 
+        model_dir: str,
+        optimize_hyperparams: bool = True,
+        hyper_opt_eval_fraction: Union[None, float] = None,
+        sorting_metric: str = "r2", 
+        grid_search_is_running: bool = False,
+        **kwargs,
+    ):
         fd_kwargs = {}
         if "finite_difference_order" in kwargs.keys():
             fd_kwargs["finite_difference_order"] = kwargs.pop("finite_difference_order")
         if "smoother_window_length" in kwargs.keys():
             fd_kwargs["smoother_window_length"] = kwargs.pop("smoother_window_length")
         FiniteDifferenceMixin.__init__(self, **fd_kwargs)
+        self.model_dir = model_dir
+        self.optimize_hyperparams = optimize_hyperparams
+        self.hyper_opt_eval_fraction = hyper_opt_eval_fraction
+        self.sorting_metric = sorting_metric
+        self.grid_search_is_running = grid_search_is_running
+        self._wrapper_params = [
+            "optimize_hyperparams",
+            "hyper_opt_eval_fraction",
+            "sorting_metric",
+            "grid_search_is_running",
+            "finite_difference_order",
+            "smoother_window_length"
+        ]
         self.base_model = ellyn(**kwargs)
     
     def get_params(self, deep: bool = True) -> Dict[str, Any]:
         params = self.base_model.get_params()
-        assert "finite_difference_order" not in params.keys(), params.keys()
-        assert "smoother_window_length" not in params.keys(), params.keys()
-        params["finite_difference_order"] = self.finite_difference_order
-        params["smoother_window_length"] = self.smoother_window_length
+        for p in self._wrapper_params:
+            assert p not in params.keys(), params.keys()
+            params[p] = getattr(self, p)
         return params
     
     def set_params(self, **params: Dict):
-        if "finite_difference_order" in params.keys():
-            self.finite_difference_order = params.pop("finite_difference_order")
-        if "smoother_window_length" in params.keys():
-            self.smoother_window_length = params.pop("smoother_window_length")
+        params = deepcopy(params)
+        for p in self._wrapper_params:
+            if p in params.keys():
+                setattr(self, p, params.pop(p))
         self.base_model.set_params(**params)
         return self
 
@@ -75,6 +96,13 @@ class EllynMixin(
         derivatives: Union[None, np.ndarray] = None,
         *args, **kwargs, # ignored, for compatibility only
     ) -> Dict[int, List[str]]:
+
+        if self.optimize_hyperparams and not self.grid_search_is_running:
+            if isinstance(trajectories, List):
+                assert len(trajectories) == 1, len(trajectories)
+                trajectories = trajectories[0]
+            assert isinstance(trajectories, np.ndarray)
+            return self.fit_grid_search(times=times, trajectory=trajectories)
 
         if isinstance(trajectories, List):
             self.final_equations = self.fit_all(times=times, trajectories=trajectories)
@@ -131,6 +159,8 @@ class EllynMixin(
 class AFPWrapper(EllynMixin):
     def __init__(self, **kwargs) -> None:
         kwargs = kwargs.copy()
+        # this is not particularly elegant but it ensures that any kwargs that 
+        # are not passed explicitly will be set to the AFP default values
         super().__init__(
             selection=(kwargs.pop("selection") if "selection" in kwargs.keys() else 'afp'),
             lex_eps_global=(kwargs.pop("lex_eps_global") if "lex_eps_global" in kwargs.keys() else False),
@@ -185,6 +215,8 @@ class AFPWrapper(EllynMixin):
 class EHCWrapper(EllynMixin):
     def __init__(self, **kwargs) -> None:
         kwargs = kwargs.copy()
+        # this is not particularly elegant but it ensures that any kwargs that 
+        # are not passed explicitly will be set to the EHC default values
         super().__init__(
             eHC_on=(kwargs.pop("eHC_on") if "eHC_on" in kwargs.keys() else True),
             eHC_its=(kwargs.pop("eHC_its") if "eHC_its" in kwargs.keys() else 3),
@@ -241,6 +273,8 @@ class EHCWrapper(EllynMixin):
 class EPLEXWrapper(EllynMixin):
     def __init__(self, **kwargs) -> None:
         kwargs = kwargs.copy()
+        # this is not particularly elegant but it ensures that any kwargs that 
+        # are not passed explicitly will be set to the EPLEX default values
         super().__init__(
             selection=(kwargs.pop("selection") if "selection" in kwargs.keys() else 'epsilon_lexicase'),
             lex_eps_global=(kwargs.pop("lex_eps_global") if "lex_eps_global" in kwargs.keys() else False),
@@ -295,6 +329,8 @@ class EPLEXWrapper(EllynMixin):
 class FEAFPWrapper(EllynMixin):
     def __init__(self, **kwargs) -> None:
         kwargs = kwargs.copy()
+        # this is not particularly elegant but it ensures that any kwargs that 
+        # are not passed explicitly will be set to the FEAFP default values
         super().__init__(
             selection=(kwargs.pop("selection") if "selection" in kwargs.keys() else 'afp'),
             lex_eps_global=(kwargs.pop("lex_eps_global") if "lex_eps_global" in kwargs.keys() else False),
