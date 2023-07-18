@@ -11,6 +11,7 @@ from symbolicregression.model.mixins import (
 )
 from symbolicregression.baselines.baseline_utils import variance_weighted_r2_score
 import re
+import time
 import numpy as np
 
 __all__ = ("FFXWrapper")
@@ -41,6 +42,7 @@ class FFXWrapper(
             fd_kwargs["smoother_window_length"] = smoother_window_length
         FiniteDifferenceMixin.__init__(self, **fd_kwargs)
         self.model_dir = model_dir
+        self.filename_pareto_front = f"equations_{time.strftime('%Y-%m-%d-%H-%M-%S-%MS')}.json"
         self.optimize_hyperparams = optimize_hyperparams
         self.hyper_opt_eval_fraction = hyper_opt_eval_fraction
         self.sorting_metric = sorting_metric

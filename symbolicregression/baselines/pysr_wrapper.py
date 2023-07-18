@@ -1,5 +1,6 @@
 from typing import Callable, Dict, List, Union
 import os
+import time
 import numpy as np
 import pandas as pd
 import itertools
@@ -53,10 +54,12 @@ class PySRWrapper(
             fd_kwargs["smoother_window_length"] = smoother_window_length
         FiniteDifferenceMixin.__init__(self, **fd_kwargs)
         self.model_dir = model_dir
+        self.filename_pareto_front = f"equations_{time.strftime('%Y-%m-%d-%H-%M-%S-%MS')}.json"
         self.optimize_hyperparams = optimize_hyperparams
         self.hyper_opt_eval_fraction = hyper_opt_eval_fraction
         self.sorting_metric = sorting_metric
         self.grid_search_is_running = grid_search_is_running
+        
         
     def get_hyper_grid(self) -> Dict:
         return {

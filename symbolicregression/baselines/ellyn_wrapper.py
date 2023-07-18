@@ -11,6 +11,7 @@ from symbolicregression.model.mixins import (
     SympyMixin,
 )
 from symbolicregression.baselines.baseline_utils import variance_weighted_r2_score
+import time
 import sympy
 import numpy as np
 
@@ -43,17 +44,20 @@ class EllynMixin(
             fd_kwargs["smoother_window_length"] = kwargs.pop("smoother_window_length")
         FiniteDifferenceMixin.__init__(self, **fd_kwargs)
         self.model_dir = model_dir
+        self.filename_pareto_front = f"equations_{time.strftime('%Y-%m-%d-%H-%M-%S-%MS')}.json"
         self.optimize_hyperparams = optimize_hyperparams
         self.hyper_opt_eval_fraction = hyper_opt_eval_fraction
         self.sorting_metric = sorting_metric
         self.grid_search_is_running = grid_search_is_running
         self._wrapper_params = [
+            "model_dir",
+            "filename_pareto_front",
             "optimize_hyperparams",
             "hyper_opt_eval_fraction",
             "sorting_metric",
             "grid_search_is_running",
             "finite_difference_order",
-            "smoother_window_length"
+            "smoother_window_length",
         ]
         self.base_model = ellyn(**kwargs)
     

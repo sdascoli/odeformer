@@ -1,6 +1,7 @@
 from typing import Any, Callable, Dict, List, Union
 from sklearn.metrics import r2_score
 import re
+import time
 import traceback
 import numpy as np
 from pysindy import ConcatLibrary, CustomLibrary, PolynomialLibrary, SINDy, optimizers
@@ -27,7 +28,6 @@ class SINDyWrapper(
         optimizer_max_iter: Union[None, int] = None,
         finite_difference_order: Union[None, int] = None,
         smoother_window_length: Union[None, int] = None,
-        debug: bool = False,
         grid_search_polynomial_degree: bool = False,
         grid_search_functions: bool = False,
         optimize_hyperparams: bool = True,
@@ -45,14 +45,13 @@ class SINDyWrapper(
         self.optimizer_threshold = optimizer_threshold
         self.optimizer_alpha = optimizer_alpha
         self.optimizer_max_iter = optimizer_max_iter
-        self.debug = debug
         self.grid_search_polynomial_degree = grid_search_polynomial_degree
         self.grid_search_functions = grid_search_functions
         self.optimize_hyperparams = optimize_hyperparams
         self.hyper_opt_eval_fraction = hyper_opt_eval_fraction
         self.sorting_metric = sorting_metric
         self.grid_search_is_running = grid_search_is_running
-        
+        self.filename_pareto_front = f"equations_{time.strftime('%Y-%m-%d-%H-%M-%S-%MS')}.json"
         
         feature_library = create_library(
             degree=self.polynomial_degree, functions=self.functions,
@@ -94,22 +93,19 @@ class SINDyWrapper(
         self,
         times: Union[List, np.ndarray],
         trajectories: Union[List, np.ndarray],
-        average_trajectories: bool = False,
         *args, **kwargs, # ignored, for compatibility only
     ) -> Dict[int, Union[None, List[str]]]:
         
+        if isinstance(trajectories, List):
+            # we have multiple trajectories but do not want to average
+            return super().fit_all(times, trajectories)
+        
         if self.optimize_hyperparams and not self.grid_search_is_running:
-            if isinstance(trajectories, List):
-                assert len(trajectories) == 1, len(trajectories)
-                trajectories = trajectories[0]
             assert isinstance(trajectories, np.ndarray)
             return self.fit_grid_search(times=times, trajectory=trajectories)
         
-        if isinstance(trajectories, List) and not average_trajectories:
-            # we have multiple trajectories but do not want to average
-            return super().fit_all(times, trajectories, average_trajectories=False)
         try:
-            super().fit(trajectories, t=times, multiple_trajectories=average_trajectories, quiet=not self.debug)
+            super().fit(trajectories, t=times)
             return self._get_equations()
         except Exception as e:
             print(traceback.format_exc())

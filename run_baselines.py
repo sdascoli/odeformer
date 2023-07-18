@@ -171,26 +171,14 @@ def main(params):
         
     evaluator = Evaluator(trainer, model)
     
-    # evaluator.evaluate_on_file(
-    #     path="/p/project/hai_microbio/sb/repos/odeformer/datasets/strogatz_extended/solutions.json",
-    #     save=params.save_results,
-    #     seed=13,
-    # )
-    
     if params.eval_on_file:
-        scores = evaluator.evaluate_on_file(
-            path=params.eval_on_file, save=params.save_results, seed=13,
-        )
+        scores = evaluator.evaluate_on_file(path=params.eval_on_file, save=params.save_results, seed=params.random_seed)
         
     if params.eval_on_pmlb:
-        scores = evaluator.evaluate_on_pmlb(
-            save=params.save_results, path_dataset=params.path_dataset,
-        )
+        scores = evaluator.evaluate_on_pmlb(path_dataset=params.path_dataset)
         
     if params.eval_on_oscillators:
-        scores = evaluator.evaluate_on_oscillators(
-            save=params.save_results,
-        )
+        scores = evaluator.evaluate_on_oscillators()
     
 def str2bool(arg: Union[bool, str]):
     if isinstance(arg, bool):
@@ -207,7 +195,7 @@ def str_or_None(arg: str):
 if __name__ == "__main__":
     BASE = os.path.join(os.getcwd(), "experiments")
     parser = get_parser()
-    parser.add_argument("--baseline_model", type=str, default="ffx",
+    parser.add_argument("--baseline_model", type=str, default="sindy_poly10",
         choices=[
             "afp", "feafp", "eplex", "ehc",
             "proged", "proged_poly",
@@ -234,7 +222,7 @@ if __name__ == "__main__":
     parser.add_argument("--sorting_metric", type=str_or_None, default="r2",
         help = "If not None, sort pareto front according to this metric before selecting the final, best model."
     )
-    parser.add_argument("--evaluation_task",
+    parser.add_argument("--e_task",# this overwrites --evaluation_task from parser.py
         type=str, choices=["interpolation", "forecasting", "y0_generalization"], default="interpolation",
     )
     params = parser.parse_args()
@@ -258,8 +246,8 @@ if __name__ == "__main__":
     params.eval_only = True
     params.cpu = True
     params.max_dimension = 5
-    
-    params.eval_size = 2
+    params.evaluation_task = params.e_task
+    # params.eval_size = 2
     
     if not hasattr(params, "subsample_ratio"):
         params.subsample_ratio = 0 # no subsampling
@@ -274,9 +262,9 @@ if __name__ == "__main__":
         dataset_name,
         f"hyper_opt_{params.optimize_hyperparams}",
         f"baseline_hyper_opt_eval_fraction_{params.hyper_opt_eval_fraction}",
-        f"subsample_ratio_{params.subsample_ratio}",
+        f"subsample_ratio_{float(params.subsample_ratio)}",
         f"eval_noise_type_{params.eval_noise_type}",
-        f"eval_gamma_noise_{params.eval_noise_gamma}",
+        f"eval_gamma_noise_{float(params.eval_noise_gamma)}",
         f"evaluation_task_{params.evaluation_task}",
         # f"baseline_to_sympy_{params.baseline_to_sympy}",
     )

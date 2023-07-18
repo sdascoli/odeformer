@@ -10,6 +10,7 @@ from symbolicregression.model.mixins import (
 )
 from symbolicregression.baselines.baseline_utils import variance_weighted_r2_score
 import re
+import time
 import numpy as np
 import pandas as pd
 import traceback
@@ -37,6 +38,7 @@ class ProGEDWrapper(BaseEstimator, PredictionIntegrationMixin, BatchMixin, GridS
         grid_search_is_running: bool = False,
     ):
         self.model_dir = model_dir
+        self.filename_pareto_front = f"equations_{time.strftime('%Y-%m-%d-%H-%M-%S-%MS')}.json"
         self.num_candidates = num_candidates
         self.verbosity = verbosity
         self.num_workers = num_workers

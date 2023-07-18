@@ -354,8 +354,7 @@ class Evaluator(object):
             test_env_seed=self.params.test_env_seed,
         )
 
-        scores = self.evaluate_on_iterator(iterator,
-                                           name = "in_domain")
+        scores = self.evaluate_on_iterator(iterator, name = "in_domain")
         
         return scores
 
@@ -424,8 +423,7 @@ class Evaluator(object):
                     self.trainer.logger.info(f"Saving dataset under:\n{path_dataset}")
                     pickle.dump(obj=iterator, file=fout)
 
-        scores = self.evaluate_on_iterator(iterator,
-                                           name="pmlb")
+        scores = self.evaluate_on_iterator(iterator, name="pmlb")
 
         return scores
     

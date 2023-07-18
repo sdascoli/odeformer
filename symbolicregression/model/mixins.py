@@ -60,8 +60,8 @@ class GridSearchMixin(ABC):
             n_jobs=(self.get_n_jobs() if n_jobs is None else n_jobs),
         )
     
-    def save_pareto_front(self, equations: Dict, filename="equations.json"):
-        with open(os.path.join(self.model_dir, filename), "a") as fout:
+    def save_pareto_front(self, equations: Dict):
+        with open(os.path.join(self.model_dir, self.filename_pareto_front), "a") as fout:
             json.dump(fp=fout, obj=equations)
     
     def fit_grid_search(
@@ -239,9 +239,7 @@ class BatchMixin(ABC):
 
         assert isinstance(trajectories, List)
         predictions_per_equation = defaultdict(list)
-        for trajectory_i, (trajectory, time) in tqdm(
-            enumerate(zip(trajectories, times)), total=len(trajectories)
-        ):
+        for trajectory_i, (trajectory, time) in tqdm(enumerate(zip(trajectories, times)), total=len(trajectories)):
             try:
                 candidates: Dict[int, List[str, None]] = self.fit(
                     times=time, trajectories=trajectory, *args, **kwargs
