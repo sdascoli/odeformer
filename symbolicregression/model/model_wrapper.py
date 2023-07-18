@@ -25,6 +25,7 @@ class ModelWrapper(nn.Module):
         embedder=None,
         encoder=None,
         decoder=None,
+        from_pretrained=False,
         beam_type="search",
         beam_length_penalty=1,
         beam_size=1,

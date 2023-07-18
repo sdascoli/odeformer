@@ -31,18 +31,31 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
 
     def __init__(self,
                 model=None,
+                from_pretrained=False,
                 max_input_points=10000,
-                rescale=False,
-                average_trajectories=False,
-                params=None
+                rescale=True,
+                params=None,
+                model_kwargs={},
                 ):
 
         self.max_input_points = max_input_points
         self.model = model
         self.rescale = rescale
         self.params = params
-        self.average_trajectories = average_trajectories
-        self.model.average_trajectories = average_trajectories
+        if from_pretrained:
+            self.load_pretrained()
+        for kwarg, val in model_kwargs.items():
+            print(kwarg, val)
+            setattr(self.model, kwarg, val)
+
+    def load_pretrained(self):
+        import gdown
+        model_path = "odeformer.pt" 
+        if not os.path.exists(model_path):
+            url = "https://drive.google.com/uc?id=18CwlutaFF_tAOObsIukrKVZMPmsjwNwF"
+            gdown.download(url, model_path, quiet=False)
+        model = torch.load(model_path)
+        self.model = model
 
     def set_args(self, args={}):
         for arg, val in args.items():
@@ -55,18 +68,21 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
         trajectories,
         sort_candidates=True,
         sort_metric="snmse",
-        average_trajectories=None,
         rescale=None,
         verbose=False,
     ):
 
-        if not average_trajectories: average_trajectories = self.average_trajectories
-        self.model.average_trajectories = average_trajectories
         if not rescale: rescale = self.rescale
         self.rescale = rescale
 
-        assert not (self.average_trajectories and self.rescale), "Cannot average trajectories and rescale at the same time"
-        assert not (self.params is None and self.rescale), "Need to know the time and feature range to rescale to"
+        assert not (self.model.average_trajectories and self.rescale), "Cannot average trajectories and rescale at the same time"
+        #assert not (self.params is None and self.rescale), "Need to know the time and feature range to rescale to"
+        if not self.params:
+            feature_scale = 1
+            time_range = 10
+        else:
+            feature_scale = self.params.init_scale
+            time_range = self.params.time_range
 
         if not isinstance(times, list):
             times = [times]
@@ -74,7 +90,7 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
         n_datasets = len(times)
         
         # rescale time and features
-        scaler = utils_wrapper.Scaler(time_range=[1, self.params.time_range], feature_scale=self.params.init_scale) if self.rescale else None 
+        scaler = utils_wrapper.Scaler(time_range=[1, time_range], feature_scale=feature_scale) if self.rescale else None 
         scale_params = {}
         if scaler is not None:
             scaled_times = []

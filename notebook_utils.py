@@ -25,6 +25,7 @@ from IPython.display import display
 from scipy import integrate
 import argparse
 import traceback
+import requests
 pi = np.pi
 e = np.e
 
