@@ -326,8 +326,10 @@ class Evaluator(object):
         if "info_name" in df.columns: df = df.drop(columns=["info_name"])
 
         for metric in self.params.validation_metrics.split(','):
-            scores[metric] = df[metric].mean()
-            scores["test_"+metric] = df["test_"+metric].mean()
+            for prefix in ["", "test_"]:
+                scores[metric] = df[metric].mean()
+                scores[prefix+metric+'_median'] = df[metric].median()
+
         scores["duration_fit"] = df["duration_fit"].mean()
                         
         # for ablation in self.ablation_to_keep:
