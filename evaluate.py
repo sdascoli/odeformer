@@ -125,6 +125,9 @@ class Evaluator(object):
         evaluation_task: Literal["interpolation", "forecasting", "y0_generalization"],
     ) -> Dict[str, Dict[str, Any]]:
         
+        if "train" not in samples.keys():
+            samples["train"] = {"times":samples["times"], "trajectories":samples["trajectory"]}
+            del samples["times"], samples["trajectory"]
         assert "test" not in samples.keys(), samples.keys()
         samples["test"] = {"times":[], "trajectories":[]}
         
@@ -133,21 +136,19 @@ class Evaluator(object):
             return samples
 
         elif evaluation_task == "forecasting":
-            for time, trajectory in zip(samples["train"]["times"], samples["train"]["trajectories"]):
+            for time, trajectory, tree in zip(samples["train"]["times"], samples["train"]["trajectories"], samples["tree"]):
                 y0 = trajectory[-1]
                 t0 = time[-1]
-                ode = samples["tree"]
                 teval = np.linspace(t0, t0+5, 512, endpoint=True)
-                test_trajectory = self.model.integrate_prediction(teval, y0=y0, prediction=ode)
+                test_trajectory = self.model.integrate_prediction(teval, y0=y0, prediction=tree)
                 samples["test"]["trajectories"].append(test_trajectory)
                 samples["test"]["times"].append(teval)
             return samples
         
         elif evaluation_task == "y0_generalization":
-            for time, trajectory, dimension in zip(samples["train"]["times"], samples["train"]["trajectories"], samples["infos"]["dimension"]):
+            for time, trajectory, tree, dimension in zip(samples["train"]["times"], samples["train"]["trajectories"], samples["tree"], samples["infos"]["dimension"]):
                 y0 = self.env.rng.randn(dimension)
-                ode = samples["tree"]
-                test_trajectory = self.model.integrate_prediction(time, y0=y0, prediction=ode)
+                test_trajectory = self.model.integrate_prediction(time, y0=y0, prediction=tree)
                 samples["test"]["trajectories"].append(test_trajectory)
                 samples["test"]["times"].append(time)
             return samples
@@ -233,7 +234,7 @@ class Evaluator(object):
                     )
             
             if "tree" in samples.keys():
-                trees = [self.env.simplifier.simplify_tree(samples["tree"], expand=True)]
+                trees = [self.env.simplifier.simplify_tree(tree, expand=True) for tree in samples["tree"]]
                 batch_results["trees"].extend(
                     [None if tree is None else tree.infix() for tree in trees]
                 )
@@ -413,7 +414,7 @@ class Evaluator(object):
                     # times_, trajectory_ = self.env.generator._subsample_trajectory(times, trajectory, subsample_ratio=self.params.subsample_ratio)
                     samples["train"]['times'].append(deepcopy(times))
                     samples["train"]['trajectories'].append(trajectory)
-                    samples['tree'] = self.str_to_tree(format_strogatz_equation(strogatz_equations[name]))
+                    samples['tree'] = [self.str_to_tree(format_strogatz_equation(strogatz_equations[name]))]
                     samples['infos'] = infos
                     # for k,v in samples['infos'].items():
                     #     samples['infos'][k] = np.array([v]*4)
@@ -463,7 +464,7 @@ class Evaluator(object):
             
             samples["train"]['times'].append(times)
             samples["train"]['trajectories'].append(np.concatenate((x,y),axis=1))
-            samples["tree"] = None
+            samples["tree"] = [None]
             iterator.append(samples)
 
         scores = self.evaluate_on_iterator(iterator,
@@ -534,7 +535,7 @@ class Evaluator(object):
                     }
                     samples["train"]['times'].append(times)
                     samples["train"]['trajectories'].append(trajectory)
-                    samples['tree'] = self.str_to_tree(" | ".join(_sample["substituted"][solution_i]))
+                    samples['tree'] = [self.str_to_tree(" | ".join(_sample["substituted"][solution_i]))]
                     iterator.append(samples)
                 except Exception as e:
                     print(sample_i, solution_i)

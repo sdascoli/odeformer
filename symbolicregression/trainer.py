@@ -112,7 +112,6 @@ class Trainer(object):
         self.n_steps_per_epoch = params.n_steps_per_epoch
         self.inner_epoch = self.total_samples = self.n_equations = 0
         self.infos_statistics = defaultdict(list)
-        self.errors_statistics = defaultdict(int)
 
         # data iterators
         self.iterators = {}
@@ -456,11 +455,6 @@ class Trainer(object):
             os.path.join(self.params.dump_path, "statistics_{}.png".format(self.epoch))
         )
 
-        str_errors = "Errors ({} eqs)\n ".format(total_eqs)
-        for error_type, count in self.errors_statistics.items():
-            str_errors += "{}: {}, ".format(error_type, count)
-        logger.info(str_errors[:-2])
-        self.errors_statistics = defaultdict(int)
         self.infos_statistics = defaultdict(list)
 
     def save_checkpoint(self, name, include_optimizer=True, include_stats=False):
@@ -653,7 +647,7 @@ class Trainer(object):
         Return a training batch for a specific task.
         """
         try:
-            batch, errors = next(self.dataloader[task])
+            batch = next(self.dataloader[task])
         except Exception as e:
             print(e)
             logger.error(
@@ -669,7 +663,7 @@ class Trainer(object):
                 else:
                     logger.warning("Not the master process, no need to requeue.")
             raise
-        return batch, errors
+        return batch
 
     def export_data(self, task):
         """
@@ -731,13 +725,11 @@ class Trainer(object):
         decoder.train()
         env = self.env
 
-        samples, errors = self.get_batch(task)
+        samples = self.get_batch(task)
 
         if self.params.debug_train_statistics:
             for info_type, info in samples["infos"].items():
                 self.infos_statistics[info_type].append(info)
-            for error_type, count in errors.items():
-                self.errors_statistics[error_type] += count
 
         times = samples["times"]
         trajectory = samples["trajectory"]

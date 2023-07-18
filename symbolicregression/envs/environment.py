@@ -1209,9 +1209,7 @@ class EnvDataset(Dataset):
         samples["infos"] = info_tensor
         if "input_sequence_length" in samples["infos"]:
             del samples["infos"]["input_sequence_length"]
-        errors = copy.deepcopy(self.errors)
-        self.errors = defaultdict(int)
-        return samples, errors
+        return samples
 
     def init_rng(self):
         """
