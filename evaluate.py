@@ -54,24 +54,30 @@ def setup_odeformer(trainer) -> SymbolicTransformerRegressor:
     embedder.eval()
     encoder.eval()
     decoder.eval()
+
+    model_kwargs = {
+        'beam_length_penalty': trainer.params.beam_length_penalty,
+        'beam_size': trainer.params.beam_size,
+        'max_generated_output_len': trainer.params.max_generated_output_len,
+        'beam_early_stopping': trainer.params.beam_early_stopping,
+        'beam_temperature': trainer.params.beam_temperature,
+        'beam_type': trainer.params.beam_type,
+    }
+
     mw = ModelWrapper(
         env=trainer.env,
         embedder=embedder,
         encoder=encoder,
         decoder=decoder,
-        beam_length_penalty=trainer.params.beam_length_penalty,
-        beam_size=trainer.params.beam_size,
-        max_generated_output_len=trainer.params.max_generated_output_len,
-        beam_early_stopping=trainer.params.beam_early_stopping,
-        beam_temperature=trainer.params.beam_temperature,
-        beam_type=trainer.params.beam_type,
+        **model_kwargs
     )
     return SymbolicTransformerRegressor(
         model=mw,
         from_pretrained=trainer.params.from_pretrained,
         max_input_points=trainer.params.max_points,
         rescale=trainer.params.rescale,
-        params=trainer.params
+        params=trainer.params,
+        model_kwargs=model_kwargs,
     )
 
 def read_file(filename, label="target", sep=None):
