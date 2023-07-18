@@ -318,12 +318,15 @@ def get_parser():
     parser.add_argument(
         "--reload_checkpoint", type=str, default="", help="Reload a checkpoint"
     )
+    parser.add_argument(
+        "--from_pretrained", type=bool_flag, default=False, help="Download a pretrained model"
+    )
 
     # evaluation
     parser.add_argument(
         "--validation_metrics",
         type=str,
-        default="r2_zero,accuracy_l1_1e-1,snmse,term_difference,is_valid,is_valid_tree",
+        default="r2_zero,accuracy_l1_biggio,snmse,term_difference,is_valid,is_valid_tree",
         help="What metrics should we report? accuracy_tolerance/l1_error/r2/_complexity/_relative_complexity/is_symbolic_solution",
     )
     parser.add_argument(

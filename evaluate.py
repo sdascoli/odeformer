@@ -68,6 +68,7 @@ def setup_odeformer(trainer) -> SymbolicTransformerRegressor:
     )
     return SymbolicTransformerRegressor(
         model=mw,
+        from_pretrained=trainer.params.from_pretrained,
         max_input_points=trainer.params.max_points,
         rescale=trainer.params.rescale,
         params=trainer.params
@@ -604,16 +605,22 @@ if __name__ == "__main__":
 
     parser = get_parser()
     params = parser.parse_args()
-    pk = pickle.load(open(params.reload_checkpoint + "/params.pkl", "rb"))
-    pickled_args = pk.__dict__
-    for p in params.__dict__:
-        if p in pickled_args and p not in ["dump_path", "reload_checkpoint", "rescale", "validation_metrics", "eval_in_domain", "eval_on_pmlb", "batch_size_eval", "beam_size", "beam_selection_metric", "subsample_prob", "eval_noise_gamma", "eval_subsample_ratio", "eval_noise_type", "use_wandb", "eval_size", "reload_data"]:
-            params.__dict__[p] = pickled_args[p]
+
+    if params.reload_checkpoint:
+        pk = pickle.load(open(params.reload_checkpoint + "/params.pkl", "rb"))
+        pickled_args = pk.__dict__
+        for p in params.__dict__:
+            if p in pickled_args and p not in ["dump_path", "reload_checkpoint", "rescale", "validation_metrics", "eval_in_domain", "eval_on_pmlb", "batch_size_eval", "beam_size", "beam_selection_metric", "subsample_prob", "eval_noise_gamma", "eval_subsample_ratio", "eval_noise_type", "use_wandb", "eval_size", "reload_data"]:
+                params.__dict__[p] = pickled_args[p]
+
+    if params.eval_dump_path is None:
+        params.eval_dump_path = Path(params.dump_path) / "new_evals"
+        if not os.path.isdir(params.eval_dump_path):
+            os.makedirs(params.eval_dump_path)
 
     params.is_slurm_job = False
     params.local_rank = -1
     params.master_port = -1
-    params.use_cross_attention = True
-    params.eval_on_file = None #"/p/project/hai_microbio/sb/repos/odeformer/datasets/polynomial_2d.txt.pkl"
+    params.eval_on_file = None 
 
     main(params)

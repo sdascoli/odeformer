@@ -45,7 +45,6 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
         if from_pretrained:
             self.load_pretrained()
         for kwarg, val in model_kwargs.items():
-            print(kwarg, val)
             setattr(self.model, kwarg, val)
 
     def load_pretrained(self):
@@ -55,6 +54,7 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
             url = "https://drive.google.com/uc?id=18CwlutaFF_tAOObsIukrKVZMPmsjwNwF"
             gdown.download(url, model_path, quiet=False)
         model = torch.load(model_path)
+        print("Loaded pretrained model")
         self.model = model
 
     def set_args(self, args={}):
