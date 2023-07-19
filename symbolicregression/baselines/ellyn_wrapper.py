@@ -51,7 +51,6 @@ class EllynMixin(
         self.grid_search_is_running = grid_search_is_running
         self._wrapper_params = [
             "model_dir",
-            "filename_pareto_front",
             "optimize_hyperparams",
             "hyper_opt_eval_fraction",
             "sorting_metric",
