@@ -34,78 +34,30 @@ def main(params):
     modules = build_modules(env, params)
     trainer = Trainer(modules, env, params)
 
-    if params.baseline_model == "sindy":
-        from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
-        model = SINDyWrapper(
-            model_dir=params.eval_dump_path,
-            optimizer_alpha=0.05,
-            optimizer_threshold=0.04,
-            polynomial_degree=6,
-            functions=None, # None means all
-            grid_search_polynomial_degree=True,
-            optimize_hyperparams=params.optimize_hyperparams,
-            hyper_opt_eval_fraction=params.hyper_opt_eval_fraction,
-            sorting_metric=params.sorting_metric,
-        )
-    elif params.baseline_model == "sindy_all":
+    if params.baseline_model == "sindy_all":
         from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
         model = SINDyWrapper(
             model_dir=params.eval_dump_path,
             polynomial_degree=10,
-            functions=[], # only polynomials
+            functions=None, # all functions
             grid_search_polynomial_degree=True,
             grid_search_functions=True,
             optimize_hyperparams=params.optimize_hyperparams,
             hyper_opt_eval_fraction=params.hyper_opt_eval_fraction,
             sorting_metric=params.sorting_metric,
         )
-    elif params.baseline_model == "sindy_full":
+    elif params.baseline_model == "sindy_esc":
         from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
         model = SINDyWrapper(
             model_dir=params.eval_dump_path,
-            polynomial_degree=3,
-            functions=[], # only polynomials
-            grid_search_polynomial_degree=True,
-            grid_search_functions=True,
-            optimize_hyperparams=params.optimize_hyperparams,
-            hyper_opt_eval_fraction=params.hyper_opt_eval_fraction,
-            sorting_metric=params.sorting_metric,
-        )
-    elif params.baseline_model == "sindy_save":
-        from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
-        model = SINDyWrapper(
-            model_dir=params.eval_dump_path,
-            optimizer_alpha=0.05,
-            optimizer_threshold=0.04,
-            polynomial_degree=6,
+            polynomial_degree=10,
             functions=["sin", "cos", "exp"],
             grid_search_polynomial_degree=True,
             optimize_hyperparams=params.optimize_hyperparams,
             hyper_opt_eval_fraction=params.hyper_opt_eval_fraction,
             sorting_metric=params.sorting_metric,
         )
-    elif params.baseline_model == "sindy_poly3":
-        from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
-        model = SINDyWrapper(
-            model_dir=params.eval_dump_path,
-            polynomial_degree=3,
-            functions=[], # only polynomials
-            optimize_hyperparams=params.optimize_hyperparams,
-            hyper_opt_eval_fraction=params.hyper_opt_eval_fraction,
-            sorting_metric=params.sorting_metric,
-        )
-    elif params.baseline_model == "sindy_poly6":
-        from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
-        model = SINDyWrapper(
-            model_dir=params.eval_dump_path,
-            polynomial_degree=6,
-            functions=[], # only polynomials
-            grid_search_polynomial_degree=True,
-            optimize_hyperparams=params.optimize_hyperparams,
-            hyper_opt_eval_fraction=params.hyper_opt_eval_fraction,
-            sorting_metric=params.sorting_metric,
-        )
-    elif params.baseline_model == "sindy_poly10":
+    elif params.baseline_model == "sindy_poly":
         from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
         model = SINDyWrapper(
             model_dir=params.eval_dump_path,
@@ -199,7 +151,7 @@ def main(params):
     evaluator = Evaluator(trainer, model)
     
     if params.eval_on_file:
-        scores = evaluator.evaluate_on_file(path=params.eval_on_file, save=params.save_results, seed=params.random_seed)
+        scores = evaluator.evaluate_on_file(path=params.eval_on_file, save=params.save_results, seed=params.test_env_seed)
         
     if params.eval_on_pmlb:
         scores = evaluator.evaluate_on_pmlb(path_dataset=params.path_dataset)
@@ -228,11 +180,11 @@ if __name__ == "__main__":
             "proged", "proged_poly",
             "ffx",
             "pysr", "pysr_poly",
-            "sindy", "sindy_all", "sindy_full", "sindy_save", "sindy_poly3", "sindy_poly6", "sindy_poly10",
+            "sindy_all", "sindy_esc", "sindy_poly",
             "odeformer", "odeformer_opt", "odeformer_opt_random"
         ]
     )
-    parser.add_argument("--dataset", type=str, choices=["strogatz", "oscillators", "<path_to_dataset>"], 
+    parser.add_argument("--dataset", type=str, choices=["strogatz","strogatz_extended", "oscillators", "<path_to_dataset>"], 
         # default="/p/project/hai_microbio/sb/repos/odeformer/datasets/strogatz_extended/strogatz_extended.json"
         # default="oscillators"
         default="strogatz"
@@ -258,6 +210,12 @@ if __name__ == "__main__":
         params.eval_on_oscillators = False
         params.eval_on_pmlb = True
         params.path_dataset = "datasets/strogatz.pkl"
+        dataset_name = params.dataset
+    elif params.dataset == "strogatz_extended":
+        params.eval_on_file = "datasets/strogatz_extended.pkl"
+        params.eval_on_oscillators = False
+        params.eval_on_pmlb = False
+        params.path_dataset = "datasets/strogatz_extended.pkl"
         dataset_name = params.dataset
     elif params.dataset == "oscillators":
         params.eval_on_pmlb = False
@@ -292,7 +250,7 @@ if __name__ == "__main__":
         f"subsample_ratio_{float(params.subsample_ratio)}",
         f"eval_noise_type_{params.eval_noise_type}",
         f"eval_gamma_noise_{float(params.eval_noise_gamma)}",
-        f"evaluation_task_{params.evaluation_task}",
+        f"{params.evaluation_task}",
         # f"baseline_to_sympy_{params.baseline_to_sympy}",
     )
     
