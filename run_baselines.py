@@ -231,7 +231,7 @@ if __name__ == "__main__":
     else:
         params.cpu = True
     
-    if not hasattr(params, "subsample_ratio"):
+    if not hasattr(params, "eval_subsample_ratio"):
         params.subsample_ratio = 0 # no subsampling
     if not hasattr(params, "eval_noise_gamma"):
         params.eval_noise_gamma = 0 # no noise
@@ -244,7 +244,7 @@ if __name__ == "__main__":
         dataset_name,
         f"hyper_opt_{params.optimize_hyperparams}",
         f"baseline_hyper_opt_eval_fraction_{params.hyper_opt_eval_fraction}",
-        f"subsample_ratio_{float(params.subsample_ratio)}",
+        f"subsample_ratio_{float(params.eval_subsample_ratio)}",
         f"eval_noise_type_{params.eval_noise_type}",
         f"eval_gamma_noise_{float(params.eval_noise_gamma)}",
         f"{params.evaluation_task}",
