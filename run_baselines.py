@@ -244,7 +244,7 @@ if __name__ == "__main__":
         dataset_name,
         f"hyper_opt_{params.optimize_hyperparams}",
         f"baseline_hyper_opt_eval_fraction_{params.hyper_opt_eval_fraction}",
-        f"eval_subsample_ratio{float(params.eval_subsample_ratio)}",
+        f"eval_subsample_ratio_{float(params.eval_subsample_ratio)}",
         f"eval_noise_type_{params.eval_noise_type}",
         f"eval_gamma_noise_{float(params.eval_noise_gamma)}",
         f"{params.evaluation_task}",
