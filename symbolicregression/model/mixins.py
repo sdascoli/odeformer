@@ -64,21 +64,18 @@ class GridSearchMixin(ABC):
         with open(os.path.join(self.model_dir, self.filename_pareto_front), "a") as fout:
             json.dump(fp=fout, obj=equations)
     
-    def fit_grid_search(
-        self,
-        times: np.ndarray,
-        trajectory: np.ndarray,
-    ):
+    def fit_grid_search(self, times: np.ndarray, trajectory: np.ndarray,):
         self.grid_search_is_running = True
-        train_idcs = np.arange(
-            int(np.floor((1-self.hyper_opt_eval_fraction)*len(times))), 
-            dtype=int
-        )
-        test_idcs = np.arange(
-            int(np.floor((1-self.hyper_opt_eval_fraction)*len(times))), 
-            len(times),
-            dtype=int
-        )
+        if isinstance(trajectory, List):
+            assert len(trajectory) == 1, len(trajectory)
+            trajectory = trajectory[0]
+        if isinstance(times, List):
+            assert len(times) == 1, len(times)
+            times = times[0]
+        assert trajectory.shape[0] == times.shape[0], f"{trajectory.shape} vs {times.shape}"
+        assert isinstance(trajectory, np.ndarray)
+        train_idcs = np.arange(int(np.floor((1-self.hyper_opt_eval_fraction)*len(times))), dtype=int)
+        test_idcs = np.arange(int(np.floor((1-self.hyper_opt_eval_fraction)*len(times))), len(times), dtype=int)
         assert len(set(train_idcs).intersection(test_idcs)) == 0, "`train_idcs` and `test_idcs` overlap."
         model = self.get_grid_search(train_idcs, test_idcs)
         model.fit(times, trajectory)
@@ -123,8 +120,6 @@ class GridSearchMixin(ABC):
         sorted_idx = np.argsort(_scores)  
         if descending: sorted_idx = list(reversed(sorted_idx))
         return [candidates[i] for i in sorted_idx]
-        
-        
 
 class SympyMixin:
     def to_sympy(

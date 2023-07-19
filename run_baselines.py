@@ -1,12 +1,23 @@
-from evaluate import *
-from symbolicregression.baselines.ffx_wrapper import FFXWrapper
-from symbolicregression.baselines.pysr_wrapper import PySRWrapper
-from symbolicregression.baselines.ellyn_wrapper import (
-   AFPWrapper, EHCWrapper, EPLEXWrapper, FEAFPWrapper,
-)
-from symbolicregression.baselines.proged_wrapper import ProGEDWrapper
-from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
+from typing import Union
+from pathlib import Path
+
 import os
+import torch
+import numpy as np
+import pandas as pd
+
+from evaluate import (
+    Trainer,
+    Evaluator, 
+    build_env, 
+    get_parser, 
+    build_modules, 
+    initialize_exp, 
+    setup_odeformer, 
+    symbolicregression,
+    init_distributed_mode, 
+)
+
 
 def format_and_save(params, scores, batch_results, name):
     scores = pd.DataFrame(scores, index=[0]).T
@@ -24,6 +35,7 @@ def main(params):
     trainer = Trainer(modules, env, params)
 
     if params.baseline_model == "sindy":
+        from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
         model = SINDyWrapper(
             model_dir=params.eval_dump_path,
             optimizer_alpha=0.05,
@@ -36,6 +48,7 @@ def main(params):
             sorting_metric=params.sorting_metric,
         )
     elif params.baseline_model == "sindy_all":
+        from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
         model = SINDyWrapper(
             model_dir=params.eval_dump_path,
             polynomial_degree=10,
@@ -47,6 +60,7 @@ def main(params):
             sorting_metric=params.sorting_metric,
         )
     elif params.baseline_model == "sindy_full":
+        from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
         model = SINDyWrapper(
             model_dir=params.eval_dump_path,
             polynomial_degree=3,
@@ -58,6 +72,7 @@ def main(params):
             sorting_metric=params.sorting_metric,
         )
     elif params.baseline_model == "sindy_save":
+        from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
         model = SINDyWrapper(
             model_dir=params.eval_dump_path,
             optimizer_alpha=0.05,
@@ -70,6 +85,7 @@ def main(params):
             sorting_metric=params.sorting_metric,
         )
     elif params.baseline_model == "sindy_poly3":
+        from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
         model = SINDyWrapper(
             model_dir=params.eval_dump_path,
             polynomial_degree=3,
@@ -79,6 +95,7 @@ def main(params):
             sorting_metric=params.sorting_metric,
         )
     elif params.baseline_model == "sindy_poly6":
+        from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
         model = SINDyWrapper(
             model_dir=params.eval_dump_path,
             polynomial_degree=6,
@@ -89,6 +106,7 @@ def main(params):
             sorting_metric=params.sorting_metric,
         )
     elif params.baseline_model == "sindy_poly10":
+        from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
         model = SINDyWrapper(
             model_dir=params.eval_dump_path,
             polynomial_degree=10,
@@ -99,6 +117,7 @@ def main(params):
             sorting_metric=params.sorting_metric,
         )
     elif params.baseline_model == "pysr":
+        from symbolicregression.baselines.pysr_wrapper import PySRWrapper
         model = PySRWrapper(
             model_dir=params.eval_dump_path,
             optimize_hyperparams=True,
@@ -106,6 +125,7 @@ def main(params):
             sorting_metric=params.sorting_metric,
         )
     elif params.baseline_model == "pysr_poly":
+        from symbolicregression.baselines.pysr_wrapper import PySRWrapper
         model = PySRWrapper(
             model_dir=params.eval_dump_path,
             optimize_hyperparams=True,
@@ -114,6 +134,7 @@ def main(params):
             unary_operators=[]
         )
     elif params.baseline_model == "proged":
+        from symbolicregression.baselines.proged_wrapper import ProGEDWrapper
         model = ProGEDWrapper(
             model_dir=params.eval_dump_path,
             optimize_hyperparams=True,
@@ -121,6 +142,7 @@ def main(params):
             sorting_metric=params.sorting_metric,
         )
     elif params.baseline_model == "proged_poly":
+        from symbolicregression.baselines.proged_wrapper import ProGEDWrapper
         model = ProGEDWrapper(
             model_dir=params.eval_dump_path,
             optimize_hyperparams=True,
@@ -130,6 +152,7 @@ def main(params):
             grid_search_generator_template_name=False,
         )
     elif params.baseline_model == "afp":
+        from symbolicregression.baselines.ellyn_wrapper import AFPWrapper
         model = AFPWrapper(
             model_dir=params.eval_dump_path,
             optimize_hyperparams=True,
@@ -137,6 +160,7 @@ def main(params):
             sorting_metric=params.sorting_metric,
         )
     elif params.baseline_model == "ehc":
+        from symbolicregression.baselines.ellyn_wrapper import EHCWrapper
         model = EHCWrapper(
             model_dir=params.eval_dump_path,
             optimize_hyperparams=True,
@@ -144,6 +168,7 @@ def main(params):
             sorting_metric=params.sorting_metric,
         )
     elif params.baseline_model == "eplex":
+        from symbolicregression.baselines.ellyn_wrapper import EPLEXWrapper
         model = EPLEXWrapper(
             model_dir=params.eval_dump_path,
             optimize_hyperparams=True,
@@ -151,6 +176,7 @@ def main(params):
             sorting_metric=params.sorting_metric,
         )
     elif params.baseline_model == "feafp":
+        from symbolicregression.baselines.ellyn_wrapper import FEAFPWrapper
         model = FEAFPWrapper(
             model_dir=params.eval_dump_path,
             optimize_hyperparams=True,
@@ -158,6 +184,7 @@ def main(params):
             sorting_metric=params.sorting_metric,
         )
     elif params.baseline_model == "ffx":
+        from symbolicregression.baselines.ffx_wrapper import FFXWrapper
         model = FFXWrapper(
             model_dir=params.eval_dump_path,
             optimize_hyperparams=True,
@@ -195,7 +222,7 @@ def str_or_None(arg: str):
 if __name__ == "__main__":
     BASE = os.path.join(os.getcwd(), "experiments")
     parser = get_parser()
-    parser.add_argument("--baseline_model", type=str, default="sindy_poly10",
+    parser.add_argument("--baseline_model", type=str, default="ffx",
         choices=[
             "afp", "feafp", "eplex", "ehc",
             "proged", "proged_poly",

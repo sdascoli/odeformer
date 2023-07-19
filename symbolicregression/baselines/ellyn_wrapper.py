@@ -102,20 +102,12 @@ class EllynMixin(
     ) -> Dict[int, List[str]]:
 
         if self.optimize_hyperparams and not self.grid_search_is_running:
-            if isinstance(trajectories, List):
-                assert len(trajectories) == 1, len(trajectories)
-                trajectories = trajectories[0]
-            assert isinstance(trajectories, np.ndarray)
             return self.fit_grid_search(times=times, trajectory=trajectories)
-
         if isinstance(trajectories, List):
             self.final_equations = self.fit_all(times=times, trajectories=trajectories)
             return self.final_equations
         if derivatives is None:
-            derivatives = self.approximate_derivative(
-                trajectory=trajectories, 
-                times=times,
-            ).squeeze()
+            derivatives = self.approximate_derivative(trajectory=trajectories, times=times).squeeze()
             if len(derivatives.shape) > 1:
                 self.final_equations = self.fit_components(times, trajectories, derivatives)
                 return self.final_equations

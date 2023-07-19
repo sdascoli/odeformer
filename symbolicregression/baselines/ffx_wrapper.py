@@ -96,10 +96,6 @@ class FFXWrapper(
     ) -> Dict[int, List[str]]:
         
         if self.optimize_hyperparams and not self.grid_search_is_running:
-            if isinstance(trajectories, List):
-                assert len(trajectories) == 1, len(trajectories)
-                trajectories = trajectories[0]
-            assert isinstance(trajectories, np.ndarray)
             return self.fit_grid_search(times=times, trajectory=trajectories)
         
         if isinstance(trajectories, List):

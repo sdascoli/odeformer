@@ -96,14 +96,10 @@ class SINDyWrapper(
         *args, **kwargs, # ignored, for compatibility only
     ) -> Dict[int, Union[None, List[str]]]:
         
-        if isinstance(trajectories, List):
-            # we have multiple trajectories but do not want to average
-            return super().fit_all(times, trajectories)
-        
         if self.optimize_hyperparams and not self.grid_search_is_running:
-            assert isinstance(trajectories, np.ndarray)
             return self.fit_grid_search(times=times, trajectory=trajectories)
-        
+        if isinstance(trajectories, List):
+            return super().fit_all(times, trajectories)
         try:
             super().fit(trajectories, t=times)
             return self._get_equations()
