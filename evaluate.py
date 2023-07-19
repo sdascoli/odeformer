@@ -265,8 +265,8 @@ class Evaluator(object):
                     else:
                         raise ValueError(f"Unknown noise type: {self.params.eval_noise_type}")
                 if self.params.eval_subsample_ratio:
-                    time, trajectory = self.env.subsample_trajectory(
-                        times,
+                    time, trajectory = self.env._subsample_trajectory(
+                        time,
                         trajectory,
                         subsample_ratio=self.params.eval_subsample_ratio,
                         seed=self.params.test_env_seed,
@@ -278,11 +278,6 @@ class Evaluator(object):
             start_time_fit = timer()
             all_candidates = self.model.fit(times, trajectories, verbose=False, sort_candidates=True)
             all_duration_fit = [timer() - start_time_fit] * len(times)
-            #all_candidates, all_duration_fit = dict(), dict()
-            #for _trajectory_i, (_times, _trajectory) in enumerate(zip(times, trajectories)):
-            #    start_time_fit = timer()
-            #    all_candidates[_trajectory_i] = self.model.fit(_times, _trajectory)[0]
-            #    all_duration_fit[_trajectory_i] = [timer() - start_time_fit]
             
             # evaluate on train data
             best_results, best_candidates = self._evaluate(
@@ -331,23 +326,12 @@ class Evaluator(object):
                 scores[prefix+metric+'_median'] = df[metric].median()
 
         scores["duration_fit"] = df["duration_fit"].mean()
-                        
-        # for ablation in self.ablation_to_keep:
-        #     for val, df_ablation in df.groupby(ablation):
-        #         avg_scores_ablation = df_ablation.mean()
-        #         for k, v in avg_scores_ablation.items():
-        #             if k not in info_columns:
-        #                 scores[k + "_{}_{}".format(ablation, val)] = v
 
         if self.params.use_wandb:
             wandb.log({name+"_"+metric: score for metric, score in scores.items()})
-
         return scores
         
-    def evaluate_in_domain(
-        self,
-        task,
-    ):
+    def evaluate_in_domain(self, task):
         self.model.rescale = False
         self.trainer.logger.info(
             "====== STARTING EVALUATION IN DOMAIN (multi-gpu: {}) =======".format(
@@ -362,15 +346,9 @@ class Evaluator(object):
             size=self.params.eval_size,
             test_env_seed=self.params.test_env_seed,
         )
+        return self.evaluate_on_iterator(iterator, name = "in_domain")
 
-        scores = self.evaluate_on_iterator(iterator, name = "in_domain")
-        
-        return scores
-
-    def evaluate_on_pmlb(
-        self,
-        path_dataset=None,
-    ):
+    def evaluate_on_pmlb(self, path_dataset=None):
         if path_dataset is not None and os.path.exists(path_dataset):
             iterator = pd.read_pickle(path_dataset)
         else:
@@ -419,65 +397,50 @@ class Evaluator(object):
                     start = j * len(times)
                     stop = (j+1) * len(times)
                     trajectory = np.concatenate((x[start:stop], y[start:stop]),axis=1)
-                    # times_, trajectory_ = self.env.generator._subsample_trajectory(times, trajectory, subsample_ratio=self.params.subsample_ratio)
                     samples["train"]['times'].append(deepcopy(times))
                     samples["train"]['trajectories'].append(trajectory)
                     samples['tree'] = [self.str_to_tree(format_strogatz_equation(strogatz_equations[name]))]
                     samples['infos'] = infos
-                    # for k,v in samples['infos'].items():
-                    #     samples['infos'][k] = np.array([v]*4)
                     iterator.append(samples)
             if path_dataset:
                 with open(path_dataset, "wb") as fout:
                     self.trainer.logger.info(f"Saving dataset under:\n{path_dataset}")
                     pickle.dump(obj=iterator, file=fout)
-
-        scores = self.evaluate_on_iterator(iterator, name="pmlb")
-
-        return scores
+        return self.evaluate_on_iterator(iterator, name="pmlb")
     
-    def evaluate_on_oscillators(
-        self,
-    ):
+    def evaluate_on_oscillators(self, path="invar_datasets"):
         self.model.rescale = self.params.rescale
         self.trainer.logger.info(
-            "====== STARTING EVALUATION OSCILLATORS (multi-gpu: {}) =======".format(
-                self.params.multi_gpu
-            )
+            "====== STARTING EVALUATION OSCILLATORS (multi-gpu: {}) =======".format(self.params.multi_gpu)
         )
         iterator = []
         datasets = {}
-        for file in glob.glob("invar_datasets/*"):
+        for file in glob.glob(path + "/*"):
             with open(file) as f:
                 lines = (line for line in f if not line.startswith('%') and not line.startswith('x'))
                 data = np.loadtxt(lines)
                 data = data[data[:,0]==0]
             datasets[file.split('/')[-1]] = data
-        
         for name, data in datasets.items():
             samples = {"train": defaultdict(list)}
             samples['infos'] = {'dimension':2, 'n_unary_ops':0, 'n_input_points':100, 'name':name}
             for k,v in samples['infos'].items():
                 samples['infos'][k] = np.array([v])
-
             times = data[:,1]
             x = data[:,2].reshape(-1,1)
             y = data[:,3].reshape(-1,1)
-            # shuffle times and trajectories
-            #idx = np.linspace(0, len(x)-1, self.dstr.max_input_points).astype(int)
             if hasattr(self.model, "max_input_points"):
                 idx = np.random.permutation(len(times))
                 times, x, y = times[idx], x[idx], y[idx]
-            
             samples["train"]['times'].append(times)
             samples["train"]['trajectories'].append(np.concatenate((x,y),axis=1))
             samples["tree"] = [None]
             iterator.append(samples)
-
-        scores = self.evaluate_on_iterator(iterator,
-                                           name="oscillators")
-
-        return scores
+        ds_path = os.path.join(path, "invar_datasets.pkl")
+        with open(ds_path, "wb") as fpickle:
+            self.trainer.logger.info(f"Saving dataset under: {ds_path}")
+            pickle.dump(iterator, fpickle)
+        return self.evaluate_on_iterator(iterator, name="oscillators")
     
     def str_to_tree(self, expr: str):
         exprs = [sympy.parse_expr(e) for e in expr.split("|")]
@@ -519,8 +482,6 @@ class Evaluator(object):
                 samples["train"]["trajectories"].append(trajectory)
                 samples['tree'].append(tree)
                 iterator.append((samples, None))
-        with open(path+".pkl", "wb") as fpickle:
-            pickle.dump(iterator, fpickle)
         return iterator
     
     def read_equations_from_json_file(self, path: str, save: bool):
@@ -545,9 +506,8 @@ class Evaluator(object):
                     samples['tree'] = [self.str_to_tree(" | ".join(_sample["substituted"][solution_i]))]
                     iterator.append(samples)
                 except Exception as e:
-                    print(sample_i, solution_i)
-                    print(e)
-                
+                    self.trainer.logger.error(sample_i, solution_i)
+                    self.trainer.logger.error(e)
         return iterator
             
     
@@ -561,11 +521,11 @@ class Evaluator(object):
             iterator = self.read_equations_from_json_file(path=path, save=save)
         else:
             iterator = self.read_equations_from_txt_file(path=path, save=save, seed=seed)
-        if save:
-            save_file = os.path.join(self.save_path, f"eval_{_filename}.csv")
-        else:
-            save_file = None
-        return self.evaluate_on_iterator(iterator, save_file)
+        ds_path = path+".pkl"
+        with open(ds_path, "wb") as fpickle:
+            self.trainer.logger.info(f"Saving dataset under: {ds_path}")
+            pickle.dump(iterator, fpickle)
+        return self.evaluate_on_iterator(iterator, _filename)
                     
 
 def main(params):
@@ -618,7 +578,11 @@ if __name__ == "__main__":
         pk = pickle.load(open(params.reload_checkpoint + "/params.pkl", "rb"))
         pickled_args = pk.__dict__
         for p in params.__dict__:
-            if p in pickled_args and p not in ["dump_path", "reload_checkpoint", "rescale", "validation_metrics", "eval_in_domain", "eval_on_pmlb", "batch_size_eval", "beam_size", "beam_selection_metric", "subsample_prob", "eval_noise_gamma", "eval_subsample_ratio", "eval_noise_type", "use_wandb", "eval_size", "reload_data"]:
+            if p in pickled_args and p not in [
+                "dump_path", "reload_checkpoint", "rescale", "validation_metrics", "eval_in_domain", "eval_on_pmlb", 
+                "batch_size_eval", "beam_size", "beam_selection_metric", "subsample_prob", "eval_noise_gamma", 
+                "eval_subsample_ratio", "eval_noise_type", "use_wandb", "eval_size", "reload_data"
+            ]:
                 params.__dict__[p] = pickled_args[p]
 
     if params.eval_dump_path is None:
