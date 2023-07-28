@@ -207,14 +207,14 @@ if __name__ == "__main__":
         params.path_dataset = "datasets/strogatz.pkl"
         dataset_name = params.dataset
     elif params.dataset == "strogatz_extended":
-        params.eval_on_file = "/p/project/hai_microbio/sb/repos/odeformer/datasets/strogatz_extended/strogatz_extended.json"
+        params.eval_on_file = "datasets/strogatz_extended/strogatz_extended.json"
         params.eval_on_oscillators = False
         params.eval_on_pmlb = False
         dataset_name = "strogatz_extended"
     elif params.dataset == "oscillators":
+        params.eval_on_file = "invar_datasets/invar_datasets.pkl"
         params.eval_on_pmlb = False
-        params.eval_on_file = False
-        params.eval_on_oscillators = True
+        params.eval_on_oscillators = False
         dataset_name = "oscillators"
     else:
         params.eval_on_pmlb = False
