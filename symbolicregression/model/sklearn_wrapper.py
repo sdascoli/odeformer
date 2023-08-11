@@ -137,8 +137,9 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
             if not candidates: all_candidates[input_id].append(None)
             for candidate in candidates:
                 if scaler is not None:
-                    candidate = scaler.rescale_function(self.model.env, candidate, *scale_params[input_id])   
-                    candidate = self.model.env.simplifier.simplify_tree(candidate)
+                    candidate = scaler.rescale_function(self.model.env, candidate, *scale_params[input_id]) 
+                    try: candidate = self.model.env.simplifier.simplify_tree(candidate)
+                    except: pass
                 all_candidates[input_id].append(candidate)
         #assert len(all_candidates.keys())==n_datasets
     

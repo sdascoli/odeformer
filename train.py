@@ -79,8 +79,8 @@ def main(params):
             pmlb_scores = evaluator.evaluate_on_pmlb()
             logger.info("__pmlb__:%s" % json.dumps(pmlb_scores))
 
-            osc_scores = evaluator.evaluate_on_oscillators()
-            logger.info("__oscillators__:%s" % json.dumps(osc_scores))
+            # osc_scores = evaluator.evaluate_on_oscillators()
+            # logger.info("__oscillators__:%s" % json.dumps(osc_scores))
         exit()
 
     trainer.n_equations = 0

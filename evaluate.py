@@ -108,6 +108,7 @@ class Evaluator(object):
         self.model = model
         self.params = trainer.params
         self.env = trainer.env
+        self.env.rng = np.random.RandomState(self.params.test_env_seed)
         self.save_path = (
             self.params.eval_dump_path
             if self.params.eval_dump_path
@@ -327,8 +328,8 @@ class Evaluator(object):
 
         for metric in self.params.validation_metrics.split(','):
             for prefix in ["", "test_"]:
-                scores[metric] = df[metric].mean()
-                scores[prefix+metric+'_median'] = df[metric].median()
+                scores[prefix+metric] = df[prefix+metric].mean()
+                scores[prefix+metric+'_median'] = df[prefix+metric].median()
 
         scores["duration_fit"] = df["duration_fit"].mean()
                         
@@ -588,7 +589,6 @@ def main(params):
         params.batch_size_eval = int(1.5 * params.batch_size)
 
     env = build_env(params)
-    env.rng = np.random.RandomState(0)
     modules = build_modules(env, params)
     trainer = Trainer(modules, env, params)
     model = setup_odeformer(trainer)
@@ -602,11 +602,11 @@ def main(params):
     if params.eval_on_pmlb:
         scores = evaluator.evaluate_on_pmlb()
         logger.info("__pmlb__:%s" % json.dumps(scores))
-        scores = evaluator.evaluate_on_oscillators()
-        logger.info("__oscillators__:%s" % json.dumps(scores))
+        # scores = evaluator.evaluate_on_oscillators()
+        # logger.info("__oscillators__:%s" % json.dumps(scores))
     
     if params.eval_on_file is not None:
-        evaluator.evaluate_on_file(path=params.eval_on_file, seed=params.random_seed)
+        evaluator.evaluate_on_file(path=params.eval_on_file, seed=params.test_env_seed)
 
 
 if __name__ == "__main__":
