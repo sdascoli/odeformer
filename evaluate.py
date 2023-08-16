@@ -133,7 +133,7 @@ class Evaluator(object):
     ) -> Dict[str, Dict[str, Any]]:
         
         if "train" not in samples.keys():
-            samples["train"] = {"times":samples["times"], "trajectories":samples["trajectory"]}
+            samples["train"] = {"times": samples["times"], "trajectories": samples["trajectory"]}
             del samples["times"], samples["trajectory"]
         assert "test" not in samples.keys(), samples.keys()
         samples["test"] = {"times":[], "trajectories":[]}
@@ -219,10 +219,25 @@ class Evaluator(object):
         return best_results, best_candidates
 
     def evaluate_on_iterator(self, iterator, name="in_domain"):
+        
+        save_file = os.path.join(self.save_path, f"eval_{name}.csv")
+        if os.path.exists(save_file):
+            self.trainer.logger.info(f"{save_file} exists. Skipping.")
+            return
+            
+        
         self.trainer.logger.info("evaluate_on_iterator")
         scores = OrderedDict({"epoch": self.trainer.epoch})
         batch_results = defaultdict(list)
         _total = min(self.eval_size, len(iterator)) if self.eval_size > 0 else len(iterator)
+        
+        if hasattr(self.params, "reload_scores_path") and self.params.reload_scores_path is not None:
+            reloaded_scores = pd.read_csv(self.params.reload_scores_path)
+            # silently assume that equations are in correct order
+            # TODO: add a check for this
+            # assert len(reloaded_scores) == len(iterator), f"{len(reloaded_scores)} vs {len(iterator)}"
+        
+        fit_counter = 0
         
         for samples_i, samples in enumerate(tqdm(iterator, total=_total)):
             if samples_i == self.eval_size:
@@ -276,8 +291,12 @@ class Evaluator(object):
 
             # fit
             start_time_fit = timer()
-            all_candidates = self.model.fit(times, trajectories, verbose=False, sort_candidates=True)
+            if hasattr(self.params, "reload_scores_path") and self.params.reload_scores_path is not None:
+                all_candidates = [reloaded_scores.iloc[fit_counter].predicted_trees]
+            else:
+                all_candidates = self.model.fit(times, trajectories, verbose=False, sort_candidates=True)
             all_duration_fit = [timer() - start_time_fit] * len(times)
+            fit_counter += 1
             
             # evaluate on train data
             best_results, best_candidates = self._evaluate(
@@ -303,8 +322,6 @@ class Evaluator(object):
                 batch_results['test_'+k].extend(v)
 
         batch_results = pd.DataFrame.from_dict(batch_results)
-
-        save_file = os.path.join(self.save_path, f"eval_{name}.csv")
 
         batch_results.to_csv(save_file, index=False)
         self.trainer.logger.info("Saved {} equations to {}".format(len(batch_results), save_file))
@@ -596,3 +613,9 @@ if __name__ == "__main__":
     params.eval_on_file = None 
 
     main(params)
+    
+    # TODO: forecasting: start integration at training trajectory start but only consider extra part when computing score
+    # TODO: implement loading existing scores: pass path to scores to be loaded but save scores and params of evaluation under new path
+    # TODO: constant optimization
+    # TODO: inference from multiple trajectories via constant tuning
+    
