@@ -142,13 +142,13 @@ def main(params):
     evaluator = Evaluator(trainer, model)
     
     if params.eval_on_file:
-        _ = evaluator.evaluate_on_file(path=params.eval_on_file, save=params.save_results, seed=params.test_env_seed)
+        evaluator.evaluate_on_file(path=params.eval_on_file, save=params.save_results, seed=params.test_env_seed)
         
     if params.eval_on_pmlb:
-        _ = evaluator.evaluate_on_pmlb(path_dataset=params.path_dataset)
+        evaluator.evaluate_on_pmlb(path_dataset=params.path_dataset)
         
     if params.eval_on_oscillators:
-        _ = evaluator.evaluate_on_oscillators()
+        evaluator.evaluate_on_oscillators()
     
 def str2bool(arg: Union[bool, str]):
     if isinstance(arg, bool):
@@ -165,7 +165,7 @@ def str_or_None(arg: str):
 if __name__ == "__main__":
     BASE = os.path.join(os.getcwd(), "experiments")
     parser = get_parser()
-    parser.add_argument("--model", type=str, default="odeformer",
+    parser.add_argument("--model", type=str, default="sindy_poly",
         choices=[
             "afp", "feafp", "eplex", "ehc",
             "proged", "proged_poly",
@@ -176,7 +176,7 @@ if __name__ == "__main__":
         ]
     )
     parser.add_argument("--dataset", type=str, choices=["strogatz","strogatz_extended", "oscillators", "<path_to_dataset>"], 
-        default="strogatz_extended"
+        default="strogatz"
     )
     parser.add_argument("--optimize_hyperparams", type=str2bool, default=True, 
         help="Do / Don't optimizer hyper parameters."
@@ -191,9 +191,17 @@ if __name__ == "__main__":
         help = "If not None, sort pareto front according to this metric before selecting the final, best model."
     )
     parser.add_argument("--e_task",# this overwrites --evaluation_task from parser.py
-        type=str, choices=["interpolation", "forecasting", "y0_generalization"], default="interpolation",
+        type=str, choices=["interpolation", "forecasting", "y0_generalization"], default="forecasting",
     )
+    parser.add_argument("--reload_scores_path", type=str_or_None, default="/p/project/hai_microbio/sb/repos/odeformer/experiments/sindy_poly/strogatz/hyper_opt_True/baseline_hyper_opt_eval_fraction_0.3/eval_subsample_ratio_0.0/eval_noise_type_additive/eval_gamma_noise_0.0/interpolation/eval_pmlb.csv", 
+        help="Path to existing scores.csv from which candidates are re-loaded for re-evaluation, e.g. for forecasting or y0 generalization."
+    )
+    
     params = parser.parse_args()
+    
+    if params.reload_scores_path is not None:
+        assert os.path.exists(params.reload_scores_path), params.reload_scores_path
+    
     params.validation_metrics = 'r2,r2_zero,snmse,accuracy_l1_1e-1,accuracy_l1_1e-3,accuracy_l1_biggio,is_valid,complexity_sympy,relative_complexity_sympy,complexity_string,relative_complexity_string' # complexity,term_difference,term_difference_sympy
     params.eval_only = True
     params.max_dimension = 5
@@ -211,10 +219,15 @@ if __name__ == "__main__":
         params.eval_on_oscillators = False
         params.eval_on_pmlb = False
         dataset_name = "strogatz_extended"
+    # elif params.dataset == "oscillators":
+    #     params.eval_on_pmlb = False
+    #     params.eval_on_file = False
+    #     params.eval_on_oscillators = True
+    #     dataset_name = "oscillators"
     elif params.dataset == "oscillators":
+        params.eval_on_file = "invar_datasets/invar_datasets.pkl"
         params.eval_on_pmlb = False
-        params.eval_on_file = False
-        params.eval_on_oscillators = True
+        params.eval_on_oscillators = False
         dataset_name = "oscillators"
     else:
         params.eval_on_pmlb = False
@@ -248,7 +261,7 @@ if __name__ == "__main__":
         f"eval_noise_type_{params.eval_noise_type}",
         f"eval_gamma_noise_{float(params.eval_noise_gamma)}",
         f"{params.evaluation_task}",
-        f"beam_size={params.beam_size}" if "odeformer" in params.model else "",
+        f"beam_size_{params.beam_size}" if "odeformer" in params.model else "",
     )
     
     params.eval_dump_path = params.dump_path
@@ -264,8 +277,7 @@ if __name__ == "__main__":
         params.batch_size_eval = int(1.5 * params.batch_size)
     Path(params.dump_path).mkdir(exist_ok=True, parents=True)
     Path(params.eval_dump_path).mkdir(exist_ok=True, parents=True)
-    print(params.eval_dump_path, os.path.exists(params.eval_dump_path))
-    
+    print(params.eval_dump_path, os.path.exists(params.eval_dump_path))            
     init_distributed_mode(params)
     logger = initialize_exp(params, write_dump_path=False)
     if not params.cpu:
