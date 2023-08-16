@@ -231,7 +231,7 @@ class Evaluator(object):
         batch_results = defaultdict(list)
         _total = min(self.eval_size, len(iterator)) if self.eval_size > 0 else len(iterator)
         
-        if hasattr(self.params, "reload_scores_path") and self.params.reload_scores_path is not None:
+        if hasattr(self.params, "reload_scores_path") and (self.params.reload_scores_path is not None):
             reloaded_scores = pd.read_csv(self.params.reload_scores_path)
             # silently assume that equations are in correct order
             # TODO: add a check for this
