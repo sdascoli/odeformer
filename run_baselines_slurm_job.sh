@@ -5,8 +5,9 @@ export GIT_PYTHON_REFRESH=quiet
 export TOKENIZERS_PARALLELISM=false
 
 cd "${1}"
-echo "run_baseline_slurm_job.sh on $(hostname)"
 echo "cwd: ${1}"
+echo "run_baseline_slurm_job.sh on $(hostname)"
+echo "with args: ${@}"
 
 # Print job information
 echo "Starting job ${SLURM_JOBID}"

@@ -32,7 +32,7 @@ dataset="strogatz"
 hyper_opt="True"
 eval_noise_type="additive"
 baseline_hyper_opt_eval_fraction="0.3"
-evaluation_task="forecasting" #"y0_generalization" #
+evaluation_task="interpolation" #"y0_generalization" #
 sorting_metric="r2"
 
 reload="False"
@@ -64,11 +64,11 @@ do
                     mkdir -p "${model_dir}"
                     if [[ "${reload}" == "True" ]]; then
                         if [[ "${dataset}" == "strogatz" ]]; then
-                            reload_scores_path="/p/project/hai_microbio/sb/repos/odeformer/experiments/${model}/${dataset}/hyper_opt_${hyper_opt}/baseline_hyper_opt_eval_fraction_${baseline_hyper_opt_eval_fraction}/eval_subsample_ratio_${eval_subsample_ratio}/eval_noise_type_${eval_noise_type}/eval_gamma_noise_${eval_noise_gamma}/interpolation/beam_size_${beam_size}/eval_pmlb.csv"
+                            reload_scores_path="${base_dir}/${job_dir}/eval_pmlb.csv"
                         elif [[ "${dataset}" == "strogatz_extended" ]]; then
-                            reload_scores_path="/p/project/hai_microbio/sb/repos/odeformer/experiments/${model}/${dataset}/hyper_opt_${hyper_opt}/baseline_hyper_opt_eval_fraction_${baseline_hyper_opt_eval_fraction}/eval_subsample_ratio_${eval_subsample_ratio}/eval_noise_type_${eval_noise_type}/eval_gamma_noise_${eval_noise_gamma}/interpolation/beam_size_${beam_size}/eval_strogatz_extended.json.csv"
+                            reload_scores_path="${base_dir}/${job_dir}/eval_strogatz_extended.json.csv"
                         elif [[ "${dataset}" == "oscillators" ]]; then
-                            reload_scores_path="/p/project/hai_microbio/sb/repos/odeformer/experiments/${model}/${dataset}/hyper_opt_${hyper_opt}/baseline_hyper_opt_eval_fraction_${baseline_hyper_opt_eval_fraction}/eval_subsample_ratio_${eval_subsample_ratio}/eval_noise_type_${eval_noise_type}/eval_gamma_noise_${eval_noise_gamma}/interpolation/beam_size_${beam_size}/eval_invar_datasets.pkl.csv"
+                            reload_scores_path="${base_dir}/${job_dir}/eval_invar_datasets.pkl.csv"
                         else
                             echo "Unknown dataset ${dataset}"
                         fi
@@ -99,7 +99,7 @@ do
                                 "${baseline_hyper_opt_eval_fraction}" \
                                 "${sorting_metric}" \
                                 "${beam_size}" \
-                                "${reload_scores_path}"&
+                                "${reload_scores_path}" &
 
                 elif [[ "${hostname}" == *"hpc-submit"* ]]; then
                     base_dir="/home/haicu/soeren.becker/repos/odeformer"
@@ -108,6 +108,19 @@ do
                     echo "pwd: ${PWD}"
                     echo "model_dir: ${model_dir}"
                     mkdir -p "${model_dir}"
+                    if [[ "${reload}" == "True" ]]; then
+                        if [[ "${dataset}" == "strogatz" ]]; then
+                            reload_scores_path="${base_dir}/${job_dir}/eval_pmlb.csv"
+                        elif [[ "${dataset}" == "strogatz_extended" ]]; then
+                            reload_scores_path="${base_dir}/${job_dir}/eval_strogatz_extended.json.csv"
+                        elif [[ "${dataset}" == "oscillators" ]]; then
+                            reload_scores_path="${base_dir}/${job_dir}/eval_invar_datasets.pkl.csv"
+                        else
+                            echo "Unknown dataset ${dataset}"
+                        fi
+                    else
+                        reload_scores_path="None"
+                    fi
                     sbatch \
                         --job-name "${job_name}" \
                         -o "${model_dir}/log_output_%j.out" \
@@ -125,7 +138,10 @@ do
                             "${hyper_opt}" \
                             "${baseline_hyper_opt_eval_fraction}" \
                             "${sorting_metric}" \
-                            "${beam_size}" &
+                            "${beam_size}" \
+                            "${reload_scores_path}" &
+                else
+                    echo "Unknown hostname: $(hostname)"
                 fi
 
             done
