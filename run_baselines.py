@@ -158,7 +158,7 @@ def str2bool(arg: Union[bool, str]):
     return False
 
 def str_or_None(arg: str):
-    if arg.lower == "none":
+    if arg.lower() == "none":
         return None
     return arg
     
