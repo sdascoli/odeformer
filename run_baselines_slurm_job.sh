@@ -1,21 +1,12 @@
 #!/bin/bash
-#SBATCH --time=0-24:00:00
-#SBATCH --cpus-per-task=48
-#SBATCH --mem=0
-#SBATCH --account=hai_microbio
-#SBATCH --partition=booster
-#SBATCH --nodes=1
-#SBATCH --gres=gpu:4
-#SBATCH --ntasks-per-node=1
-#SBATCH --nice=100
-#SBATCH --job-name=eval_model
-#SBATCH --output=/p/project/hai_microbio/sb/repos/odeformer/experiments/out2/run_baseline_%j.out
-#SBATCH --error=/p/project/hai_microbio/sb/repos/odeformer/experiments/out2/run_baseline_%j.err
 
 # Move either to project root dir or the config file path.
 export GIT_PYTHON_REFRESH=quiet
 export TOKENIZERS_PARALLELISM=false
-cd /p/project/hai_microbio/sb/dev/repos/odeformer
+
+cd "${1}"
+echo "run_baseline_slurm_job.sh on $(hostname)"
+echo "cwd: ${1}"
 
 # Print job information
 echo "Starting job ${SLURM_JOBID}"
@@ -25,7 +16,19 @@ echo "SLURM assigned me the node(s): $(squeue -j ${SLURM_JOBID} -O nodelist:1000
 CONDA_BASE=$(conda info --base)
 source $CONDA_BASE/etc/profile.d/conda.sh
 conda activate symbolicregression39
-echo "Submitting job for ${1}"
-srun python /p/project/hai_microbio/sb/repos/odeformer/run_baselines.py --baseline_model ${1} &
 
-wait
+export SLURM_NTASKS=1
+
+echo "Submitting job for ${2}"
+python run_baselines.py \
+    --model ${2} \
+    --dataset ${3} \
+    --eval_subsample_ratio ${4} \
+    --eval_noise_type ${5} \
+    --eval_noise_gamma ${6} \
+    --e_task ${7} \
+    --optimize_hyperparams ${8} \
+    --hyper_opt_eval_fraction ${9} \
+    --sorting_metric  ${10} \
+    --beam_size  ${11} \
+    --reload_scores_path ${12}
