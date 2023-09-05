@@ -215,7 +215,7 @@ if __name__ == "__main__":
         params.path_dataset = "datasets/strogatz.pkl"
         dataset_name = params.dataset
     elif params.dataset == "strogatz_extended":
-        params.eval_on_file = "datasets/strogatz_extended/strogatz_extended.json"
+        params.eval_on_file = "datasets/strogatz_extended/strogatz_extended.json.pkl"
         params.eval_on_oscillators = False
         params.eval_on_pmlb = False
         dataset_name = "strogatz_extended"
