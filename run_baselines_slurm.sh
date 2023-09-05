@@ -10,23 +10,23 @@ export SLURM_NTASKS=1
 export SLURM_LOCALID=0
 
 MODELS=(
-    # "afp"
-    # "feafp"
-    # "eplex"
-    # "ehc"
-    # "proged"
-    # "proged_poly"
-    # "ffx"
-    # "pysr"
-    # "pysr_poly"
-    # "sindy_all"
-    # "sindy_esc"
+    "afp"
+    "feafp"
+    "eplex"
+    "ehc"
+    "proged"
+    "proged_poly"
+    "ffx"
+    "pysr"
+    "pysr_poly"
+    "sindy_all"
+    "sindy_esc"
     "sindy_poly"
-    # "odeformer"
+    "odeformer"
 )
 
-dataset="strogatz"
-# dataset="strogatz_extended"
+# dataset="strogatz"
+dataset="strogatz_extended"
 # dataset="oscillators"
 
 hyper_opt="True"
@@ -37,9 +37,9 @@ sorting_metric="r2"
 
 reload="False"
 
-for eval_subsample_ratio in "0.0" #"0.25" "0.5";
+for eval_subsample_ratio in "0.0" "0.25" "0.5";
 do
-    for eval_noise_gamma in "0.0" #"0.01" "0.02" "0.03" "0.04" "0.05";
+    for eval_noise_gamma in "0.0" "0.01" "0.02" "0.03" "0.04" "0.05";
     do
         for model in "${MODELS[@]}";
         do
@@ -101,7 +101,7 @@ do
                                 "${beam_size}" \
                                 "${reload_scores_path}" &
 
-                elif [[ "${hostname}" == *"hpc-submit"* ]]; then
+                elif [[ "${hostname}" == *"hpc-submit"* ]] || [[ "${hostname}" == *"hpc-build01.scidom.de"* ]]; then
                     base_dir="/home/haicu/soeren.becker/repos/odeformer"
                     model_dir="${base_dir}/${job_dir}"
                     echo "hostname: ${hostname}"
@@ -125,8 +125,11 @@ do
                         --job-name "${job_name}" \
                         -o "${model_dir}/log_output_%j.out" \
                         -e "${model_dir}/log_error_%j.err" \
-                        --mem "128G" \
+                        --mem "256G" \
+                        --cpus-per-task "32" \
                         --partition "cpu_p" \
+                        --qos="cpu_normal" \
+                        --nice="10000" \
                         run_baselines_slurm_job.sh \
                             "${base_dir}" \
                             "${model}" \
@@ -148,6 +151,3 @@ do
         done
     done
 done
-
-
-#--nice "100" \
