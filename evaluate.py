@@ -129,7 +129,7 @@ class Evaluator(object):
     def prepare_test_trajectory(
         self,
         samples: Dict[str, Dict[str, Any]],
-        evaluation_task: Literal["interpolation", "forecasting", "y0_generalization"],
+        evaluation_task: Literal["debug", "interpolation", "forecasting", "y0_generalization"],
     ) -> Dict[str, Dict[str, Any]]:
         
         if "train" not in samples.keys():
@@ -138,7 +138,7 @@ class Evaluator(object):
         assert "test" not in samples.keys(), samples.keys()
         samples["test"] = {"times":[], "trajectories":[]}
         
-        if evaluation_task == "interpolation":
+        if evaluation_task == "interpolation" or evaluation_task == "debug":
             samples["test"] = deepcopy(samples["train"])
             return samples
 
@@ -155,6 +155,7 @@ class Evaluator(object):
         elif evaluation_task == "y0_generalization":
             for time, trajectory, tree, dimension in zip(samples["train"]["times"], samples["train"]["trajectories"], samples["tree"], samples["infos"]["dimension"]):
                 y0 = self.env.rng.randn(dimension)
+                self.trainer.logger.info(f"y0_generalization: using random y0 = {y0}")
                 test_trajectory = self.model.integrate_prediction(time, y0=y0, prediction=tree)
                 samples["test"]["trajectories"].append(test_trajectory)
                 samples["test"]["times"].append(time)
@@ -177,6 +178,9 @@ class Evaluator(object):
         best_results = {metric: [] for metric in validation_metrics.split(',')}
         best_results["duration_fit"], best_results["pareto_front"], best_candidates = [], [], []
         zipped = [times, trajectories, trees, (all_candidates.values() if isinstance(all_candidates, Dict) else all_candidates)]
+        
+        debug_dict = defaultdict(list)
+        
         if all_durations is not None:
             zipped.append(all_durations)
         for items in zip(*zipped):
@@ -211,11 +215,25 @@ class Evaluator(object):
                 tree=tree,
                 metrics=validation_metrics
             )
+            debug_dict["time"].append(time)
+            debug_dict["trajectory"].append(trajectory)
+            debug_dict["best_candidate"].append(best_candidate)
+            debug_dict["pred_trajectory"].append(pred_trajectory)
+            
             if len(items) == 5:
                 best_result["duration_fit"] = [duration_fit]
             for k, v in best_result.items():
                 best_results[k].append(v[0])
             best_candidates.append(best_candidate)
+        
+        import time
+        
+        timestamp = str(time.time()).replace(".", "_")
+        
+        os.makedirs(os.path.join(self.save_path, "pkls"), exist_ok=True)
+        with open(os.path.join(self.save_path, "pkls", f"{timestamp}.pkl"), "wb") as fout:
+            pickle.dump(obj=debug_dict, file=fout)
+        
         return best_results, best_candidates
 
     def evaluate_on_iterator(self, iterator, name="in_domain"):
@@ -225,7 +243,6 @@ class Evaluator(object):
             self.trainer.logger.info(f"{save_file} exists. Skipping.")
             return
             
-        
         self.trainer.logger.info("evaluate_on_iterator")
         scores = OrderedDict({"epoch": self.trainer.epoch})
         batch_results = defaultdict(list)
@@ -293,6 +310,9 @@ class Evaluator(object):
             start_time_fit = timer()
             if hasattr(self.params, "reload_scores_path") and self.params.reload_scores_path is not None:
                 all_candidates = [reloaded_scores.iloc[fit_counter].predicted_trees]
+                
+                if all_candidates[0] is np.nan or pd.isnull(all_candidates[0]):
+                    all_candidates[0] = str(all_candidates[0])
             else:
                 all_candidates = self.model.fit(times, trajectories, verbose=False, sort_candidates=True)
             all_duration_fit = [timer() - start_time_fit] * len(times)
