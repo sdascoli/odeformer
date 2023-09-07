@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from ast import parse
 from operator import length_hint, xor
 from typing import Union
+from typing_extensions import Literal
 # from turtle import degrees
 import numpy as np
 import scipy.special
@@ -820,8 +821,51 @@ class RandomFunctions(Generator):
         
         return tree, (times, trajectory)
 
+def _integrate_ode(
+    y0,
+    times,
+    tree,
+    ode_integrator = 'solve_ivp',
+    events=None,
+    debug=False,
+    allow_warnings=False,
+    timeout: Literal[-1, 1, 10] = 1,
+):
+    if timeout == -1:
+        return _integrate_ode_without_timeout(y0, times, tree, ode_integrator=ode_integrator, events=events, debug=debug, allow_warnings=allow_warnings)
+    elif timeout == 1:
+        return _integrate_ode_1_sec(y0, times, tree, ode_integrator=ode_integrator, events=events, debug=debug, allow_warnings=allow_warnings)
+    elif timeout == 10:
+        return _integrate_ode_10_sec(y0, times, tree, ode_integrator=ode_integrator, events=events, debug=debug, allow_warnings=allow_warnings)
+    else:
+        raise ValueError(f"Timout = {timeout} is not supported. Must be one in [1, 10, False].")
+
 @timeout(1)
-def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', events=None, debug=False, allow_warnings=False):
+def _integrate_ode_1_sec(
+    y0,
+    times,
+    tree,
+    ode_integrator = 'solve_ivp',
+    events=None,
+    debug=False,
+    allow_warnings=False,
+):
+    return _integrate_ode_without_timeout(y0, times, tree, ode_integrator = 'solve_ivp', events=None, debug=False, allow_warnings=False)
+
+@timeout(10)
+def _integrate_ode_10_sec(
+    y0,
+    times,
+    tree,
+    ode_integrator = 'solve_ivp',
+    events=None,
+    debug=False,
+    allow_warnings=False,
+):
+    return _integrate_ode_without_timeout(y0, times, tree, ode_integrator = 'solve_ivp', events=None, debug=False, allow_warnings=False)
+
+# @timeout(1)
+def _integrate_ode_without_timeout(y0, times, tree, ode_integrator = 'solve_ivp', events=None, debug=False, allow_warnings=False):
 
     with warnings.catch_warnings(record=True) as caught_warnings:
 
@@ -916,9 +960,9 @@ def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', events=None, d
     
     return trajectory
 
-def integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', events=None, debug=False, allow_warnings=False):
+def integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', events=None, debug=False, allow_warnings=False, timeout=1):
     try: 
-        return _integrate_ode(y0, times, tree, ode_integrator, events, debug, allow_warnings)
+        return _integrate_ode(y0, times, tree, ode_integrator, events, debug, allow_warnings, timeout)
     except MyTimeoutError:
         if debug: print("Timeout error")
         return [np.nan for _ in range(len(times))]

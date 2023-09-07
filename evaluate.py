@@ -115,6 +115,12 @@ class Evaluator(object):
             if self.params.dump_path
             else self.params.reload_checkpoint
         )
+        if hasattr(params, "eval_integration_timeout"):
+            self.eval_integration_timeout = params.eval_integration_timeout
+        else:
+            self.eval_integration_timeout = 1
+        self.trainer.logger.info(f"Setting eval_integration_timeout to {self.eval_integration_timeout}")
+        
         if not os.path.exists(self.save_path): os.makedirs(self.save_path)
         
         if hasattr(self.params, "eval_size"):
@@ -138,7 +144,7 @@ class Evaluator(object):
         assert "test" not in samples.keys(), samples.keys()
         samples["test"] = {"times":[], "trajectories":[]}
         
-        if evaluation_task == "interpolation" or evaluation_task == "debug":
+        if "interpolation" in evaluation_task or "debug" in evaluation_task:
             samples["test"] = deepcopy(samples["train"])
             return samples
 
@@ -147,7 +153,7 @@ class Evaluator(object):
                 y0 = trajectory[-1]
                 t0 = time[-1]
                 teval = np.linspace(t0, t0+5, 512, endpoint=True)
-                test_trajectory = self.model.integrate_prediction(teval, y0=y0, prediction=tree)
+                test_trajectory = self.model.integrate_prediction(teval, y0=y0, prediction=tree, timeout=self.eval_integration_timeout)
                 samples["test"]["trajectories"].append(test_trajectory)
                 samples["test"]["times"].append(teval)
             return samples
@@ -156,7 +162,7 @@ class Evaluator(object):
             for time, trajectory, tree, dimension in zip(samples["train"]["times"], samples["train"]["trajectories"], samples["tree"], samples["infos"]["dimension"]):
                 y0 = self.env.rng.randn(dimension)
                 self.trainer.logger.info(f"y0_generalization: using random y0 = {y0}")
-                test_trajectory = self.model.integrate_prediction(time, y0=y0, prediction=tree)
+                test_trajectory = self.model.integrate_prediction(time, y0=y0, prediction=tree, timeout=self.eval_eval_integration_timeout)
                 samples["test"]["trajectories"].append(test_trajectory)
                 samples["test"]["times"].append(time)
             return samples
@@ -179,7 +185,7 @@ class Evaluator(object):
         best_results["duration_fit"], best_results["pareto_front"], best_candidates = [], [], []
         zipped = [times, trajectories, trees, (all_candidates.values() if isinstance(all_candidates, Dict) else all_candidates)]
         
-        debug_dict = defaultdict(list)
+        # debug_dict = defaultdict(list)
         
         if all_durations is not None:
             zipped.append(all_durations)
@@ -204,7 +210,7 @@ class Evaluator(object):
             if isinstance(best_candidate, str) and (not hasattr(self.params, "convert_prediction_to_tree") or self.params.convert_prediction_to_tree):
                 try: best_candidate = self.str_to_tree(best_candidate)
                 except: pass
-            pred_trajectory = self.model.integrate_prediction(time, y0=trajectory[0], prediction=best_candidate)
+            pred_trajectory = self.model.integrate_prediction(time, y0=trajectory[0], prediction=best_candidate, timeout=self.eval_eval_integration_timeout)
             if not hasattr(self.params, "convert_prediction_to_tree") or self.params.convert_prediction_to_tree:
                 try: best_candidate = self.env.simplifier.simplify_tree(best_candidate, expand=True)
                 except: pass
@@ -215,10 +221,10 @@ class Evaluator(object):
                 tree=tree,
                 metrics=validation_metrics
             )
-            debug_dict["time"].append(time)
-            debug_dict["trajectory"].append(trajectory)
-            debug_dict["best_candidate"].append(best_candidate)
-            debug_dict["pred_trajectory"].append(pred_trajectory)
+            #debug_dict["time"].append(time)
+            #debug_dict["trajectory"].append(trajectory)
+            #debug_dict["best_candidate"].append(best_candidate)
+            #debug_dict["pred_trajectory"].append(pred_trajectory)
             
             if len(items) == 5:
                 best_result["duration_fit"] = [duration_fit]
@@ -226,13 +232,11 @@ class Evaluator(object):
                 best_results[k].append(v[0])
             best_candidates.append(best_candidate)
         
-        import time
-        
-        timestamp = str(time.time()).replace(".", "_")
-        
-        os.makedirs(os.path.join(self.save_path, "pkls"), exist_ok=True)
-        with open(os.path.join(self.save_path, "pkls", f"{timestamp}.pkl"), "wb") as fout:
-            pickle.dump(obj=debug_dict, file=fout)
+        #import time
+        #timestamp = str(time.time()).replace(".", "_")
+        #os.makedirs(os.path.join(self.save_path, "pkls"), exist_ok=True)
+        #with open(os.path.join(self.save_path, "pkls", f"{timestamp}.pkl"), "wb") as fout:
+        #    pickle.dump(obj=debug_dict, file=fout)
         
         return best_results, best_candidates
 
@@ -502,7 +506,7 @@ class Evaluator(object):
                 y0 = np.ones(len(var_names))
                 times = np.linspace(0, 5, 256)
                 trajectory = self.model.integrate_prediction(
-                    times, y0=y0, prediction=line
+                    times, y0=y0, prediction=line, timeout=self.eval_integration_timeout,
                 )
                 if np.nan in trajectory:
                     self.trainer.logger.info(
@@ -635,7 +639,6 @@ if __name__ == "__main__":
     main(params)
     
     # TODO: forecasting: start integration at training trajectory start but only consider extra part when computing score
-    # TODO: implement loading existing scores: pass path to scores to be loaded but save scores and params of evaluation under new path
     # TODO: constant optimization
     # TODO: inference from multiple trajectories via constant tuning
     

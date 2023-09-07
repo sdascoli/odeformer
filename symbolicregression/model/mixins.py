@@ -310,6 +310,7 @@ class PredictionIntegrationMixin:
         y0: np.ndarray, 
         prediction = None, 
         ode_integrator: Union[None, str] = None,
+        timeout: int = 1,
     ) -> np.ndarray:
         
         times = np.array(times)
@@ -334,7 +335,7 @@ class PredictionIntegrationMixin:
                 ode_integrator = _default_ode_integrator
         else:
             ode_integrator = _default_ode_integrator
-        trajectory = integrate_ode(y0, sorted_times, prediction, ode_integrator=ode_integrator)
+        trajectory = integrate_ode(y0, sorted_times, prediction, ode_integrator=ode_integrator, timeout=timeout)
 
         if trajectory is not None:
             trajectory = np.array(trajectory)

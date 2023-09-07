@@ -191,12 +191,15 @@ if __name__ == "__main__":
         help = "If not None, sort pareto front according to this metric before selecting the final, best model."
     )
     parser.add_argument("--e_task",# this overwrites --evaluation_task from parser.py
-        type=str, choices=["debug", "interpolation", "forecasting", "y0_generalization"], default="forecasting",
+        type=str, 
+        # choices=["debug", "interpolation", "forecasting", "y0_generalization"],
+        default="forecasting",
     )
     parser.add_argument("--reload_scores_path", type=str_or_None, 
         default = None,
         help="Path to existing scores.csv from which candidates are re-loaded for re-evaluation, e.g. for forecasting or y0 generalization."
     )
+    parser.add_argument("--eval_integration_timeout", type=int, default=10)
     
     params = parser.parse_args()
     
