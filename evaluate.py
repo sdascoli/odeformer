@@ -249,6 +249,8 @@ class Evaluator(object):
             else:
                 trees = [None]*len(times)
 
+            original_times, original_trajectories = deepcopy(times), deepcopy(trajectories)
+
             # corrupt training data
             for i, (time, trajectory) in enumerate(zip(times, trajectories)):
                 if self.params.eval_noise_gamma:
@@ -256,15 +258,10 @@ class Evaluator(object):
                         train=False,
                         trajectory=trajectory,
                         gamma=self.params.eval_noise_gamma,
-                        noise_type=self.params.eval_noise_type,
                         seed=self.params.test_env_seed,
                     )
-                    if self.params.eval_noise_type == "additive":
-                        trajectory = trajectory + noise
-                    elif self.params.eval_noise_type == "multiplicative":
-                        trajectory = trajectory * noise
-                    else:
-                        raise ValueError(f"Unknown noise type: {self.params.eval_noise_type}")
+                    trajectory += noise
+
                 if self.params.eval_subsample_ratio:
                     time, trajectory, subsample_ratio = self.env._subsample_trajectory(
                         time,
@@ -287,7 +284,7 @@ class Evaluator(object):
             
             # evaluate on train data
             best_results, best_candidates = self._evaluate(
-                times, trajectories, trees, all_candidates, all_duration_fit, self.params.validation_metrics
+                original_times, original_trajectories, trees, all_candidates, all_duration_fit, self.params.validation_metrics
             )
             # evaluate on test data
             test_results, _ = self._evaluate(
@@ -618,7 +615,7 @@ if __name__ == "__main__":
         pk = pickle.load(open(params.reload_checkpoint + "/params.pkl", "rb"))
         pickled_args = pk.__dict__
         for p in params.__dict__:
-            if p in pickled_args and p not in ["eval_dump_path", "dump_path", "reload_checkpoint", "rescale", "validation_metrics", "eval_in_domain", "eval_on_pmlb", "batch_size_eval", "beam_size", "beam_selection_metric", "subsample_prob", "eval_noise_gamma", "eval_subsample_ratio", "eval_noise_type", "use_wandb", "eval_size", "reload_data"]:
+            if p in pickled_args and p not in ["eval_dump_path", "dump_path", "reload_checkpoint", "rescale", "validation_metrics", "eval_in_domain", "eval_on_pmlb", "batch_size_eval", "beam_size", "beam_selection_metric", "subsample_prob", "eval_noise_gamma", "eval_subsample_ratio", "use_wandb", "eval_size", "reload_data"]:
                 params.__dict__[p] = pickled_args[p]
 
     if params.eval_dump_path is None:
@@ -630,5 +627,7 @@ if __name__ == "__main__":
     params.local_rank = -1
     params.master_port = -1
     params.eval_on_file = None 
+
+    torch.save(params, os.path.join(params.dump_path, "params.pkl"))
 
     main(params)
