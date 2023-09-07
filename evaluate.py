@@ -252,7 +252,7 @@ class Evaluator(object):
             # corrupt training data
             for i, (time, trajectory) in enumerate(zip(times, trajectories)):
                 if self.params.eval_noise_gamma:
-                    noise = self.env._create_noise(
+                    noise, gamma = self.env._create_noise(
                         train=False,
                         trajectory=trajectory,
                         gamma=self.params.eval_noise_gamma,
@@ -266,8 +266,8 @@ class Evaluator(object):
                     else:
                         raise ValueError(f"Unknown noise type: {self.params.eval_noise_type}")
                 if self.params.eval_subsample_ratio:
-                    time, trajectory = self.env.subsample_trajectory(
-                        times,
+                    time, trajectory, subsample_ratio = self.env._subsample_trajectory(
+                        time,
                         trajectory,
                         subsample_ratio=self.params.eval_subsample_ratio,
                         seed=self.params.test_env_seed,
@@ -618,7 +618,7 @@ if __name__ == "__main__":
         pk = pickle.load(open(params.reload_checkpoint + "/params.pkl", "rb"))
         pickled_args = pk.__dict__
         for p in params.__dict__:
-            if p in pickled_args and p not in ["dump_path", "reload_checkpoint", "rescale", "validation_metrics", "eval_in_domain", "eval_on_pmlb", "batch_size_eval", "beam_size", "beam_selection_metric", "subsample_prob", "eval_noise_gamma", "eval_subsample_ratio", "eval_noise_type", "use_wandb", "eval_size", "reload_data"]:
+            if p in pickled_args and p not in ["eval_dump_path", "dump_path", "reload_checkpoint", "rescale", "validation_metrics", "eval_in_domain", "eval_on_pmlb", "batch_size_eval", "beam_size", "beam_selection_metric", "subsample_prob", "eval_noise_gamma", "eval_subsample_ratio", "eval_noise_type", "use_wandb", "eval_size", "reload_data"]:
                 params.__dict__[p] = pickled_args[p]
 
     if params.eval_dump_path is None:

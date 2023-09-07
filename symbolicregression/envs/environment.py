@@ -533,7 +533,7 @@ class FunctionEnvironment(object):
             except: rng = np.random.RandomState(0)
         if gamma is None:
             gamma = (
-                rng.uniform(0, self.params.train_noise_gamma)
+                rng.choice(np.linspace(0, self.params.train_noise_gamma, 5))
                 if train
                 else self.params.eval_noise_gamma
             )
@@ -541,12 +541,12 @@ class FunctionEnvironment(object):
             norm = scipy.linalg.norm(
                 (np.abs(trajectory) + 1e-100) / np.sqrt(trajectory.shape[0])
             )
-            return gamma * norm * np.random.randn(*trajectory.shape)
+            return gamma * norm * np.random.randn(*trajectory.shape), gamma
         elif noise_type == "multiplicative": 
-            return np.random.normal(loc=1, scale=gamma, size=trajectory.shape)
+            return np.random.normal(loc=1, scale=gamma, size=trajectory.shape), gamma
         else:
             raise ValueError(f"Unknown noise type: {noise_type}.")
-    
+            
     def _subsample_trajectory(
         self,
         times: np.ndarray, 
@@ -563,7 +563,7 @@ class FunctionEnvironment(object):
             except: rng = np.random.RandomState(0)
         if subsample_ratio is None:
             subsample_ratio = (
-                rng.uniform(0, self.params.train_subsample_ratio)
+                rng.choice(np.linspace(0, self.params.train_subsample_ratio, 5))
                 if train
                 else self.params.eval_subsample_ratio
             )
@@ -574,7 +574,7 @@ class FunctionEnvironment(object):
         )
         trajectory = np.delete(trajectory, indices_to_remove, axis=0)
         times = np.delete(times, indices_to_remove, axis=0)
-        return times, trajectory
+        return times, trajectory, subsample_ratio
 
     def create_train_iterator(self, task, data_path, params, **args):
         """
@@ -1102,23 +1102,7 @@ class EnvDataset(Dataset):
         assert n > 0, "n<=0"
 
         for _ in range(n):
-            if self.path is None:
-                sample = self.generate_sample()
-            else:
-                sample = self.read_sample()
-
-            times, trajectory = sample['times'], sample['trajectory']
-
-            # subsampling
-            if self.params.train_subsample_ratio or self.params.eval_subsample_ratio:
-                times, trajectory = self.env._subsample_trajectory(times, trajectory, train=self.train)
-            # output noise added to trajectory
-            if self.params.train_noise_gamma or self.params.eval_noise_gamma:
-                trajectory += self.env._create_noise(trajectory, train=self.train)
-            
-            sample['times'] = times
-            sample['trajectory'] = trajectory
-            
+            sample = self.getitem()           
             self.collate_queue.append(sample)
 
         # sort sequences
@@ -1266,30 +1250,41 @@ class EnvDataset(Dataset):
         Either generate it, or read it from file.
         """
         self.init_rng()
+        if self.train and self.skip:
+            return SKIP_ITEM
+        else: 
+            sample = self.getitem()
+            return sample
+    
+    def getitem(self):
+
         if self.path is None:
-            if self.train and self.skip:
-                return SKIP_ITEM
-            else:
-                sample = self.generate_sample()
+            sample = self.generate_sample()
         else:
-            if self.train and self.skip:
-                return SKIP_ITEM
-            else:
-                sample = self.read_sample()
+            sample = self.read_sample()
 
         times, trajectory = sample['times'], sample['trajectory']
 
         # subsampling
         if self.params.train_subsample_ratio or self.params.eval_subsample_ratio:
-            times, trajectory = self.env._subsample_trajectory(times, trajectory, train=self.train)
+            times, trajectory, subsample_ratio = self.env._subsample_trajectory(times, trajectory, train=self.train)
+        else:
+            subsample_ratio = 0
         # output noise added to trajectory
         if self.params.train_noise_gamma or self.params.eval_noise_gamma:
-            trajectory += self.env._create_noise(trajectory, train=self.train)
+            noise, gamma = self.env._create_noise(trajectory, train=self.train)
+            trajectory += noise
+        else:
+            gamma = 0
+
+        sample['infos']['subsample_ratio'] = subsample_ratio
+        sample['infos']['noise_gamma'] = gamma
         
         sample['times'] = times
         sample['trajectory'] = trajectory
 
         return sample
+
 
     def read_sample(self):
         """
