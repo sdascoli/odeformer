@@ -10,32 +10,30 @@ export SLURM_NTASKS=1
 export SLURM_LOCALID=0
 
 MODELS=(
-    "afp"
-    "feafp"
-    "eplex"
-    "ehc"
-    "proged"
-    "proged_poly"
-    "ffx"
-    "pysr"
-    "pysr_poly"
-    "sindy_all"
-    "sindy_esc"
-    "sindy_poly"
+    # "afp"
+    # "feafp"
+    # "eplex"
+    # "ehc"
+    # "proged"
+    # "proged_poly"
+    # "ffx"
+    # "pysr"
+    # "pysr_poly"
+    # "sindy_all"
+    # "sindy_esc"
+    # "sindy_poly"
     "odeformer"
 )
 
-# dataset="strogatz"
-dataset="strogatz_extended"
+dataset="strogatz"
+# dataset="strogatz_extended"
 # dataset="oscillators"
 
 hyper_opt="True"
 eval_noise_type="additive"
 baseline_hyper_opt_eval_fraction="0.3"
-evaluation_task="interpolation" #"y0_generalization" #
+evaluation_task="debug" # "interpolation" "y0_generalization" "forecasting"
 sorting_metric="r2"
-
-reload="False"
 
 for eval_subsample_ratio in "0.0" "0.25" "0.5";
 do
@@ -45,7 +43,7 @@ do
         do
             # some model specific settings
             if [[ "odeformer" == *"${model}"* ]]; then
-                beam_sizes=(1) # 2 3 10 20 30 40 50)
+                beam_sizes=(1 2 3 10 20 30 40 50)
             else
                 beam_sizes=(1)
             fi
@@ -53,53 +51,68 @@ do
             for beam_size in "${beam_sizes[@]}";
             do
                 job_dir="experiments/${model}/${dataset}/hyper_opt_${hyper_opt}/baseline_hyper_opt_eval_fraction_${baseline_hyper_opt_eval_fraction}/eval_subsample_ratio_${eval_subsample_ratio}/eval_noise_type_${eval_noise_type}/eval_gamma_noise_${eval_noise_gamma}/${evaluation_task}/beam_size_${beam_size}"
+                job_dir_reload="experiments/${model}/${dataset}/hyper_opt_${hyper_opt}/baseline_hyper_opt_eval_fraction_${baseline_hyper_opt_eval_fraction}/eval_subsample_ratio_${eval_subsample_ratio}/eval_noise_type_${eval_noise_type}/eval_gamma_noise_${eval_noise_gamma}/interpolation/beam_size_${beam_size}"
                 job_name="${model}_${dataset}_${eval_subsample_ratio}_${eval_noise_type}_${eval_noise_gamma}_${beam_size}"
+
                 # some cluster specific settings
                 if [[ "${hostname}" == *"juwels"* ]]; then
                     base_dir="/p/project/hai_microbio/sb/repos/odeformer"
                     model_dir="${base_dir}/${job_dir}"
-                    echo "hostname: ${hostname}"
-                    echo "pwd: ${PWD}"
-                    echo "model_dir: ${model_dir}"
+                    #echo "hostname: ${hostname}"
+                    #echo "pwd: ${PWD}"
+                    #echo "model_dir: ${model_dir}"
                     mkdir -p "${model_dir}"
-                    if [[ "${reload}" == "True" ]]; then
+
+                    if [[ "${evaluation_task}" == "debug" ]] || [[ "${evaluation_task}" == "forecasting" ]] || [[ "${evaluation_task}" == "y0_generalization" ]]; then
                         if [[ "${dataset}" == "strogatz" ]]; then
-                            reload_scores_path="${base_dir}/${job_dir}/eval_pmlb.csv"
+                            reload_scores_path="${base_dir}/${job_dir_reload}/eval_pmlb.csv"
+                            path_final_scores="${base_dir}/${job_dir}/eval_pmlb.csv"
                         elif [[ "${dataset}" == "strogatz_extended" ]]; then
-                            reload_scores_path="${base_dir}/${job_dir}/eval_strogatz_extended.json.csv"
+                            reload_scores_path="${base_dir}/${job_dir_reload}/eval_strogatz_extended.json.pkl.csv"
+                            path_final_scores="${base_dir}/${job_dir}/eval_invar_datasets.pkl.csv"
                         elif [[ "${dataset}" == "oscillators" ]]; then
-                            reload_scores_path="${base_dir}/${job_dir}/eval_invar_datasets.pkl.csv"
+                            reload_scores_path="${base_dir}/${job_dir_reload}/eval_invar_datasets.pkl.csv"
+                            path_final_scores="${base_dir}/${job_dir}/eval_invar_datasets.pkl.csv"
                         else
                             echo "Unknown dataset ${dataset}"
                         fi
                     else
                         reload_scores_path="None"
                     fi
-                        sbatch \
-                            --output "${model_dir}"/log_output_%j.out \
-                            --error "${model_dir}"/log_error_%j.err \
-                            --mem "0" \
-                            --time "0-00:10:00" \
-                            --cpus-per-task "48" \
-                            --job-name "${job_name}" \
-                            --account "hai_microbio" \
-                            --partition "booster" \
-                            --nodes "1" \
-                            --gres "gpu:4" \
-                            --ntasks-per-node "1" \
-                            run_baselines_slurm_job.sh \
-                                "${base_dir}" \
-                                "${model}" \
-                                "${dataset}" \
-                                "${eval_subsample_ratio}" \
-                                "${eval_noise_type}" \
-                                "${eval_noise_gamma}" \
-                                "${evaluation_task}" \
-                                "${hyper_opt}" \
-                                "${baseline_hyper_opt_eval_fraction}" \
-                                "${sorting_metric}" \
-                                "${beam_size}" \
-                                "${reload_scores_path}" &
+
+                    if test -f "${path_final_scores}"; then
+                        #echo "skipping ${path_final_scores}"
+                        continue
+                    else
+                        echo "did not find ${path_final_scores}"
+                        # continue
+                    fi
+
+                    sbatch \
+                        --output "${model_dir}"/log_output_%j.out \
+                        --error "${model_dir}"/log_error_%j.err \
+                        --mem "0" \
+                        --time "0-00:15:00" \
+                        --cpus-per-task "48" \
+                        --job-name "${job_name}" \
+                        --account "hai_microbio" \
+                        --partition "booster" \
+                        --nodes "1" \
+                        --gres "gpu:4" \
+                        --ntasks-per-node "1" \
+                        run_baselines_slurm_job.sh \
+                            "${base_dir}" \
+                            "${model}" \
+                            "${dataset}" \
+                            "${eval_subsample_ratio}" \
+                            "${eval_noise_type}" \
+                            "${eval_noise_gamma}" \
+                            "${evaluation_task}" \
+                            "${hyper_opt}" \
+                            "${baseline_hyper_opt_eval_fraction}" \
+                            "${sorting_metric}" \
+                            "${beam_size}" \
+                            "${reload_scores_path}" &
 
                 elif [[ "${hostname}" == *"hpc-submit"* ]] || [[ "${hostname}" == *"hpc-build01.scidom.de"* ]]; then
                     base_dir="/home/haicu/soeren.becker/repos/odeformer"
@@ -108,18 +121,28 @@ do
                     echo "pwd: ${PWD}"
                     echo "model_dir: ${model_dir}"
                     mkdir -p "${model_dir}"
-                    if [[ "${reload}" == "True" ]]; then
+                    if [[ "${evaluation_task}" == "forecasting" ]] || [[ "${evaluation_task}" == "y0_generalization" ]]; then
                         if [[ "${dataset}" == "strogatz" ]]; then
-                            reload_scores_path="${base_dir}/${job_dir}/eval_pmlb.csv"
+                            reload_scores_path="${base_dir}/${job_dir_reload}/eval_pmlb.csv"
+                            path_final_scores="${base_dir}/${job_dir}/eval_pmlb.csv"
                         elif [[ "${dataset}" == "strogatz_extended" ]]; then
-                            reload_scores_path="${base_dir}/${job_dir}/eval_strogatz_extended.json.csv"
+                            reload_scores_path="${base_dir}/${job_dir_reload}/eval_strogatz_extended.json.csv"
+                            path_final_scores="${base_dir}/${job_dir}/eval_invar_datasets.pkl.csv"
                         elif [[ "${dataset}" == "oscillators" ]]; then
-                            reload_scores_path="${base_dir}/${job_dir}/eval_invar_datasets.pkl.csv"
+                            reload_scores_path="${base_dir}/${job_dir_reload}/eval_invar_datasets.pkl.csv"
+                            path_final_scores="${base_dir}/${job_dir}/eval_invar_datasets.pkl.csv"
                         else
                             echo "Unknown dataset ${dataset}"
                         fi
                     else
                         reload_scores_path="None"
+                    fi
+                    if test -f "${path_final_scores}"; then
+                        echo "skipping ${path_final_scores}"
+                        continue
+                    else
+                        echo "did not find ${path_final_scores}"
+                        continue
                     fi
                     sbatch \
                         --job-name "${job_name}" \
@@ -151,3 +174,13 @@ do
         done
     done
 done
+
+
+# next: 
+# odeformer, forecasting on strogatz
+# odeformer, interpolation on oscillators
+# odeformer, forecasting on oscillators
+
+# different forecasting horizons ?
+
+# baselines + odeformer on strogatz_extended
