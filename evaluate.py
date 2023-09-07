@@ -116,7 +116,7 @@ class Evaluator(object):
             else self.params.reload_checkpoint
         )
         if hasattr(self.params, "eval_integration_timeout"):
-            self.eval_integration_timeout = params.eval_integration_timeout
+            self.eval_integration_timeout = self.params.eval_integration_timeout
         else:
             self.eval_integration_timeout = 1
         self.trainer.logger.info(f"Setting eval_integration_timeout to {self.eval_integration_timeout}")
