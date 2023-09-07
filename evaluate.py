@@ -115,7 +115,7 @@ class Evaluator(object):
             if self.params.dump_path
             else self.params.reload_checkpoint
         )
-        if hasattr(params, "eval_integration_timeout"):
+        if hasattr(self.params, "eval_integration_timeout"):
             self.eval_integration_timeout = params.eval_integration_timeout
         else:
             self.eval_integration_timeout = 1
