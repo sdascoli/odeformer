@@ -104,6 +104,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                             try:
                                 results[metric].append(r2_score(true[i], predicted[i], multioutput='variance_weighted'))
                             except Exception as e:
+                                traceback.print_exc()
                                 results[metric].append(0)
                 elif metric == "r2_zero":
                     for i in range(len(true)):
