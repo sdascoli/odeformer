@@ -338,7 +338,7 @@ class Evaluator(object):
         #                 scores[k + "_{}_{}".format(ablation, val)] = v
 
         if self.params.use_wandb:
-            wandb.log({name+"_"+metric: score for metric, score in scores.items()})
+            wandb.log({name+"_"+metric: score for metric, score in scores.items() if "median" not in metric})
 
         return scores
         

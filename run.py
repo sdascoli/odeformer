@@ -9,7 +9,7 @@ import shutil
 from distutils import dir_util
 #user = os.getlogin()
 
-exp_folder = 'no_subsampling'
+exp_folder = 'paper'
 
 #dump_path = f'/home/{user}/odeformer/experiments'
 dump_path = f'/sb_u0621_liac_scratch/odeformer/experiments'
@@ -27,7 +27,7 @@ extra_args = {
     'min_dimension':1,
     'max_dimension':6,
     'float_descriptor_length':3,
-    'enc_emb_dim':256,
+    'enc_emb_dim':512,
     'dec_emb_dim':512,
     #'subsample_ratio':0.5,
     'max_points':200,
@@ -35,8 +35,8 @@ extra_args = {
 
 grid = {
     #'float_descriptor_length':[1,2,3],
-    "train_noise_gamma":[0,.1],
-    "train_subsample_ratio":[0,.5],
+    "train_noise_gamma":[.1],
+    "train_subsample_ratio":[.5],
     #"lr":[4e-4],
     #"sign_as_token":[False],
     #"use_two_hot":[False]

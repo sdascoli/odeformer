@@ -50,8 +50,11 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
     def load_pretrained(self):
         import gdown
         model_path = "odeformer.pt" 
+        print("Downloading pretrained model")
         if not os.path.exists(model_path):
-            url = "https://drive.google.com/uc?id=18CwlutaFF_tAOObsIukrKVZMPmsjwNwF"
+            #id = "18CwlutaFF_tAOObsIukrKVZMPmsjwNwF"
+            id = "1L_UZ0qgrBVkRuhg5j3BQoGxlvMk_Pm1W"
+            url = "https://drive.google.com/uc?id="+id
             gdown.download(url, model_path, quiet=False)
         model = torch.load(model_path)
         print("Loaded pretrained model")
