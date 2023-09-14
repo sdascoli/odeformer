@@ -21,17 +21,17 @@ import pickle
 import numpy as np
 import pandas as pd
 
-import symbolicregression
+import odeformer
 from parsers import get_parser
-from symbolicregression.slurm import init_signal_handler, init_distributed_mode
-from symbolicregression.utils import initialize_exp
-from symbolicregression.model import build_modules
-from symbolicregression.envs import build_env
-from symbolicregression.envs.generators import NodeList
-from symbolicregression.trainer import Trainer
-from symbolicregression.model.sklearn_wrapper import SymbolicTransformerRegressor
-from symbolicregression.model.model_wrapper import ModelWrapper
-from symbolicregression.metrics import compute_metrics
+from odeformer.slurm import init_signal_handler, init_distributed_mode
+from odeformer.utils import initialize_exp
+from odeformer.model import build_modules
+from odeformer.envs import build_env
+from odeformer.envs.generators import NodeList
+from odeformer.trainer import Trainer
+from odeformer.model.sklearn_wrapper import SymbolicTransformerRegressor
+from odeformer.model.model_wrapper import ModelWrapper
+from odeformer.metrics import compute_metrics
 
 # np.seterr(all="raise")
 
@@ -579,7 +579,7 @@ def main(params):
     if not params.cpu:
         assert torch.cuda.is_available()
     params.eval_only = True
-    symbolicregression.utils.CUDA = not params.cpu
+    odeformer.utils.CUDA = not params.cpu
 
     # build environment / modules / trainer / evaluator
     if params.batch_size_eval is None:

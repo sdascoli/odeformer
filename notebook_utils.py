@@ -29,19 +29,19 @@ import requests
 pi = np.pi
 e = np.e
 
-import symbolicregression
-from symbolicregression.envs import ENVS, build_env
-from symbolicregression.model import build_modules
-from symbolicregression.envs.generators import RandomFunctions
-from symbolicregression.envs.encoders import  Equation, FloatSequences
-from symbolicregression.envs.environment import FunctionEnvironment
-from symbolicregression.utils import *
-from symbolicregression.model.sklearn_wrapper import SymbolicTransformerRegressor
-from symbolicregression.model.model_wrapper import ModelWrapper
-from symbolicregression.model.embedders import *
-from symbolicregression.trainer import Trainer
-from symbolicregression.envs.generators import integrate_ode
-from symbolicregression.envs.utils import *
+import odeformer
+from odeformer.envs import ENVS, build_env
+from odeformer.model import build_modules
+from odeformer.envs.generators import RandomFunctions
+from odeformer.envs.encoders import  Equation, FloatSequences
+from odeformer.envs.environment import FunctionEnvironment
+from odeformer.utils import *
+from odeformer.model.sklearn_wrapper import SymbolicTransformerRegressor
+from odeformer.model.model_wrapper import ModelWrapper
+from odeformer.model.embedders import *
+from odeformer.trainer import Trainer
+from odeformer.envs.generators import integrate_ode
+from odeformer.envs.utils import *
 from evaluate import Evaluator
 
 user = os.getlogin()

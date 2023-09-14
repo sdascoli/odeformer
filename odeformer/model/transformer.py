@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from symbolicregression.model.embedders import TwoHotEmbedder
+from odeformer.model.embedders import TwoHotEmbedder
 
 N_MAX_POSITIONS = 4096  # maximum input sequence length
 

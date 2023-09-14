@@ -5,10 +5,10 @@ import time
 import traceback
 import numpy as np
 from pysindy import ConcatLibrary, CustomLibrary, PolynomialLibrary, SINDy, optimizers
-from symbolicregression.model.mixins import (
+from odeformer.model.mixins import (
     GridSearchMixin, BatchMixin, FiniteDifferenceMixin, PredictionIntegrationMixin,
 )
-from symbolicregression.baselines.baseline_utils import variance_weighted_r2_score
+from odeformer.baselines.baseline_utils import variance_weighted_r2_score
 
 __all__ = ("SINDyWrapper", "create_library")
 

@@ -15,12 +15,12 @@ import pickle
 from pathlib import Path
 import wandb
 
-import symbolicregression
-from symbolicregression.slurm import init_signal_handler, init_distributed_mode
-from symbolicregression.utils import bool_flag, initialize_exp
-from symbolicregression.model import check_model_params, build_modules
-from symbolicregression.envs import build_env
-from symbolicregression.trainer import Trainer
+import odeformer
+from odeformer.slurm import init_signal_handler, init_distributed_mode
+from odeformer.utils import bool_flag, initialize_exp
+from odeformer.model import check_model_params, build_modules
+from odeformer.envs import build_env
+from odeformer.trainer import Trainer
 from evaluate import Evaluator, setup_odeformer
 from parsers import get_parser
 import setproctitle
@@ -53,7 +53,7 @@ def main(params):
     # CPU / CUDA
     if not params.cpu:
         assert torch.cuda.is_available()
-    symbolicregression.utils.CUDA = not params.cpu
+    odeformer.utils.CUDA = not params.cpu
 
     # build environment / modules / trainer / evaluator
     if params.batch_size_eval is None:

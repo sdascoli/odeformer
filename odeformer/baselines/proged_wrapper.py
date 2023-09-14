@@ -3,12 +3,12 @@ from multiprocessing import Pool
 from sklearn.base import BaseEstimator
 from sklearn.metrics import r2_score
 from ProGED.equation_discoverer import EqDisco
-from symbolicregression.model.mixins import (
+from odeformer.model.mixins import (
     PredictionIntegrationMixin,
     BatchMixin,
     GridSearchMixin,
 )
-from symbolicregression.baselines.baseline_utils import variance_weighted_r2_score
+from odeformer.baselines.baseline_utils import variance_weighted_r2_score
 import re
 import time
 import numpy as np

@@ -1,7 +1,7 @@
 # Deep Symbolic Regression
 
 This repository contains code for the paper [End-to-end symbolic regression with transformers](https://arxiv.org/abs/2204.10532).
-An interactive demonstration of the paper may be found [here](https://symbolicregression.metademolab.com/).
+An interactive demonstration of the paper may be found [here](https://odeformer.metademolab.com/).
 
 The code is based on the repository [Deep Learning for Symbolic Mathematics](https://github.com/facebookresearch/SymbolicMathematics).
 Most of the code specific to recurrent sequences lies in the folder ```src/envs```.
@@ -31,7 +31,7 @@ To launch evaluation, please use the flag ```reload_checkpoint``` to specify in 
 
 We include a small notebook that loads a pre-trained model you can play with in ```Example.ipynb```
 
-You can also check the demo website where you can play with the model without a single line of code [here](https://symbolicregression.metademolab.com/).
+You can also check the demo website where you can play with the model without a single line of code [here](https://odeformer.metademolab.com/).
 
 ## Multinode training
 

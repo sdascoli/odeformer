@@ -5,8 +5,8 @@
 # LICENSE file in the root directory of this source tree.
 
 import argparse
-from symbolicregression.envs import ENVS
-from symbolicregression.utils import bool_flag
+from odeformer.envs import ENVS
+from odeformer.utils import bool_flag
 
 
 def get_parser():

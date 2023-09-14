@@ -8,7 +8,7 @@ from typing import Tuple, List, Optional
 from abc import ABC, abstractmethod
 import torch
 import torch.nn as nn
-from symbolicregression.utils import to_cuda
+from odeformer.utils import to_cuda
 import torch.nn.functional as F
 
 MultiDimensionalFloat = List[float]

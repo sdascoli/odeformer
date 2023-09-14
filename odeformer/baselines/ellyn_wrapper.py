@@ -2,7 +2,7 @@ from copy import deepcopy
 from typing import Any, Callable, Dict, List, Union
 from sklearn.metrics import r2_score
 from ellyn import ellyn
-from symbolicregression.model.mixins import (
+from odeformer.model.mixins import (
     GridSearchMixin,
     BatchMixin, 
     FiniteDifferenceMixin,
@@ -10,7 +10,7 @@ from symbolicregression.model.mixins import (
     MultiDimMixin,
     SympyMixin,
 )
-from symbolicregression.baselines.baseline_utils import variance_weighted_r2_score
+from odeformer.baselines.baseline_utils import variance_weighted_r2_score
 import time
 import sympy
 import numpy as np

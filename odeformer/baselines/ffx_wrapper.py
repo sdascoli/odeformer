@@ -1,7 +1,7 @@
 from typing import Any, Callable, Dict, List, Union
 from sklearn.metrics import r2_score
 from ffx import FFXRegressor
-from symbolicregression.model.mixins import (
+from odeformer.model.mixins import (
     GridSearchMixin,
     BatchMixin,
     PredictionIntegrationMixin,
@@ -9,7 +9,7 @@ from symbolicregression.model.mixins import (
     MultiDimMixin,
     SympyMixin,
 )
-from symbolicregression.baselines.baseline_utils import variance_weighted_r2_score
+from odeformer.baselines.baseline_utils import variance_weighted_r2_score
 import re
 import time
 import numpy as np

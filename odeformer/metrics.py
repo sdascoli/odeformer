@@ -12,7 +12,7 @@ import regex
 import numpy as np
 import scipy
 import sympy
-from symbolicregression.envs.generators import Node, NodeList
+from odeformer.envs.generators import Node, NodeList
 
 def get_complexity(expr: sympy.core.Expr):
     # taken from: https://github.com/cavalab/srbench/blob/master/postprocessing/symbolic_utils.py#L12:L16

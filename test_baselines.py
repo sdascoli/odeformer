@@ -1,11 +1,11 @@
 from evaluate import *
-from symbolicregression.baselines.ffx_wrapper import FFXWrapper
-from symbolicregression.baselines.pysr_wrapper import PySRWrapper
-#from symbolicregression.baselines.ellyn_wrapper import (
+from odeformer.baselines.ffx_wrapper import FFXWrapper
+from odeformer.baselines.pysr_wrapper import PySRWrapper
+#from odeformer.baselines.ellyn_wrapper import (
 #    AFPWrapper, EHCWrapper, EPLEXWrapper, FEAFPWrapper,
 #)
-#from symbolicregression.baselines.proged_wrapper import ProGEDWrapper
-from symbolicregression.baselines.sindy_wrapper import SINDyWrapper
+#from odeformer.baselines.proged_wrapper import ProGEDWrapper
+from odeformer.baselines.sindy_wrapper import SINDyWrapper
 
 def format_and_save(params, scores, batch_results, name):
     scores = pd.DataFrame(scores, index=[0]).T
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     params.eval_on_pmlb = True
     #params.eval_on_file = "experiments/datagen_general/datagen_use_sympy_True/data.prefix.test"
     
-    symbolicregression.utils.CUDA = not params.cpu
+    odeformer.utils.CUDA = not params.cpu
     if params.batch_size_eval is None:
         params.batch_size_eval = int(1.5 * params.batch_size)
     Path(params.dump_path).mkdir(exist_ok=True, parents=True)

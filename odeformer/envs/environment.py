@@ -21,10 +21,10 @@ import traceback
 
 # import math
 import numpy as np
-import symbolicregression.envs.encoders as encoders
-import symbolicregression.envs.generators as generators
-from symbolicregression.envs.generators import all_operators
-import symbolicregression.envs.simplifiers as simplifiers
+import odeformer.envs.encoders as encoders
+import odeformer.envs.generators as generators
+from odeformer.envs.generators import all_operators
+import odeformer.envs.simplifiers as simplifiers
 from typing import Optional, Dict
 import torch
 import torch.nn.functional as F

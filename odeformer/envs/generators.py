@@ -15,9 +15,9 @@ import copy
 from logging import getLogger
 from collections import defaultdict
 import warnings
-import symbolicregression
-from symbolicregression.envs import encoders
-from symbolicregression.envs.utils import *
+import odeformer
+from odeformer.envs import encoders
+from odeformer.envs.utils import *
 from ..utils import bool_flag, timeout, MyTimeoutError
 from functools import partial
 import numexpr as ne
@@ -27,7 +27,7 @@ import numexpr as ne
 # from numbalsoda import lsoda_sig, lsoda
 # import nbkode
 
-#from symbolicregression.envs.export_jax import *
+#from odeformer.envs.export_jax import *
 # import jax
 # import jax.numpy as jnp
 # from diffrax import diffeqsolve, ODETerm, SaveAt
@@ -827,7 +827,7 @@ def _integrate_ode(y0, times, tree, ode_integrator = 'solve_ivp', events=None, d
 
         if ode_integrator == 'jax':
 
-            sympy_trees = symbolicregression.envs.Simplifier.tree_to_sympy_expr(tree, round=True)
+            sympy_trees = odeformer.envs.Simplifier.tree_to_sympy_expr(tree, round=True)
             jax_trees, jax_params = [], []
             for tree in sympy_trees:
                 symbols = list(tree.free_symbols)
@@ -971,7 +971,7 @@ def tree_to_numexpr_fn(tree):
 if __name__ == "__main__":
 
     from parsers import get_parser
-    from symbolicregression.envs.environment import SPECIAL_WORDS
+    from odeformer.envs.environment import SPECIAL_WORDS
 
     parser = get_parser()
     params = parser.parse_args()

@@ -2,7 +2,7 @@
 
 CONDA_BASE=$(conda info --base)
 source $CONDA_BASE/etc/profile.d/conda.sh
-conda activate symbolicregression39
+conda activate odeformer39
 
 MODELS=(
     # "afp"

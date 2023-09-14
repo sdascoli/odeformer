@@ -15,8 +15,8 @@ import numpy as np
 import pandas as pd
 
 from evaluate import *
-from symbolicregression.model.mixins import PredictionIntegrationMixin
-from symbolicregression.baselines.baseline_utils import variance_weighted_r2_score
+from odeformer.model.mixins import PredictionIntegrationMixin
+from odeformer.baselines.baseline_utils import variance_weighted_r2_score
 
 class ConstantOptimizer(PredictionIntegrationMixin):
     

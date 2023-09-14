@@ -10,14 +10,14 @@ import time as _time
 import numpy as np
 import torch
 from collections import defaultdict
-from symbolicregression.metrics import compute_metrics
+from odeformer.metrics import compute_metrics
 from sklearn.base import BaseEstimator
-import symbolicregression.model.utils_wrapper as utils_wrapper
-from symbolicregression.model.mixins import PredictionIntegrationMixin
+import odeformer.model.utils_wrapper as utils_wrapper
+from odeformer.model.mixins import PredictionIntegrationMixin
 import traceback
 from sklearn import feature_selection 
-from symbolicregression.envs.generators import integrate_ode
-from symbolicregression.envs.utils import *
+from odeformer.envs.generators import integrate_ode
+from odeformer.envs.utils import *
 import warnings
 import scipy
 

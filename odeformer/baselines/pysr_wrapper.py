@@ -6,13 +6,13 @@ import pandas as pd
 import itertools
 import traceback
 from pysr import PySRRegressor
-from symbolicregression.model.mixins import (
+from odeformer.model.mixins import (
     GridSearchMixin,
     BatchMixin, 
     PredictionIntegrationMixin, 
     FiniteDifferenceMixin,
 )
-from symbolicregression.baselines.baseline_utils import variance_weighted_r2_score
+from odeformer.baselines.baseline_utils import variance_weighted_r2_score
 
 class PySRWrapper(
     PySRRegressor, BatchMixin, PredictionIntegrationMixin, FiniteDifferenceMixin, GridSearchMixin,

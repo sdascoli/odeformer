@@ -60,7 +60,7 @@ def parse_args():
 def get_shared_folder() -> Path:
     user = os.getenv("USER")
     if Path("/checkpoint/").is_dir():
-        p = Path("/checkpoint/{}/symbolicregression".format(user))
+        p = Path("/checkpoint/{}/odeformer".format(user))
         # p = p / str(int(time.time()))
         p = p / FOLDER_NAME
         p.mkdir(exist_ok=True)
@@ -143,7 +143,7 @@ def main():
         for f in os.listdir():
             if f.endswith(".py"):
                 shutil.copy2(f, args.job_dir)
-        dir_util.copy_tree("symbolicregression", os.path.join(args.job_dir, "symbolicregression"))
+        dir_util.copy_tree("odeformer", os.path.join(args.job_dir, "odeformer"))
         os.chdir(args.job_dir)
 
         args.exp_id = args.job_dir.name

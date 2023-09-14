@@ -24,7 +24,7 @@ echo "SLURM assigned me the node(s): $(squeue -j ${SLURM_JOBID} -O nodelist:1000
 # Activate Anaconda environment
 CONDA_BASE=$(conda info --base)
 source $CONDA_BASE/etc/profile.d/conda.sh
-conda activate symbolicregression39
+conda activate odeformer39
 echo "Submitting job for ${1}"
 srun python /p/project/hai_microbio/sb/repos/odeformer/run_baselines.py --baseline_model ${1} &
 

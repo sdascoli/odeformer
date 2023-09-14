@@ -14,8 +14,8 @@ import numpy as np
 import itertools
 import traceback
 from pysindy.differentiation import FiniteDifference, SmoothedFiniteDifference
-from symbolicregression.envs.generators import integrate_ode
-from symbolicregression.metrics import compute_metrics
+from odeformer.envs.generators import integrate_ode
+from odeformer.metrics import compute_metrics
 
 __all__ = (
     "BatchMixin", 

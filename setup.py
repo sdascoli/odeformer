@@ -7,7 +7,7 @@ setup(
     author="Stéphane d'Ascoli",
     author_email="stephane.dascoli@gmail.com",
     packages="odeformer",
-    intall_requires=[
+    install_requires=[
         "numexpr==2.8.4",
         "sympy==1.11.1",
         "matplotlib",
