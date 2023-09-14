@@ -21,7 +21,8 @@ setup(
         "torch==2.0.0",
         "tqdm",
         "wandb",
-        "pysindy"
+        "pysindy",
+        "gdown"
     ]
 )
 

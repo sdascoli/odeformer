@@ -13,7 +13,6 @@ from sympy.core.rules import Transform
 import numpy as np
 from functools import partial
 import numexpr as ne
-import sympytorch
 import torch
 from ..utils import timeout, MyTimeoutError
 
@@ -171,21 +170,6 @@ class Simplifier(ABC):
         expr = self.tree_to_sympy_expr(tree)
         mod = self.expr_to_torch_module(expr, dtype)
         return mod
-
-    def expr_to_torch_module(self, expr, dtype):
-        mod = sympytorch.SymPyModule(expressions=[expr])
-        mod.to(dtype)
-
-        def wrapper_fn(_mod, x, constants=None):
-            local_dict = {}
-            for d in range(x.shape[1]):
-                local_dict["x_{}".format(d)] = x[:, d]
-            if constants is not None:
-                for d in range(constants.shape[0]):
-                    local_dict["CONSTANT_{}".format(d)] = constants[d]
-            return _mod(**local_dict)
-
-        return partial(wrapper_fn, mod)
 
     def expr_to_numpy_fn(self, expr):
         def wrapper_fn(_expr, x, extra_local_dict={}):
