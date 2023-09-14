@@ -6,7 +6,7 @@ setup(
     description="Transformers for symbolic regression of ODEs",
     author="Stéphane d'Ascoli",
     author_email="stephane.dascoli@gmail.com",
-    packages="odeformer",
+    packages=find_packages("odeformer","odeformer.*"),
     install_requires=[
         "numexpr==2.8.4",
         "sympy==1.11.1",
