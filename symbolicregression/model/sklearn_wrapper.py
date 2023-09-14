@@ -47,15 +47,25 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
         for kwarg, val in model_kwargs.items():
             setattr(self.model, kwarg, val)
 
+        if not self.params:
+            feature_scale = 1
+            time_range = 10
+        else:
+            feature_scale = self.params.init_scale
+            time_range = self.params.time_range
+        self.scaler = utils_wrapper.Scaler(time_range=[1, time_range], feature_scale=feature_scale) if self.rescale else None 
+
     def load_pretrained(self):
         import gdown
         model_path = "odeformer.pt" 
-        print("Downloading pretrained model")
         if not os.path.exists(model_path):
+            print(f"Downloading pretrained model and saving to {model_path}")
             #id = "18CwlutaFF_tAOObsIukrKVZMPmsjwNwF"
             id = "1L_UZ0qgrBVkRuhg5j3BQoGxlvMk_Pm1W"
             url = "https://drive.google.com/uc?id="+id
             gdown.download(url, model_path, quiet=False)
+        else:
+            print(f"Found pretrained model at {model_path}")
         model = torch.load(model_path)
         print("Loaded pretrained model")
         self.model = model
@@ -64,6 +74,21 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
         for arg, val in args.items():
             assert hasattr(self, arg), "{} arg does not exist".format(arg)
             setattr(self, arg, val)
+
+    def set_model_args(self, args={}):
+        for arg, val in args.items():
+            assert hasattr(self.model, arg), "{} arg does not exist".format(arg)
+            setattr(self.model, arg, val)
+
+    def print_predictions(self, dataset_number=None, n_candidates=1):
+        n_datasets = len(self.predictions)
+        if dataset_number is None:
+            assert n_datasets==1, "Need to specify dataset number"
+            dataset_number = 0
+        else: 
+            assert dataset_number<n_datasets, "Dataset {} does not exist".format(dataset_number)
+        for candidate in self.predictions[dataset_number][:n_candidates]:
+            print(candidate)
 
     def fit(
         self,
@@ -80,12 +105,6 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
 
         assert not (self.model.average_trajectories and self.rescale), "Cannot average trajectories and rescale at the same time"
         #assert not (self.params is None and self.rescale), "Need to know the time and feature range to rescale to"
-        if not self.params:
-            feature_scale = 1
-            time_range = 10
-        else:
-            feature_scale = self.params.init_scale
-            time_range = self.params.time_range
 
         if not isinstance(times, list):
             times = [times]
@@ -93,19 +112,20 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
         n_datasets = len(times)
         
         # rescale time and features
-        scaler = utils_wrapper.Scaler(time_range=[1, time_range], feature_scale=feature_scale) if self.rescale else None 
         scale_params = {}
-        if scaler is not None:
+        if self.scaler is not None:
             scaled_times = []
             scaled_trajectories = []
             for i, (time, trajectory) in enumerate(zip(times, trajectories)):
-                scaled_time, scaled_trajectory = scaler.fit_transform(time, trajectory)
+                scaled_time, scaled_trajectory = self.scaler.fit_transform(time, trajectory)
                 scaled_times.append(scaled_time)
                 scaled_trajectories.append(scaled_trajectory)
-                scale_params[i]=scaler.get_params()
+                scale_params[i]=self.scaler.get_params()
         else:
             scaled_times = times.copy()
             scaled_trajectories = trajectories.copy()
+
+        #print(scaled_times, scaled_trajectories)
 
         # permute trajectories so that when bagging the model doesn't get chunks
         for i, (scaled_time, scaled_trajectory) in enumerate(zip(scaled_times, scaled_trajectories)):
@@ -139,8 +159,8 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
             candidates = outputs[i]
             if not candidates: all_candidates[input_id].append(None)
             for candidate in candidates:
-                if scaler is not None:
-                    candidate = scaler.rescale_function(self.model.env, candidate, *scale_params[input_id]) 
+                if self.scaler is not None:
+                    candidate = self.scaler.rescale_function(self.model.env, candidate, *scale_params[input_id]) 
                     try: candidate = self.model.env.simplifier.simplify_tree(candidate)
                     except: pass
                 all_candidates[input_id].append(candidate)
@@ -150,7 +170,26 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
             for input_id in all_candidates.keys():
                 all_candidates[input_id] = self.sort_candidates(times[input_id], trajectories[input_id], all_candidates[input_id], metric=sort_metric, verbose=verbose)
 
+        self.predictions = all_candidates
+
         return all_candidates
+    
+    def predict(self, times, y0):
+        if not isinstance(times, list):
+            times = [times]
+            y0 = [y0]
+        n_datasets = len(times)
+        assert len(y0)==n_datasets, "Need to provide initial conditions for each dataset"
+        
+        predictions = []
+        for i in range(n_datasets):
+            candidates = self.predictions[i]
+            prediction = self.integrate_prediction(times[i], y0[i], prediction=candidates[0])
+            predictions.append(prediction)
+
+        if len(predictions)==1: predictions = predictions[0]
+
+        return predictions
 
     @torch.no_grad()
     def evaluate_tree(self, tree, times, trajectory, metric):

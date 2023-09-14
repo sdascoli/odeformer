@@ -30,8 +30,8 @@ class Scaler(ABC):
     def fit(self, time, trajectory):
         earliest = np.argmin(time)
         self.time_scaler.fit(time.reshape(-1,1))
-        self.traj_scale = trajectory[earliest]
-        self.traj_scale[self.traj_scale==0] = 1
+        self.traj_scale = trajectory[earliest].copy()
+        self.traj_scale[self.traj_scale==0] = 1.
 
     def transform(self, time, trajectory):
         scaled_time = self.time_scaler.transform(time.reshape(-1,1))*self.time_scale+self.time_shift
