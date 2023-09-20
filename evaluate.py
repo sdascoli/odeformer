@@ -149,6 +149,7 @@ class Evaluator(object):
         # samples["test"] = {"times":[], "trajectories":[]}
         
         if "interpolation" in evaluation_task:
+            self.trainer.logger.info("Setting up test trajectory for interpolation")
             samples["test"] = deepcopy(samples["train"])
             return samples
 
@@ -323,6 +324,7 @@ class Evaluator(object):
             else:
                 raise ValueError(f"Unknown file suffix: {self.params.reload_scores_path}")
             num_reloaded_preds = reloaded_scores.shape[0]
+            self.trainer.logger.info(f"Reloaded {num_reloaded_preds} existing predictions")
             if num_reloaded_preds < _total and not self.params.continue_fitting:
                 self.trainer.logger.info(
                     "evaluate_on_iterator:"
@@ -344,20 +346,19 @@ class Evaluator(object):
             if samples_i == self.eval_size:
                 self.trainer.logger.info(f"Reached self.eval_size = {self.eval_size} iterations. Stopping evaluation.")
                 break
-            if not "test" in samples.keys():
-                
-                y0_generalization_delta=None
-                if "y0_generalization" in self.params.evaluation_task:
-                    y0_generalization_delta = self.params.y0_generalization_delta
-                
-                if not "test" in samples.keys():
-                    samples = self.prepare_test_trajectory(
-                        samples=samples, 
-                        evaluation_task=self.params.evaluation_task,
-                        rng=np.random.RandomState(self.params.test_env_seed + samples_i),
-                        y0=None,
-                        y0_generalization_delta=y0_generalization_delta,
-                    )
+            
+            y0_generalization_delta=None
+            if "y0_generalization" in self.params.evaluation_task:
+                y0_generalization_delta = self.params.y0_generalization_delta        
+        
+            samples = self.prepare_test_trajectory(
+                samples=samples, 
+                evaluation_task=self.params.evaluation_task,
+                rng=np.random.RandomState(self.params.test_env_seed + samples_i),
+                y0=None,
+                y0_generalization_delta=y0_generalization_delta,
+            )
+            
             times, trajectories, infos = samples["train"]["times"], samples["train"]["trajectories"], samples["infos"]
             for k, v in infos.items():
                 if isinstance(v, np.ndarray) or isinstance(v, torch.Tensor):
@@ -408,6 +409,8 @@ class Evaluator(object):
                 (self.params.reload_scores_path is not None) and \
                 (reloaded_scores.shape[0] > fit_counter)):
                 
+                self.trainer.logger.info(f"Reusing prediction for sample {fit_counter}")
+                
                 # we want to reload predictions and there is a prediction for this sample
                 all_candidates = [reloaded_scores.iloc[fit_counter].predicted_trees]
                 
@@ -426,6 +429,7 @@ class Evaluator(object):
                 if all_candidates[0] is np.nan or pd.isnull(all_candidates[0]):
                     all_candidates[0] = str(all_candidates[0])
             else:
+                self.trainer.logger.info(f"Obtaining new prediction for sample {fit_counter}")
                 all_candidates = self.model.fit(times, trajectories, verbose=False, sort_candidates=True)
                 
             all_duration_fit = [timer() - start_time_fit] * len(times)
