@@ -32,4 +32,9 @@ python run_baselines.py \
     --hyper_opt_eval_fraction ${9} \
     --sorting_metric  ${10} \
     --beam_size  ${11} \
-    --reload_scores_path ${12}
+    --reload_scores_path ${12} \
+    --optimize_constants ${13} \
+    --optimize_constants_init_random ${14} \
+    --forecasting_window_length ${15} \
+    --y0_generalization_delta ${16} \
+    --continue_fitting ${17}

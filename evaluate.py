@@ -20,6 +20,7 @@ import wandb
 import pickle
 import numpy as np
 import pandas as pd
+import traceback
 
 import symbolicregression
 from parsers import get_parser
@@ -32,7 +33,7 @@ from symbolicregression.trainer import Trainer
 from symbolicregression.model.sklearn_wrapper import SymbolicTransformerRegressor
 from symbolicregression.model.model_wrapper import ModelWrapper
 from symbolicregression.metrics import compute_metrics
-
+from param_optimizer import ParameterOptimizer
 # np.seterr(all="raise")
 
 def setup_odeformer(trainer) -> SymbolicTransformerRegressor:
@@ -136,33 +137,59 @@ class Evaluator(object):
         self,
         samples: Dict[str, Dict[str, Any]],
         evaluation_task: Literal["debug", "interpolation", "forecasting", "y0_generalization"],
+        rng: np.random.RandomState,
+        y0: Union[None, np.ndarray],
+        y0_generalization_delta: Union[None, np.ndarray],
     ) -> Dict[str, Dict[str, Any]]:
         
         if "train" not in samples.keys():
             samples["train"] = {"times": samples["times"], "trajectories": samples["trajectory"]}
             del samples["times"], samples["trajectory"]
-        assert "test" not in samples.keys(), samples.keys()
-        samples["test"] = {"times":[], "trajectories":[]}
         
-        if "interpolation" in evaluation_task or "debug" in evaluation_task:
+        # samples["test"] = {"times":[], "trajectories":[]}
+        
+        if "interpolation" in evaluation_task:
             samples["test"] = deepcopy(samples["train"])
             return samples
 
-        elif evaluation_task == "forecasting":
-            for time, trajectory, tree in zip(samples["train"]["times"], samples["train"]["trajectories"], samples["tree"]):
-                y0 = trajectory[-1]
-                t0 = time[-1]
-                teval = np.linspace(t0, t0+5, 512, endpoint=True)
-                test_trajectory = self.model.integrate_prediction(teval, y0=y0, prediction=tree, timeout=self.eval_integration_timeout)
-                samples["test"]["trajectories"].append(test_trajectory)
-                samples["test"]["times"].append(teval)
-            return samples
+        # elif "forecasting" in evaluation_task:
+        #     for time, trajectory, tree in zip(samples["train"]["times"], samples["train"]["trajectories"], samples["tree"]):
+        #         if y0 is None:
+        #             y0 = trajectory[-1]
+        #             self.trainer.logger.info(f"forecasting: y0 is None. Setting y0 = {y0}")
+        #         self.trainer.logger.info(f"forecasting: using y0 = {y0}")
+        #         t0 = time[-1]
+        #         self.trainer.logger.info(f"Using y0 = {y0}")
+        #         if hasattr(self.params, "forecasting_window_length"):
+        #             forecasting_window_length = self.params.forecasting_window_length
+        #         else:
+        #             forecasting_window_length = 5
+        #         teval = np.linspace(t0, t0+forecasting_window_length, 512, endpoint=True)
+        #         test_trajectory = self.model.integrate_prediction(
+        #             teval, y0=y0, prediction=tree, timeout=self.eval_integration_timeout
+        #         )
+        #         samples["test"]["trajectories"].append(test_trajectory)
+        #         samples["test"]["times"].append(teval)
+        #     return samples
         
-        elif evaluation_task == "y0_generalization":
+        elif "y0_generalization" in evaluation_task:
+            
+            if "test" in samples.keys():
+                self.trainer.logger.info("y0_generalization: Using predefined test trajectories.")
+                return samples
+            self.trainer.logger.info("y0_generalization: creating new test trajectories.")
+            samples["test"] = {"times":[], "trajectories":[]}
+            
             for time, trajectory, tree, dimension in zip(samples["train"]["times"], samples["train"]["trajectories"], samples["tree"], samples["infos"]["dimension"]):
-                y0 = self.env.rng.randn(dimension)
-                self.trainer.logger.info(f"y0_generalization: using random y0 = {y0}")
-                test_trajectory = self.model.integrate_prediction(time, y0=y0, prediction=tree, timeout=self.eval_eval_integration_timeout)
+                if y0 is None:
+                    y0 = trajectory[0]
+                    self.trainer.logger.info(f"y0_generalization: y0 is None. Setting y0 = {y0}")
+                if y0_generalization_delta is not None:
+                    y0 = y0 + y0_generalization_delta
+                self.trainer.logger.info(f"y0_generalization: using y0 = {y0}")
+                test_trajectory = self.model.integrate_prediction(
+                    time, y0=y0, prediction=tree, timeout=self.eval_integration_timeout
+                )
                 samples["test"]["trajectories"].append(test_trajectory)
                 samples["test"]["times"].append(time)
             return samples
@@ -170,6 +197,35 @@ class Evaluator(object):
         else:
             raise ValueError(f"Unknown evaluation_task: {evaluation_task}")
             
+            
+    def _optimize_constants(
+        self,
+        eq: str,
+        times: np.ndarray,
+        observations: np.ndarray,
+        init_random: bool,
+        seed: int = 2023,
+    ) -> str:
+        
+        # TODO: allow input to be of type List or Dict
+        try:
+            optimizer = ParameterOptimizer(
+                eq=eq,
+                y0=observations[0],
+                time=times,
+                observed_trajectory=observations,
+                optimization_objective="r2",
+                eval_objective="r2",
+                init_random=init_random,
+                track_eval_history=True,
+                seed=seed,
+            )
+            eq_optimized, _, _ = optimizer.optimize()
+            self.trainer.logger.info(f"orig eq: {eq}\noptimized eq: {eq_optimized}")
+            return eq_optimized
+        except Exception as e:
+            traceback.print_exc()
+            return np.nan
 
     def _evaluate(
         self,
@@ -178,15 +234,14 @@ class Evaluator(object):
         trees: List[Union[None, NodeList]],
         all_candidates: Union[List, Dict],
         all_durations: Union[List, Dict],
-        validation_metrics: str
+        validation_metrics: str,
+        y0: Union[None, np.ndarray] = None
     ) -> Tuple[Dict, Dict]:
         
         best_results = {metric: [] for metric in validation_metrics.split(',')}
         best_results["duration_fit"], best_results["pareto_front"], best_candidates = [], [], []
         zipped = [times, trajectories, trees, (all_candidates.values() if isinstance(all_candidates, Dict) else all_candidates)]
-        
-        # debug_dict = defaultdict(list)
-        
+        pred_trajectories = []
         if all_durations is not None:
             zipped.append(all_durations)
         for items in zip(*zipped):
@@ -198,6 +253,7 @@ class Evaluator(object):
                 for k in best_results:
                     best_results[k].append(np.nan)
                 best_candidates.append(None)
+                pred_trajectories.append(np.nan)
                 continue
             best_results["pareto_front"].append(candidates)
             time, idx = sorted(time), np.argsort(time)
@@ -210,10 +266,15 @@ class Evaluator(object):
             if isinstance(best_candidate, str) and (not hasattr(self.params, "convert_prediction_to_tree") or self.params.convert_prediction_to_tree):
                 try: best_candidate = self.str_to_tree(best_candidate)
                 except: pass
-            pred_trajectory = self.model.integrate_prediction(time, y0=trajectory[0], prediction=best_candidate, timeout=self.eval_eval_integration_timeout)
+            if y0 is None:
+                y0=trajectory[0]
+            pred_trajectory = self.model.integrate_prediction(
+                time, y0=y0, prediction=best_candidate, timeout=self.eval_integration_timeout
+            )
             if not hasattr(self.params, "convert_prediction_to_tree") or self.params.convert_prediction_to_tree:
                 try: best_candidate = self.env.simplifier.simplify_tree(best_candidate, expand=True)
                 except: pass
+            pred_trajectories.append(pred_trajectory)
             best_result = compute_metrics(
                 pred_trajectory, 
                 trajectory, 
@@ -221,10 +282,6 @@ class Evaluator(object):
                 tree=tree,
                 metrics=validation_metrics
             )
-            #debug_dict["time"].append(time)
-            #debug_dict["trajectory"].append(trajectory)
-            #debug_dict["best_candidate"].append(best_candidate)
-            #debug_dict["pred_trajectory"].append(pred_trajectory)
             
             if len(items) == 5:
                 best_result["duration_fit"] = [duration_fit]
@@ -232,39 +289,75 @@ class Evaluator(object):
                 best_results[k].append(v[0])
             best_candidates.append(best_candidate)
         
-        #import time
-        #timestamp = str(time.time()).replace(".", "_")
-        #os.makedirs(os.path.join(self.save_path, "pkls"), exist_ok=True)
-        #with open(os.path.join(self.save_path, "pkls", f"{timestamp}.pkl"), "wb") as fout:
-        #    pickle.dump(obj=debug_dict, file=fout)
-        
-        return best_results, best_candidates
+        return best_results, best_candidates, pred_trajectories
+
+    def save_results(self, batch_results: Dict, save_file: str):
+        batch_results = pd.DataFrame.from_dict(batch_results)
+        batch_results.to_pickle(save_file.replace(".csv", ".pkl"))
+        batch_results.drop(
+            labels=[
+                "times_train", "trajectories_train", "times_test", "trajectories_test", 
+                "trajectory_train_pred", "trajectory_test_pred",
+            ], 
+            axis=1,
+            inplace=True,
+        )
+        batch_results.to_csv(save_file, index=False)
 
     def evaluate_on_iterator(self, iterator, name="in_domain"):
-        
         save_file = os.path.join(self.save_path, f"eval_{name}.csv")
         if os.path.exists(save_file):
             self.trainer.logger.info(f"{save_file} exists. Skipping.")
-            return
-            
+            return    
+        
         self.trainer.logger.info("evaluate_on_iterator")
         scores = OrderedDict({"epoch": self.trainer.epoch})
         batch_results = defaultdict(list)
-        _total = min(self.eval_size, len(iterator)) if self.eval_size > 0 else len(iterator)
-        
+        _total = len(iterator)
         if hasattr(self.params, "reload_scores_path") and (self.params.reload_scores_path is not None):
-            reloaded_scores = pd.read_csv(self.params.reload_scores_path)
-            # silently assume that equations are in correct order
-            # TODO: add a check for this
-            # assert len(reloaded_scores) == len(iterator), f"{len(reloaded_scores)} vs {len(iterator)}"
+            self.trainer.logger.info(f"Reloading scores from {self.params.reload_scores_path}")
+            if self.params.reload_scores_path.endswith("csv"):
+                reloaded_scores = pd.read_csv(self.params.reload_scores_path)
+            elif self.params.reload_scores_path.endswith(".pkl"):
+                reloaded_scores = pd.read_pickle(self.params.reload_scores_path)
+            else:
+                raise ValueError(f"Unknown file suffix: {self.params.reload_scores_path}")
+            num_reloaded_preds = reloaded_scores.shape[0]
+            if num_reloaded_preds < _total and not self.params.continue_fitting:
+                self.trainer.logger.info(
+                    "evaluate_on_iterator:"
+                    f"number of reloaded predictions ({num_reloaded_preds}) < len(iterator ({_total}))"
+                    "Only evaluating on samples with reloaded prediction."
+                )
+                _total = num_reloaded_preds
+        
+        if self.eval_size > 0 and self.eval_size < _total:
+            self.trainer.logger(
+                "evaluate_on_iterator: evaluating on self.eval_size = {self.eval_size} / {_total} samples." 
+            )
+            _total = self.eval_size
         
         fit_counter = 0
         
-        for samples_i, samples in enumerate(tqdm(iterator, total=_total)):
+        for samples_i, samples in enumerate(tqdm(iterator[:_total], total=_total)):
+            
             if samples_i == self.eval_size:
+                self.trainer.logger.info(f"Reached self.eval_size = {self.eval_size} iterations. Stopping evaluation.")
                 break
             if not "test" in samples.keys():
-                samples = self.prepare_test_trajectory(samples, evaluation_task=self.params.evaluation_task)
+                
+                y0_generalization_delta=None
+                if "y0_generalization" in self.params.evaluation_task:
+                    y0_generalization_delta = self.params.y0_generalization_delta
+                
+                if not "test" in samples.keys():
+                    samples = self.prepare_test_trajectory(
+                        samples=samples, 
+                        evaluation_task=self.params.evaluation_task,
+                        rng=np.random.RandomState(self.params.test_env_seed + samples_i),
+                        y0=None,
+                        y0_generalization_delta=y0_generalization_delta,
+                    )
             times, trajectories, infos = samples["train"]["times"], samples["train"]["trajectories"], samples["infos"]
             for k, v in infos.items():
                 if isinstance(v, np.ndarray) or isinstance(v, torch.Tensor):
@@ -272,9 +365,7 @@ class Evaluator(object):
                 elif isinstance(v, List):
                     infos[k] = v
                 else:
-                    raise TypeError(
-                        f"v should be of type List of np.ndarray but has type: {type(v)}"
-                    )
+                    raise TypeError(f"v should be of type List of np.ndarray but has type: {type(v)}")
             
             if "tree" in samples.keys():
                 trees = [self.env.simplifier.simplify_tree(tree, expand=True) for tree in samples["tree"]]
@@ -282,7 +373,7 @@ class Evaluator(object):
                     [None if tree is None else tree.infix() for tree in trees]
                 )
             else:
-                trees = [None]*len(times)
+                trees = [None] * len(times)
 
             # corrupt training data
             for i, (time, trajectory) in enumerate(zip(times, trajectories)):
@@ -292,14 +383,15 @@ class Evaluator(object):
                         trajectory=trajectory,
                         gamma=self.params.eval_noise_gamma,
                         noise_type=self.params.eval_noise_type,
-                        seed=self.params.test_env_seed,
+                        seed=self.params.test_env_seed + i,
                     )
-                    if self.params.eval_noise_type == "additive":
+                    if self.params.eval_noise_type in ["additive", "adaptive_additive"]:
                         trajectory = trajectory + noise
                     elif self.params.eval_noise_type == "multiplicative":
                         trajectory = trajectory * noise
                     else:
                         raise ValueError(f"Unknown noise type: {self.params.eval_noise_type}")
+                    
                 if self.params.eval_subsample_ratio:
                     time, trajectory = self.env._subsample_trajectory(
                         time,
@@ -312,31 +404,65 @@ class Evaluator(object):
 
             # fit
             start_time_fit = timer()
-            if hasattr(self.params, "reload_scores_path") and self.params.reload_scores_path is not None:
+            if (hasattr(self.params, "reload_scores_path") and \
+                (self.params.reload_scores_path is not None) and \
+                (reloaded_scores.shape[0] > fit_counter)):
+                
+                # we want to reload predictions and there is a prediction for this sample
                 all_candidates = [reloaded_scores.iloc[fit_counter].predicted_trees]
                 
+                if (hasattr(self.params, "optimize_constants") and \
+                    self.params.optimize_constants and \
+                    (not "optimize_constants" in self.params.reload_scores_path)):
+                    
+                    all_candidates[0] = self._optimize_constants(
+                        eq=all_candidates[0],
+                        times=reloaded_scores.iloc[fit_counter].times_train,
+                        observations=reloaded_scores.iloc[fit_counter].trajectories_train,
+                        init_random=self.params.optimize_constants_init_random,
+                        seed=self.params.test_env_seed + fit_counter,
+                    )
+                    
                 if all_candidates[0] is np.nan or pd.isnull(all_candidates[0]):
                     all_candidates[0] = str(all_candidates[0])
             else:
                 all_candidates = self.model.fit(times, trajectories, verbose=False, sort_candidates=True)
+                
             all_duration_fit = [timer() - start_time_fit] * len(times)
             fit_counter += 1
             
             # evaluate on train data
-            best_results, best_candidates = self._evaluate(
+            best_results, best_candidates, trajectories_train_pred = self._evaluate(
                 times, trajectories, trees, all_candidates, all_duration_fit, self.params.validation_metrics
             )
+            if "y0_generalization" in self.params.evaluation_task:
+                y0=None # trajectories_train_pred[0][0]
+            elif "forecasting" in self.params.evaluation_task:
+                # TODO could be None
+                y0=trajectories_train_pred[0][-1]
+            else:
+                y0=None
+                
             # evaluate on test data
-            test_results, _ = self._evaluate(
+            test_results, _, trajectories_test_pred = self._evaluate(
                 times=samples["test"]["times"],
                 trajectories=samples["test"]["trajectories"],
                 trees=trees,
                 all_candidates=best_candidates,
                 all_durations=None,
-                validation_metrics=self.params.validation_metrics
+                validation_metrics=self.params.validation_metrics,
+                y0=y0
             )
             # collect results
             batch_results["predicted_trees"].extend([tree.infix() if hasattr(tree, 'infix') else tree for tree in best_candidates])
+            
+            batch_results["times_train"].extend(times)
+            batch_results["trajectories_train"].extend(trajectories)
+            batch_results["times_test"].extend(samples["test"]["times"])
+            batch_results["trajectories_test"].extend(samples["test"]["trajectories"])
+            batch_results["trajectory_train_pred"].extend(trajectories_train_pred)
+            batch_results["trajectory_test_pred"].extend(trajectories_test_pred)
+            
             for k, v in infos.items():
                 batch_results["info_" + k].extend(v)
             for k, v in best_results.items():
@@ -345,9 +471,14 @@ class Evaluator(object):
                 if k == "duration_fit": continue
                 batch_results['test_'+k].extend(v)
 
-        batch_results = pd.DataFrame.from_dict(batch_results)
+            # save intermediate_results
+            self.save_results(
+                batch_results=batch_results,
+                save_file=save_file.replace(".csv", "_intermediate.csv")
+            )
 
-        batch_results.to_csv(save_file, index=False)
+        self.save_results(batch_results=batch_results, save_file=save_file)
+        
         self.trainer.logger.info("Saved {} equations to {}".format(len(batch_results), save_file))
         try:
             df = pd.read_csv(save_file, na_filter=True)
@@ -530,25 +661,37 @@ class Evaluator(object):
         with open(path, "r") as fjson:
             store: List[Dict[str, Any]] = json.load(fjson)
         for sample_i, _sample in enumerate(store):
-            for solution_i in range(len(_sample["solutions"])):
-                try:
-                    samples = {"train": defaultdict(list)}
-                    times = np.array(_sample["solutions"][solution_i][0]["t"])
-                    trajectory = np.array(_sample["solutions"][solution_i][0]["y"]).T
-                    samples['infos'] = {
-                        'dimension': [trajectory.shape[1]],
-                        'n_unary_ops': [np.nan],
-                        'n_input_points': [len(times)],
-                        'name': [f"{_sample['eq_description']}_{solution_i:2d}"],
-                        'dataset': ["strogatz_extended"],
-                    }
-                    samples["train"]['times'].append(times)
-                    samples["train"]['trajectories'].append(trajectory)
-                    samples['tree'] = [self.str_to_tree(" | ".join(_sample["substituted"][solution_i]))]
-                    iterator.append(samples)
-                except Exception as e:
-                    self.trainer.logger.error(sample_i, solution_i)
-                    self.trainer.logger.error(e)
+            #for solution_i in range(len(_sample["solutions"][0])):
+            
+            try:
+                samples = {"train": defaultdict(list), "test": defaultdict(list)}
+                # first initial condition = train trajectory
+                solution_i = 0
+                times = np.array(_sample["solutions"][0][solution_i]["t"])
+                trajectory = np.array(_sample["solutions"][0][solution_i]["y"]).T
+                samples["train"]['times'].append(times)
+                samples["train"]['trajectories'].append(trajectory)
+                
+                samples['infos'] = {
+                    'dimension': [trajectory.shape[1]],
+                    'n_unary_ops': [np.nan],
+                    'n_input_points': [len(times)],
+                    'name': [f"{_sample['eq_description']}_{solution_i:2d}"],
+                    'dataset': ["strogatz_extended"],
+                }
+                samples['tree'] = [self.str_to_tree(" | ".join(_sample["substituted"][solution_i]))]
+                
+                # second initial condition = generalization trajectory
+                solution_i = 1
+                times = np.array(_sample["solutions"][0][solution_i]["t"])
+                trajectory = np.array(_sample["solutions"][0][solution_i]["y"]).T
+                samples["test"]['times'].append(times)
+                samples["test"]['trajectories'].append(trajectory)
+                
+                iterator.append(samples)
+            except Exception as e:
+                self.trainer.logger.error(sample_i, solution_i)
+                self.trainer.logger.error(e)
         return iterator
             
     
@@ -563,9 +706,10 @@ class Evaluator(object):
         else:
             iterator = self.read_equations_from_txt_file(path=path, save=save, seed=seed)
         ds_path = path+".pkl"
-        with open(ds_path, "wb") as fpickle:
-            self.trainer.logger.info(f"Saving dataset under: {ds_path}")
-            pickle.dump(iterator, fpickle)
+        if not os.path.exists(ds_path):
+            with open(ds_path, "wb") as fpickle:
+                self.trainer.logger.info(f"Saving dataset under: {ds_path}")
+                pickle.dump(iterator, fpickle)
         return self.evaluate_on_iterator(iterator, _filename)
                     
 
@@ -637,8 +781,3 @@ if __name__ == "__main__":
     params.eval_on_file = None 
 
     main(params)
-    
-    # TODO: forecasting: start integration at training trajectory start but only consider extra part when computing score
-    # TODO: constant optimization
-    # TODO: inference from multiple trajectories via constant tuning
-    

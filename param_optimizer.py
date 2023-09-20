@@ -18,7 +18,7 @@ from evaluate import *
 from symbolicregression.model.mixins import PredictionIntegrationMixin
 from symbolicregression.baselines.baseline_utils import variance_weighted_r2_score
 
-class ConstantOptimizer(PredictionIntegrationMixin):
+class ParameterOptimizer(PredictionIntegrationMixin):
     
     def __init__(
         self,
@@ -30,6 +30,7 @@ class ConstantOptimizer(PredictionIntegrationMixin):
         optimization_objective: Literal["mse", "r2"] = "r2",
         eval_objective: Literal["mse", "r2"] = "r2",
         track_eval_history: bool = True,
+        seed: int = 2023,
     ):
         """
         Parameters
@@ -64,6 +65,7 @@ class ConstantOptimizer(PredictionIntegrationMixin):
         self.CONSTANTS_PATTERN = r"(?:(?<!_\d*))(?:(?<!\*\*))(?:[-+]?)?(?:(?<=\()[-+]?)?(?:(?<=^)[-+]?)?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[Ee][+-]?\d+)?"
         self.orig_params = self.get_params()
         self.eval_history = []
+        self.rng = np.random.RandomState(seed)
         
     
     def get_params(self) -> Dict[str, float]:
@@ -95,10 +97,20 @@ class ConstantOptimizer(PredictionIntegrationMixin):
     def set_params(self, params: np.ndarray) -> str:
         self.eq = self.insert_params(params)
     
-    def simulate(self, params: Union[List, np.ndarray]) -> Tuple[np.ndarray, str]:
+    def simulate(
+        self, 
+        params: Union[List, np.ndarray], 
+        times: Union[None, np.ndarray] = None,
+        y0: Union[None, np.ndarray] = None,
+    ) -> np.ndarray:
+        
+        if times is None:
+            times = self.time
+        if y0 is None:
+            y0 = self.y0
         return self.integrate_prediction(
-            times=self.time,
-            y0=self.y0, 
+            times=times,
+            y0=y0, 
             prediction=self.insert_params(params),
         )
         
@@ -125,7 +137,7 @@ class ConstantOptimizer(PredictionIntegrationMixin):
         param_priors = list(self.get_params().values())
         info = minimize(
             fun=lambda _params: self.objective(_params),
-            x0=(np.random.randn(len(param_priors)) if self.init_random else param_priors),
+            x0=(self.rng.randn(len(param_priors)) if self.init_random else param_priors),
         )
         if self.track_eval_history:
             # take best params
@@ -169,7 +181,7 @@ def main(args, result_dir, result_file):
             scores = all_scores.iloc[trajetory_counter]
             pred_eq = " | ".join([str(sympy.parse_expr(e)) for e in scores.predicted_trees.split("|")])
             
-            param_optimizer = ConstantOptimizer(
+            param_optimizer = ParameterOptimizer(
                 eq=pred_eq,
                 y0=_trajectory[0],
                 time=_times,

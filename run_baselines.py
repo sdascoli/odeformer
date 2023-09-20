@@ -101,6 +101,7 @@ def main(params):
             optimize_hyperparams=True,
             hyper_opt_eval_fraction=params.hyper_opt_eval_fraction,
             sorting_metric=params.sorting_metric,
+            time_limit=60*60,
         )
     elif params.model == "ehc":
         from symbolicregression.baselines.ellyn_wrapper import EHCWrapper
@@ -109,6 +110,7 @@ def main(params):
             optimize_hyperparams=True,
             hyper_opt_eval_fraction=params.hyper_opt_eval_fraction,
             sorting_metric=params.sorting_metric,
+            time_limit=60*60,
         )
     elif params.model == "eplex":
         from symbolicregression.baselines.ellyn_wrapper import EPLEXWrapper
@@ -117,6 +119,7 @@ def main(params):
             optimize_hyperparams=True,
             hyper_opt_eval_fraction=params.hyper_opt_eval_fraction,
             sorting_metric=params.sorting_metric,
+            time_limit=60*60,
         )
     elif params.model == "feafp":
         from symbolicregression.baselines.ellyn_wrapper import FEAFPWrapper
@@ -125,6 +128,7 @@ def main(params):
             optimize_hyperparams=True,
             hyper_opt_eval_fraction=params.hyper_opt_eval_fraction,
             sorting_metric=params.sorting_metric,
+            time_limit=60*60,
         )
     elif params.model == "ffx":
         from symbolicregression.baselines.ffx_wrapper import FFXWrapper
@@ -161,9 +165,14 @@ def str_or_None(arg: str):
     if arg.lower() == "none":
         return None
     return arg
+
+def float_or_None(arg: str):
+    if arg.lower() == "none":
+        return None
+    return float(arg)
     
 if __name__ == "__main__":
-    BASE = os.path.join(os.getcwd(), "experiments")
+    BASE = os.path.join(os.getcwd(), "experiments_paper")
     parser = get_parser()
     parser.add_argument("--model", type=str, default="odeformer",
         choices=[
@@ -180,6 +189,12 @@ if __name__ == "__main__":
     )
     parser.add_argument("--optimize_hyperparams", type=str2bool, default=True, 
         help="Do / Don't optimizer hyper parameters."
+    )
+    parser.add_argument("--optimize_constants", type=str2bool, default=True, 
+        help="Do / Don't optimizer constants of a predicted equation."
+    )
+    parser.add_argument("--optimize_constants_init_random", type=str2bool, default=True, 
+        help="Use randomly sampled initial constants when optimization constants of a predicted equation."
     )
     parser.add_argument("--hyper_opt_eval_fraction", type=float, default=0.3,
         help="Fraction of trajectory length that is used to score hyper parameter optimization on."
@@ -200,6 +215,10 @@ if __name__ == "__main__":
         help="Path to existing scores.csv from which candidates are re-loaded for re-evaluation, e.g. for forecasting or y0 generalization."
     )
     parser.add_argument("--eval_integration_timeout", type=int, default=10)
+    parser.add_argument("--forecasting_window_length", type=int, default=5)
+    parser.add_argument("--y0_generalization_delta", type=float_or_None, default=0)
+    parser.add_argument("--continue_fitting", type=str2bool, default=False)
+    
     
     params = parser.parse_args()
     
@@ -210,7 +229,6 @@ if __name__ == "__main__":
     params.eval_only = True
     params.max_dimension = 5
     params.evaluation_task = params.e_task
-    # params.eval_size = 2
     
     if params.dataset == "strogatz":
         params.eval_on_file = False
@@ -219,7 +237,8 @@ if __name__ == "__main__":
         params.path_dataset = "datasets/strogatz.pkl"
         dataset_name = params.dataset
     elif params.dataset == "strogatz_extended":
-        params.eval_on_file = "datasets/strogatz_extended/strogatz_extended.json.pkl"
+        # params.eval_on_file = "datasets/strogatz_extended/strogatz_extended.json.pkl"
+        params.eval_on_file = "datasets/strogatz_extended/strogatz_extended.json"
         params.eval_on_oscillators = False
         params.eval_on_pmlb = False
         dataset_name = "strogatz_extended"
@@ -255,6 +274,21 @@ if __name__ == "__main__":
     if not hasattr(params, "eval_noise_type"):
         params.eval_noise_type = "additive"
     
+    if params.optimize_constants:
+        if params.optimize_constants_init_random:
+            opt_init_str = "init_random"
+        else:
+            opt_init_str = "init_predicted"
+    else:
+        opt_init_str = ""
+        
+    if "forecasting" in params.evaluation_task:
+        eval_task_str = f"{params.evaluation_task}_{params.forecasting_window_length}"
+    elif "y0_generalization" in params.evaluation_task:
+        eval_task_str = f"{params.evaluation_task}_{params.y0_generalization_delta}"
+    else:
+        eval_task_str = f"{params.evaluation_task}"
+        
     params.dump_path = os.path.join(
         BASE, 
         params.model,
@@ -264,8 +298,10 @@ if __name__ == "__main__":
         f"eval_subsample_ratio_{float(params.eval_subsample_ratio)}",
         f"eval_noise_type_{params.eval_noise_type}",
         f"eval_gamma_noise_{float(params.eval_noise_gamma)}",
-        f"{params.evaluation_task}",
+        eval_task_str,
         f"beam_size_{params.beam_size}",
+        ("optimize_constants" if params.optimize_constants else ""),
+        opt_init_str,
     )
     
     params.eval_dump_path = params.dump_path
@@ -288,6 +324,4 @@ if __name__ == "__main__":
         assert torch.cuda.is_available()
     print(params)
     main(params)
-
-    # TODO enable re-evaluation
-    # TODO integrate constant optimization
+    
