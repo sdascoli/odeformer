@@ -522,7 +522,7 @@ class FunctionEnvironment(object):
         trajectory: np.ndarray, 
         train: Union[bool, None] = None, 
         gamma: Union[None, float] = None,
-        noise_type: Literal["additive", "multiplicative"] = "additive",
+        noise_type: Literal["additive", "multiplicative", "adaptive_additive"] = "additive",
         seed: Union[int, None] = None,
     ):
         """Returns noise"""
@@ -541,11 +541,14 @@ class FunctionEnvironment(object):
             norm = scipy.linalg.norm(
                 (np.abs(trajectory) + 1e-100) / np.sqrt(trajectory.shape[0])
             )
-            return gamma * norm * np.random.randn(*trajectory.shape)
+            return gamma * norm * rng.randn(*trajectory.shape)
+        elif noise_type == "adaptive_additive":
+            return gamma * trajectory * rng.randn(*trajectory.shape)
         elif noise_type == "multiplicative": 
-            return np.random.normal(loc=1, scale=gamma, size=trajectory.shape)
+            return rng.normal(loc=1, scale=gamma, size=trajectory.shape)
         else:
             raise ValueError(f"Unknown noise type: {noise_type}.")
+        
     
     def _subsample_trajectory(
         self,
@@ -761,7 +764,7 @@ class FunctionEnvironment(object):
             "--eval_noise_type",
             type=str,
             default="additive",
-            choices=["additive", "multiplicative"],
+            choices=["additive", "multiplicative", "adaptive_additive"],
             help="Type of noise added at test time",
         )
         parser.add_argument(
