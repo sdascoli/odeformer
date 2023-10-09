@@ -38,8 +38,8 @@ x = 2.3*np.cos(times+.5)
 y = 1.2*np.sin(times+.1)
 trajectory = np.stack([x, y], axis=1)
 
-dstr.fit(times, trajectory)
-dstr.print_predictions(n_candidates=1)
+candidates = dstr.fit(times, trajectory)
+dstr.print(n_predictions=1)
 pred_trajectory = dstr.predict(times, trajectory[0])
 print(r2_score(trajectory, pred_trajectory))
 ```
@@ -48,7 +48,7 @@ print(r2_score(trajectory, pred_trajectory))
 ## Training and evaluation
 
 To launch a model training with additional arguments (arg1,val1), (arg2,val2):
-```python train.py --arg1 val1 --arg2 --val2```
+```python train.py --arg1 val1 --arg2 val2```
 
 All hyper-parameters related to training are specified in ```parsers.py```, and those related to the environment are in ```envs/environment.py```.
 
