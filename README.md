@@ -5,7 +5,7 @@ https://pypi.org/project/odeformer/)
 
 # ODEformer: symbolic regression of dynamical systems with transformers
 
-This repository contains code for the paper [ODEformer: symbolic regression of dynamical systems with transformers](https://arxiv.org/pdf/2309.12207.pdf).
+This repository contains code for the paper [ODEformer: symbolic regression of dynamical systems with transformers](https://arxiv.org/pdf/2310.05573.pdf).
 
 ## Installation
 This package is installable via pip:
