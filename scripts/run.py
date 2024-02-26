@@ -109,7 +109,6 @@ for params in dict_product(grid):
         if f.endswith('.py'):
             shutil.copy2(f, job_dir)
     dir_util.copy_tree('odeformer', os.path.join(job_dir,'odeformer'))
-    dir_util.copy_tree('invar_datasets', os.path.join(job_dir,'invar_datasets'))
     os.chdir(job_dir)
 
     logfile = os.path.join(job_dir,'train.log')
