@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='odeformer',
-    version='0.1.5',
+    version='0.1.6',
     description="Transformers for symbolic regression of ODEs",
     author="Stéphane d'Ascoli",
     author_email="stephane.dascoli@gmail.com",
@@ -23,7 +23,7 @@ setup(
         "torch>=2.0.0",
         "tqdm",
         "wandb",
-        "pysindy",
+        #"pysindy",
         "gdown",
         "regex"
     ],

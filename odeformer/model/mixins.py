@@ -13,7 +13,6 @@ import torch
 import numpy as np
 import itertools
 import traceback
-from pysindy.differentiation import FiniteDifference, SmoothedFiniteDifference
 from odeformer.envs.generators import integrate_ode
 from odeformer.metrics import compute_metrics
 
@@ -292,6 +291,7 @@ class FiniteDifferenceMixin:
         return self.get_differentiation_method()._differentiate(trajectory, times)
     
     def get_differentiation_method(self):
+        from pysindy.differentiation import FiniteDifference, SmoothedFiniteDifference
         if self.smoother_window_length is None:
             return FiniteDifference(order=self.finite_difference_order)
         return SmoothedFiniteDifference(
