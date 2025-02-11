@@ -117,7 +117,7 @@ class GridSearchMixin(ABC):
                 metrics = sorting_metric,
             )[sorting_metric][0]
             if math.isnan(_score): 
-                _score = -np.infty if descending else np.infty
+                _score = -np.inf if descending else np.inf
             _scores.append(_score)
         sorted_idx = np.argsort(_scores)  
         if descending: sorted_idx = list(reversed(sorted_idx))

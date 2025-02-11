@@ -219,7 +219,7 @@ def compute_metrics(predicted, true, predicted_tree=None, tree=None, metrics="r2
                 else:
                     try:
                         l1_error = np.mean(np.abs((true[i] - predicted[i])))
-                        if np.isnan(l1_error): results[metric].append(np.infty)
+                        if np.isnan(l1_error): results[metric].append(np.inf)
                         else: results[metric].append(l1_error)
                     except Exception as e:
                         results[metric].append(np.nan)

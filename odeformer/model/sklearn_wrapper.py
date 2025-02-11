@@ -211,7 +211,7 @@ class SymbolicTransformerRegressor(BaseEstimator, PredictionIntegrationMixin):
         for candidate in candidates:
             score = self.evaluate_tree(candidate, times, trajectory, metric)
             if math.isnan(score): 
-                score = -np.infty if descending else np.infty
+                score = -np.inf if descending else np.inf
             scores.append(score)
         sorted_idx = np.argsort(scores)  
 

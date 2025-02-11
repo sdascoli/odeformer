@@ -21,7 +21,7 @@ def order_data(X, y):
 
 def get_infinite_relative_error(prediction, truth):
     abs_relative_error = np.abs((prediction - truth) / (truth + 1e-100))
-    abs_relative_error = np.nan_to_num(abs_relative_error, nan=np.infty)
+    abs_relative_error = np.nan_to_num(abs_relative_error, nan=np.inf)
     return np.max(abs_relative_error)
 
 
